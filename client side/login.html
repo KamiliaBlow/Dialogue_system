@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход - Терминал GMS-4521</title>
+    <link rel="stylesheet" href="styles/login_styles.css">
+    <link href="https://fonts.googleapis.com/css?family=Orbitron:700" rel="stylesheet">
+</head>
+<body>
+    <div class="background-code" id="bgCode"></div>
+    <div class="login-container">
+
+        <!-- Форма входа -->
+        <div id="loginForm">
+            <h1 class="login-title typing-effect">ТЕРМИНАЛ GMS-4521</h1>
+
+            <div class="form-group">
+                <label class="form-label">ПОЗЫВНОЙ:</label>
+                <input type="text" id="loginUsername" class="form-input" autocomplete="off">
+                <div id="loginUsernameError" class="form-error">Введите позывной.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">КОД ДОСТУПА:</label>
+                <input type="password" id="loginPassword" class="form-input">
+                <div id="loginPasswordError" class="form-error">Введите код доступа.</div>
+            </div>
+
+            <div id="loginError" class="form-error">Неверный позывной или код доступа.</div>
+
+            <button type="button" id="loginButton" class="form-button">ВОЙТИ</button>
+
+            <div class="switch-form">
+                Нет доступа?
+                <a id="showRegister">Зарегистрироваться</a>
+            </div>
+        </div>
+
+        <!-- Форма регистрации -->
+        <div id="registerForm" style="display: none;">
+
+            <div class="form-group">
+                <label class="form-label">СОЗДАТЬ ПОЗЫВНОЙ:</label>
+                <input type="text" id="registerUsername" class="form-input" autocomplete="off">
+                <div id="registerUsernameError" class="form-error">Введите позывной (мин. 3 символа).</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">СОЗДАТЬ КОД ДОСТУПА:</label>
+                <input type="password" id="registerPassword" class="form-input">
+                <div id="registerPasswordError" class="form-error">Введите код доступа (мин. 6 символов).</div>
+            </div>
+
+            <div id="registerError" class="form-error">Ошибка при регистрации.</div>
+
+            <button type="button" id="registerButton" class="form-button">ЗАРЕГИСТРИРОВАТЬСЯ</button>
+
+            <div class="switch-form">
+                Уже есть доступ?
+                <a id="showLogin">Войти</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/login-api.js"></script>
+</body>
+</html>
