@@ -7,28 +7,41 @@ const session = require('express-session');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config(); // For environment variables
 
 const app = express();
-const port = 3000;
+const PORT = process.env.PORT || 3000;
+const DB_PATH = process.env.DB_PATH || './database.db';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'default_secret_for_development';
 
 // Настройка middleware
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',') 
+  : ['https://localhost', 'https://127.0.0.1'];
+
 app.use(cors({
-  origin: ['https://yousite', 'https://yousite'],
+  origin: allowedOrigins,
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increased limit for large payloads
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public'))); // Папка с вашими статическими файлами
 
 // Настройка сессий
 app.use(session({
-  secret: 'YOURESECRET',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 86400000 } // 24 часа
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+    maxAge: 24 * 60 * 60 * 1000, // 24 часа
+    httpOnly: true, // Prevent XSS attacks
+    sameSite: 'strict' // CSRF protection
+  }
 }));
 
 // Подключение к базе данных
-const db = new sqlite3.Database('./database.db', (err) => {
+const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) {
     console.error('Ошибка при подключении к базе данных:', err.message);
   } else {
@@ -89,18 +102,69 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// Middleware для проверки администратора
+function requireAdmin(req, res, next) {
+  // Проверка авторизации
+  if (!req.session.userId) {
+    return res.status(401).json({ message: 'Требуется авторизация' });
+  }
+  
+  // Проверка, является ли пользователь администратором
+  db.get('SELECT is_admin FROM users WHERE id = ?', [req.session.userId], (err, user) => {
+    if (err) {
+      console.error('Ошибка проверки администратора:', err.message);
+      return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
+    }
+    
+    if (!user || user.is_admin !== 1) {
+      return res.status(403).json({ message: 'Недостаточно прав для доступа' });
+    }
+    
+    next();
+  });
+}
+
+// Валидация данных пользователя
+function validateUserInput(username, password) {
+  const errors = [];
+  
+  if (!username || typeof username !== 'string' || username.trim().length < 3) {
+    errors.push('Имя пользователя должно содержать не менее 3 символов');
+  }
+  
+  if (!password || typeof password !== 'string' || password.length < 6) {
+    errors.push('Пароль должен содержать не менее 6 символов');
+  }
+  
+  return errors;
+}
+
+// Валидация частоты диалога
+function validateFrequency(frequency) {
+  if (!frequency || typeof frequency !== 'string' || frequency.trim().length === 0) {
+    return 'Частота диалога обязательна';
+  }
+  return null;
+}
+
 // Маршрут для регистрации
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   
-  if (!username || !password) {
-    return res.status(400).json({ message: 'Необходимо указать имя пользователя и пароль' });
+  // Валидация входных данных
+  const validationErrors = validateUserInput(username, password);
+  if (validationErrors.length > 0) {
+    return res.status(400).json({ 
+      message: 'Ошибка валидации', 
+      errors: validationErrors 
+    });
   }
   
   try {
     // Проверяем, существует ли пользователь
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
+    db.get('SELECT id FROM users WHERE username = ?', [username.trim()], (err, user) => {
       if (err) {
+        console.error('Ошибка проверки существующего пользователя:', err.message);
         return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
       }
       
@@ -109,28 +173,35 @@ app.post('/api/register', async (req, res) => {
       }
       
       // Хешируем пароль
-      const hashedPassword = await bcrypt.hash(password, 10);
-      
-      // Создаем нового пользователя
-      db.run('INSERT INTO users (username, password) VALUES (?, ?)', 
-        [username, hashedPassword], 
-        function(err) {
-          if (err) {
-            return res.status(500).json({ message: 'Ошибка при создании пользователя', error: err.message });
-          }
-          
-          // Устанавливаем сессию
-          req.session.userId = this.lastID;
-          req.session.username = username;
-          
-          res.status(201).json({ 
-            message: 'Пользователь успешно создан',
-            userId: this.lastID,
-            username
+      bcrypt.hash(password, 10, (hashErr, hashedPassword) => {
+        if (hashErr) {
+          console.error('Ошибка хеширования пароля:', hashErr.message);
+          return res.status(500).json({ message: 'Ошибка сервера', error: hashErr.message });
+        }
+        
+        // Создаем нового пользователя
+        db.run('INSERT INTO users (username, password) VALUES (?, ?)', 
+          [username.trim(), hashedPassword], 
+          function(insertErr) {
+            if (insertErr) {
+              console.error('Ошибка создания пользователя:', insertErr.message);
+              return res.status(500).json({ message: 'Ошибка при создании пользователя', error: insertErr.message });
+            }
+            
+            // Устанавливаем сессию
+            req.session.userId = this.lastID;
+            req.session.username = username.trim();
+            
+            res.status(201).json({ 
+              message: 'Пользователь успешно создан',
+              userId: this.lastID,
+              username: username.trim()
+            });
           });
-        });
+      });
     });
   } catch (error) {
+    console.error('Ошибка регистрации:', error.message);
     res.status(500).json({ message: 'Ошибка сервера', error: error.message });
   }
 });
@@ -139,14 +210,20 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
+  // Валидация входных данных
   if (!username || !password) {
     return res.status(400).json({ message: 'Необходимо указать имя пользователя и пароль' });
   }
   
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ message: 'Неверный формат данных' });
+  }
+  
   try {
     // Ищем пользователя
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
+    db.get('SELECT id, username, password, is_admin FROM users WHERE username = ?', [username.trim()], (err, user) => {
       if (err) {
+        console.error('Ошибка поиска пользователя:', err.message);
         return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
       }
       
@@ -155,23 +232,31 @@ app.post('/api/login', async (req, res) => {
       }
       
       // Проверяем пароль
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      
-      if (!isValidPassword) {
-        return res.status(401).json({ message: 'Неверное имя пользователя или пароль' });
-      }
-      
-      // Устанавливаем сессию
-      req.session.userId = user.id;
-      req.session.username = user.username;
-      
-      res.json({ 
-        message: 'Успешная авторизация',
-        userId: user.id,
-        username: user.username
+      bcrypt.compare(password, user.password, (compareErr, isValidPassword) => {
+        if (compareErr) {
+          console.error('Ошибка проверки пароля:', compareErr.message);
+          return res.status(500).json({ message: 'Ошибка сервера', error: compareErr.message });
+        }
+        
+        if (!isValidPassword) {
+          return res.status(401).json({ message: 'Неверное имя пользователя или пароль' });
+        }
+        
+        // Устанавливаем сессию
+        req.session.userId = user.id;
+        req.session.username = user.username;
+        req.session.isAdmin = user.is_admin === 1;
+        
+        res.json({ 
+          message: 'Успешная авторизация',
+          userId: user.id,
+          username: user.username,
+          isAdmin: user.is_admin === 1
+        });
       });
     });
   } catch (error) {
+    console.error('Ошибка авторизации:', error.message);
     res.status(500).json({ message: 'Ошибка сервера', error: error.message });
   }
 });
@@ -219,19 +304,38 @@ app.post('/api/dialogue-progress', requireAuth, (req, res) => {
   const userId = req.session.userId;
   const { frequency, progress, completed, lastLine } = req.body;
   
+  // Валидация входных данных
+  if (!frequency || typeof frequency !== 'string' || frequency.trim().length === 0) {
+    return res.status(400).json({ message: 'Частота диалога обязательна' });
+  }
+  
+  if (typeof progress !== 'number' || progress < 0) {
+    return res.status(400).json({ message: 'Прогресс должен быть неотрицательным числом' });
+  }
+  
+  if (typeof completed !== 'boolean') {
+    return res.status(400).json({ message: 'Статус завершения должен быть логическим значением' });
+  }
+  
+  if (typeof lastLine !== 'number' || lastLine < 0) {
+    return res.status(400).json({ message: 'Номер последней линии должен быть неотрицательным числом' });
+  }
+  
   db.get('SELECT * FROM dialogue_progress WHERE user_id = ? AND frequency = ?', 
-    [userId, frequency], 
+    [userId, frequency.trim()], 
     (err, row) => {
       if (err) {
+        console.error('Ошибка базы данных:', err.message);
         return res.status(500).json({ message: 'Ошибка базы данных', error: err.message });
       }
       
       if (row) {
         // Обновляем существующую запись
         db.run('UPDATE dialogue_progress SET progress = ?, completed = ?, last_line = ? WHERE user_id = ? AND frequency = ?',
-          [progress, completed ? 1 : 0, lastLine, userId, frequency],
+          [progress, completed ? 1 : 0, lastLine, userId, frequency.trim()],
           (err) => {
             if (err) {
+              console.error('Ошибка при обновлении прогресса:', err.message);
               return res.status(500).json({ message: 'Ошибка при обновлении прогресса', error: err.message });
             }
             res.json({ message: 'Прогресс обновлен' });
@@ -239,9 +343,10 @@ app.post('/api/dialogue-progress', requireAuth, (req, res) => {
       } else {
         // Создаем новую запись
         db.run('INSERT INTO dialogue_progress (user_id, frequency, progress, completed, last_line) VALUES (?, ?, ?, ?, ?)',
-          [userId, frequency, progress, completed ? 1 : 0, lastLine],
+          [userId, frequency.trim(), progress, completed ? 1 : 0, lastLine],
           (err) => {
             if (err) {
+              console.error('Ошибка при сохранении прогресса:', err.message);
               return res.status(500).json({ message: 'Ошибка при сохранении прогресса', error: err.message });
             }
             res.json({ message: 'Прогресс сохранен' });
@@ -255,10 +360,24 @@ app.post('/api/user-choice', requireAuth, (req, res) => {
   const userId = req.session.userId;
   const { frequency, choiceId, choiceText } = req.body;
   
+  // Валидация входных данных
+  if (!frequency || typeof frequency !== 'string' || frequency.trim().length === 0) {
+    return res.status(400).json({ message: 'Частота диалога обязательна' });
+  }
+  
+  if (!choiceId || typeof choiceId !== 'string' || choiceId.trim().length === 0) {
+    return res.status(400).json({ message: 'ID выбора обязателен' });
+  }
+  
+  if (!choiceText || typeof choiceText !== 'string' || choiceText.trim().length === 0) {
+    return res.status(400).json({ message: 'Текст выбора обязателен' });
+  }
+  
   db.run('INSERT INTO user_choices (user_id, frequency, choice_id, choice_text) VALUES (?, ?, ?, ?)',
-    [userId, frequency, choiceId, choiceText],
+    [userId, frequency.trim(), choiceId.trim(), choiceText.trim()],
     function(err) {
       if (err) {
+        console.error('Ошибка при сохранении выбора:', err.message);
         return res.status(500).json({ message: 'Ошибка при сохранении выбора', error: err.message });
       }
       res.json({ 
@@ -325,17 +444,23 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 });
 
 // Изменение пароля пользователя (для админа)
-app.post('/api/admin/change-password', requireAdmin, async (req, res) => {
+app.post('/api/admin/change-password', requireAdmin, (req, res) => {
   const { userId, newPassword } = req.body;
   
-  if (!userId || !newPassword) {
-    return res.status(400).json({ message: 'Необходимо указать ID пользователя и новый пароль' });
+  // Валидация входных данных
+  if (!userId || typeof userId !== 'number' || userId <= 0) {
+    return res.status(400).json({ message: 'Неверный ID пользователя' });
+  }
+  
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    return res.status(400).json({ message: 'Пароль должен содержать не менее 6 символов' });
   }
   
   try {
     // Проверяем, существует ли пользователь
-    db.get('SELECT * FROM users WHERE id = ?', [userId], async (err, user) => {
+    db.get('SELECT id FROM users WHERE id = ?', [userId], (err, user) => {
       if (err) {
+        console.error('Ошибка проверки пользователя:', err.message);
         return res.status(500).json({ message: 'Ошибка сервера', error: err.message });
       }
       
@@ -344,20 +469,27 @@ app.post('/api/admin/change-password', requireAdmin, async (req, res) => {
       }
       
       // Хешируем новый пароль
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      // Обновляем пароль пользователя
-      db.run('UPDATE users SET password = ? WHERE id = ?', 
-        [hashedPassword, userId], 
-        function(err) {
-          if (err) {
-            return res.status(500).json({ message: 'Ошибка при обновлении пароля', error: err.message });
-          }
-          
-          res.json({ message: 'Пароль пользователя успешно обновлен' });
-        });
+      bcrypt.hash(newPassword, 10, (hashErr, hashedPassword) => {
+        if (hashErr) {
+          console.error('Ошибка хеширования пароля:', hashErr.message);
+          return res.status(500).json({ message: 'Ошибка сервера', error: hashErr.message });
+        }
+        
+        // Обновляем пароль пользователя
+        db.run('UPDATE users SET password = ? WHERE id = ?', 
+          [hashedPassword, userId], 
+          function(updateErr) {
+            if (updateErr) {
+              console.error('Ошибка обновления пароля:', updateErr.message);
+              return res.status(500).json({ message: 'Ошибка при обновлении пароля', error: updateErr.message });
+            }
+            
+            res.json({ message: 'Пароль пользователя успешно обновлен' });
+          });
+      });
     });
   } catch (error) {
+    console.error('Ошибка изменения пароля:', error.message);
     res.status(500).json({ message: 'Ошибка сервера', error: error.message });
   }
 });
@@ -559,7 +691,7 @@ app.post('/api/repeat-counts', requireAuth, (req, res) => {
   const { repeatCounts } = req.body;
   
   // Проверяем, что repeatCounts - это объект
-  if (!repeatCounts || typeof repeatCounts !== 'object') {
+  if (!repeatCounts || typeof repeatCounts !== 'object' || Array.isArray(repeatCounts)) {
     return res.status(400).json({ message: 'Неверный формат данных' });
   }
   
@@ -568,7 +700,7 @@ app.post('/api/repeat-counts', requireAuth, (req, res) => {
     db.serialize(() => {
       db.run('BEGIN TRANSACTION');
       
-      // Для каждой частоты обновляем или вставляем запись
+      // Подготавливаем SQL-запрос для вставки или обновления
       const stmt = db.prepare(`
         INSERT INTO dialogue_repeats (user_id, frequency, repeat_count, updated_at)
         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -576,33 +708,44 @@ app.post('/api/repeat-counts', requireAuth, (req, res) => {
         DO UPDATE SET repeat_count = MAX(repeat_count, ?), updated_at = CURRENT_TIMESTAMP
       `);
       
+      let hasError = false;
+      let processedCount = 0;
+      const totalItems = Object.keys(repeatCounts).length;
+      
       // Обрабатываем каждую частоту из объекта repeatCounts
-      Object.keys(repeatCounts).forEach(frequency => {
-        const count = repeatCounts[frequency];
-        if (typeof count === 'number' && count >= 0) {
-          stmt.run(userId, frequency, count, count);
+      for (const [frequency, count] of Object.entries(repeatCounts)) {
+        if (typeof frequency === 'string' && frequency.trim().length > 0 && 
+            typeof count === 'number' && count >= 0) {
+          stmt.run(userId, frequency.trim(), count, count);
+          processedCount++;
         }
-      });
+      }
       
       stmt.finalize();
       
       db.run('COMMIT', err => {
         if (err) {
+          console.error('Ошибка при сохранении счетчиков повторений:', err.message);
           return res.status(500).json({ 
             message: 'Ошибка при сохранении счетчиков повторений', 
             error: err.message 
           });
         }
         
-        res.json({ message: 'Счетчики повторений успешно сохранены' });
+        res.json({ 
+          message: `Счетчики повторений успешно сохранены (${processedCount} из ${totalItems} обработано)`,
+          processedCount: processedCount,
+          totalCount: totalItems
+        });
       });
     });
   } catch (error) {
-    // В случае ошибки отменяем транзакцию
-    db.run('ROLLBACK');
-    res.status(500).json({ 
-	message: 'Ошибка при сохранении счетчиков повторений', 
-      error: error.message 
+    console.error('Ошибка при сохранении счетчиков повторений:', error.message);
+    db.run('ROLLBACK', () => {
+      res.status(500).json({ 
+        message: 'Ошибка при сохранении счетчиков повторений', 
+        error: error.message 
+      });
     });
   }
 });
@@ -825,12 +968,14 @@ app.post('/api/admin/initialize-dialogue-access', requireAdmin, (req, res) => {
 });
 
 // Настройка HTTPS
+const SSL_DIR = process.env.SSL_DIR || path.join(__dirname, 'ssl');
+
 const httpsOptions = {
-  key: fs.readFileSync(path.join(__dirname, 'ssl', 'privkey.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'ssl', 'cert.pem'))
+  key: fs.readFileSync(path.join(SSL_DIR, 'privkey.pem')),
+  cert: fs.readFileSync(path.join(SSL_DIR, 'cert.pem'))
 };
 
 // Запуск сервера
-https.createServer(httpsOptions, app).listen(3000, () => {
-  console.log('HTTPS сервер запущен на порту 3000');
+https.createServer(httpsOptions, app).listen(PORT, () => {
+  console.log(`HTTPS сервер запущен на порту ${PORT}`);
 });

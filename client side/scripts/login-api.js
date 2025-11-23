@@ -1,5 +1,5 @@
-// API URL
-const API_URL = 'https://yousite:3000/api';
+// API URL - теперь будет получаться из конфигурации
+const API_URL = window.location.origin + '/api'; // Используем текущий домен
 
 // Переключение между формами
 document.getElementById('showRegister').addEventListener('click', () => {
@@ -71,6 +71,7 @@ document.getElementById('loginButton').addEventListener('click', async () => {
 
     // Успешная авторизация
     localStorage.setItem('username', data.username);
+    localStorage.setItem('isAdmin', data.isAdmin);
     window.location.href = 'splash.html'; // Перенаправление на основную страницу
 
   } catch (error) {
