@@ -1,9 +1,38 @@
-import Config from '../Config.js';
+let games = null;
+let API_URL = null;
 
-const games = Config;
-
-// API URL
-const API_URL = 'https://yousite.ru:3000/api';
+async function loadConfig() {
+    const timestamp = Date.now();
+    
+    try {
+        // Динамический импорт с уникальным URL для обхода кэша
+        const configModule = await import(`../Config.js?t=${timestamp}`);
+        const appConfigModule = await import(`./config.js?t=${timestamp}`);
+        
+        games = configModule.default;
+        API_URL = appConfigModule.default.API_URL;
+        
+        console.log('Config loaded successfully');
+        console.log('Available frequencies:', games?.customGame?.frequencies);
+        
+    } catch (error) {
+        console.error('Failed to load config with cache busting:', error);
+        
+        // Fallback - пробуем без cache buster
+        try {
+            const configModule = await import('../Config.js');
+            const appConfigModule = await import('./config.js');
+            
+            games = configModule.default;
+            API_URL = appConfigModule.default.API_URL;
+            
+            console.log('Config loaded (fallback mode)');
+        } catch (fallbackError) {
+            console.error('Critical: Failed to load config:', fallbackError);
+            throw new Error('Не удалось загрузить конфигурацию');
+        }
+    }
+}
 
 // Состояние приложения
 const state = {
@@ -18,7 +47,12 @@ const state = {
     userName: '',
     typingTimeout: null,
     justMadeChoice: false,
-    repeatCount: {} // Новое поле для отслеживания количества прослушиваний диалога
+    repeatCount: {},
+    // Храним последние портреты для каждого окна
+    lastPortrait: {
+        window1: null,
+        window2: null
+    }
 };
 
 /**
@@ -26,6 +60,19 @@ const state = {
  */
 async function initializePage() {
     try {
+        // Загружаем конфигурацию
+        await loadConfig();
+        
+        if (!games || !games.customGame) {
+            throw new Error('Конфигурация не загружена');
+        }
+        
+        // Сбрасываем freqCount на 0 при инициализации
+        state.freqCount = 0;
+        
+        console.log('Конфигурация загружена:', games);
+        console.log('Доступные частоты:', games.customGame.frequencies);
+        
         // Загружаем счетчики повторных прослушиваний
         await loadRepeatCounts();
         
@@ -66,6 +113,13 @@ async function initializePage() {
  * Загрузка доступных частот для пользователя
  */
 async function loadAvailableFrequencies() {
+    // Проверяем, что конфигурация загружена
+    if (!games || !games[state.currentGame]) {
+        console.error('Конфигурация не загружена в loadAvailableFrequencies');
+        state.availableFrequencies = [];
+        return;
+    }
+    
     try {
         const response = await fetch(`${API_URL}/available-frequencies`, {
             credentials: 'include'
@@ -73,6 +127,7 @@ async function loadAvailableFrequencies() {
         
         if (!response.ok) {
             console.error('Ошибка при получении доступных частот');
+            checkLocalDialogueAccess();
             return;
         }
         
@@ -87,8 +142,8 @@ async function loadAvailableFrequencies() {
         
     } catch (error) {
         console.error('Ошибка при загрузке доступных частот:', error);
-        // В случае ошибки предполагаем, что доступны все частоты (fallback)
-        state.availableFrequencies = games[state.currentGame]['frequencies'];
+        // В случае ошибки используем все частоты из конфигурации
+        state.availableFrequencies = [...games[state.currentGame]['frequencies']];
     }
 }
 
@@ -96,6 +151,12 @@ async function loadAvailableFrequencies() {
  * Проверка доступа к диалогам локально (если API недоступно)
  */
 function checkLocalDialogueAccess() {
+    // Проверяем, что конфигурация загружена
+    if (!games || !games[state.currentGame]) {
+        console.error('Конфигурация не загружена в checkLocalDialogueAccess');
+        return;
+    }
+    
     // Получаем текущую игру и диалоги
     const game = games[state.currentGame];
     const allFrequencies = game['frequencies'];
@@ -185,14 +246,23 @@ async function loadUserChoices() {
  * Получить текущую частоту
  */
 function getCurrentFrequency() {
+    // Проверяем, загружена ли конфигурация
+    if (!games || !games[state.currentGame] || !games[state.currentGame]['frequencies']) {
+        console.error('Конфигурация не загружена или отсутствуют частоты');
+        return 'UNKNOWN';
+    }
+    
+    const frequencies = games[state.currentGame]['frequencies'];
+    
     // Проверяем, существует ли частота по текущему индексу
-    if (state.freqCount >= 0 && state.freqCount < games[state.currentGame]['frequencies'].length) {
-        return games[state.currentGame]['frequencies'][state.freqCount];
+    if (state.freqCount >= 0 && state.freqCount < frequencies.length) {
+        return frequencies[state.freqCount];
     }
     
     // Если индекс некорректный, возвращаем первую доступную частоту
+    console.warn(`freqCount ${state.freqCount} вне диапазона, сброс на 0`);
     state.freqCount = 0;
-    return games[state.currentGame]['frequencies'][0];
+    return frequencies[0];
 }
 
 /**
@@ -206,6 +276,15 @@ function updateFrequencyDisplay() {
  * Инициализация передачи
  */
 async function initializeTransmission() {
+    // Проверяем, что конфигурация загружена
+    if (!games || !games[state.currentGame]) {
+        console.error('Конфигурация не загружена в initializeTransmission');
+        $('#text').text('*ОШИБКА КОНФИГУРАЦИИ*');
+        $('#c-char').text('СИСТЕМА:');
+        $('#start-transmission, #repeat-transmission').addClass('hidden');
+        return;
+    }
+    
     const currentFrequency = getCurrentFrequency();
     console.log(`Инициализация передачи для частоты ${currentFrequency}`);
     
@@ -389,11 +468,7 @@ function currentConversation(resetCount = false) {
     $('#start-transmission').addClass('hidden');
     
     // Устанавливаем изображения персонажей
-    if (state.currentDialogue.characters && state.currentDialogue.characters.length >= 2) {
-        $('#char-1').css('background-image', `url(${state.currentDialogue.characters[0].image})`);
-        $('#char-2').css('background-image', `url(${state.currentDialogue.characters[1].image})`);
-        $('.overlay').css('opacity', '0.3');
-    }
+    initializeCharacterPortraits();
     
     console.log(`Начинаем диалог для частоты ${currentFrequency} с позиции ${state.count}`);
     
@@ -895,20 +970,87 @@ function getCharacterVoice(speakerIndex) {
 }
 
 /**
+ * Получить окно персонажа (1 или 2)
+ * @param {number} speakerIndex - Индекс персонажа
+ * @returns {number} - Номер окна (1 или 2)
+ */
+function getCharacterWindow(speakerIndex) {
+    if (speakerIndex >= 0 && 
+        state.currentDialogue.characters && 
+        speakerIndex < state.currentDialogue.characters.length) {
+        const char = state.currentDialogue.characters[speakerIndex];
+        // Если указан параметр window, используем его
+        if (char.window) {
+            return parseInt(char.window) || 1;
+        }
+    }
+    // По умолчанию: нечетные индексы -> окно 1, четные -> окно 2
+    return speakerIndex % 2 === 0 ? 1 : 2;
+}
+
+/**
+ * Получить всех персонажей для указанного окна
+ * @param {number} windowNum - Номер окна (1 или 2)
+ * @returns {Array} - Массив индексов персонажей
+ */
+function getCharactersForWindow(windowNum) {
+    if (!state.currentDialogue.characters) return [];
+    
+    return state.currentDialogue.characters
+        .map((char, index) => ({ char, index }))
+        .filter(({ char, index }) => {
+            const charWindow = char.window ? parseInt(char.window) : (index % 2 === 0 ? 1 : 2);
+            return charWindow === windowNum;
+        })
+        .map(({ index }) => index);
+}
+
+/**
  * Обновить отображение персонажа
+ * Сохраняет портрет в окне после первой реплики
  * @param {number} speakerIndex - Индекс персонажа
  * @param {string} image - Путь к изображению
  */
 function updateCharacterDisplay(speakerIndex, image) {
-    if (speakerIndex === 0) {
+    const speakerWindow = getCharacterWindow(speakerIndex);
+    
+    if (speakerWindow === 1) {
+        // Говорящий в окне 1 (слева) - активно
         $('#char-1').css('background-image', `url(${image})`);
         $('#char-1 .overlay').css('opacity', '0.7');
+        
+        // Сохраняем портрет для окна 1
+        state.lastPortrait.window1 = image;
+        
+        // Окно 2 - показываем последний портрет или оставляем как есть
         $('#char-2 .overlay').css('opacity', '0.3');
-    } else if (speakerIndex === 1) {
+    } else {
+        // Говорящий в окне 2 (справа) - активно
         $('#char-2').css('background-image', `url(${image})`);
-        $('#char-1 .overlay').css('opacity', '0.3');
         $('#char-2 .overlay').css('opacity', '0.7');
+        
+        // Сохраняем портрет для окна 2
+        state.lastPortrait.window2 = image;
+        
+        // Окно 1 - показываем последний портрет или оставляем как есть
+        $('#char-1 .overlay').css('opacity', '0.3');
     }
+}
+
+/**
+ * Инициализировать портреты персонажей при старте диалога
+ * Показывает static.gif во всех окнах, сбрасывает сохраненные портреты
+ */
+function initializeCharacterPortraits() {
+    const staticImage = 'assets/images/portraits/static.gif';
+    
+    // Сбрасываем сохраненные портреты
+    state.lastPortrait.window1 = null;
+    state.lastPortrait.window2 = null;
+    
+    // При старте показываем static.gif в обоих окнах
+    $('#char-1, #char-2').css('background-image', `url(${staticImage})`);
+    $('.overlay').css('opacity', '0.3');
 }
 
 /**
@@ -993,8 +1135,7 @@ function restoreDialoguePosition() {
         // Проверяем, что count все еще в допустимом диапазоне после коррекции
         if (state.count >= 0 && state.count < state.currentDialogue.conversations.length) {
             // Показываем персонажей
-            $('#char-1').css('background-image', `url(${state.currentDialogue.characters[0].image})`);
-            $('#char-2').css('background-image', `url(${state.currentDialogue.characters[1].image})`);
+            initializeCharacterPortraits();
             
             // Очищаем текст перед началом
             $('#text').text('');
@@ -1804,15 +1945,11 @@ $('#repeat-transmission').on('click', function() {
             state.count = 0;
             
             // Устанавливаем изображения персонажей
-            $('#char-1').css('background-image', `url(${state.currentDialogue.characters[0].image})`);
-            $('#char-2').css('background-image', `url(${state.currentDialogue.characters[1].image})`);
+            initializeCharacterPortraits();
             
             // Очищаем текст и имя персонажа
             $('#text').text('');
             $('#c-char').text('');
-            
-            // Сбрасываем overlay
-            $('.overlay').css('opacity', '0.3');
             
             // Скрываем кнопку повтора
             $(this).addClass('hidden');

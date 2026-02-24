@@ -42,14 +42,16 @@ const Config = {
 			'PRIV1': {
                 'characters': [
                     {
-                        'name': 'Гарпия', 
-                        'image': 'assets/images/portraits/character_a.png',
-                        'voice': 'assets/sounds/voices/char1.wav'
+                        'name': 'Гарпия', // Имя персонажа
+                        'image': 'assets/images/portraits/character_a.png', // Путь до его портрета (может быть и gif)
+                        'voice': 'assets/sounds/voices/char1.wav', // Путь до его звука.
+						'window': '1' // В каком окошке отображается персонаж 1 слева, 2 справа
                     },
                     {
                         'name': 'Вы', 
                         'image': 'assets/images/portraits/static.gif',
-						'voice': 'assets/sounds/voices/char2.wav'
+						'voice': 'assets/sounds/voices/char2.wav',
+						'window': '2'
                     }
                 ],
 				'allowedUsers': [6], // -1 означает "доступно всем", иначе указывается массив ID пользователей
