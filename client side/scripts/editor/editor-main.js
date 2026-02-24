@@ -3,7 +3,7 @@ import AppConfig from '../config.js';
 const { API_URL } = AppConfig;
 
 class DialogueEditor {
-constructor() {
+ constructor() {
         this.state = {
             currentDialogueId: null,
             dialogues: [],
@@ -14,16 +14,19 @@ constructor() {
             portraits: [],
             sounds: [],
             voicelines: [],
+            users: [],
+            selectedAllowedUsers: [],
             selectedNodeId: null,
             audioPreview: null
         };
     }
     
-    async init() {
+async init() {
         try {
             await this.checkAuth();
             await this.loadDialogues();
             await this.loadFiles();
+            await this.loadUsers();
             this.initEventListeners();
             this.generateBackgroundCode();
         } catch (error) {
@@ -64,6 +67,17 @@ async loadFiles() {
             this.state.voicelines = voicelinesData.files || [];
         } catch (error) {
             console.error('Error loading files:', error);
+        }
+    }
+    
+    async loadUsers() {
+        try {
+            const response = await fetch(`${API_URL}/editor/users`, { credentials: 'include' });
+            const data = await response.json();
+            this.state.users = data.users || [];
+        } catch (error) {
+            console.error('Error loading users:', error);
+            this.state.users = [];
         }
     }
     
@@ -111,12 +125,50 @@ async loadFiles() {
         this.updateBranchSelects();
     }
     
-    renderDialogueInfo(dialogue) {
+renderDialogueInfo(dialogue) {
         document.getElementById('dialogue-frequency').value = dialogue.frequency;
         document.getElementById('dialogue-title').value = dialogue.title || '';
         
         const allowedUsers = JSON.parse(dialogue.allowed_users || '[-1]');
-        document.getElementById('dialogue-access').value = allowedUsers.includes(-1) ? 'all' : 'custom';
+        const isAllUsers = allowedUsers.includes(-1);
+        document.getElementById('dialogue-access').value = isAllUsers ? 'all' : 'custom';
+        this.state.selectedAllowedUsers = isAllUsers ? [] : allowedUsers;
+        
+        this.updateUsersSelector();
+        this.toggleUsersSelector(!isAllUsers);
+    }
+    
+    updateUsersSelector() {
+        const container = document.getElementById('users-list');
+        if (!container) return;
+        
+        container.innerHTML = this.state.users.map(user => `
+            <div class="user-item">
+                <input type="checkbox" id="user-${user.id}" value="${user.id}" 
+                    ${this.state.selectedAllowedUsers.includes(user.id) ? 'checked' : ''}>
+                <label for="user-${user.id}">${user.username} (ID: ${user.id})</label>
+            </div>
+        `).join('');
+        
+        container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const userId = parseInt(e.target.value);
+                if (e.target.checked) {
+                    if (!this.state.selectedAllowedUsers.includes(userId)) {
+                        this.state.selectedAllowedUsers.push(userId);
+                    }
+                } else {
+                    this.state.selectedAllowedUsers = this.state.selectedAllowedUsers.filter(id => id !== userId);
+                }
+            });
+        });
+    }
+    
+    toggleUsersSelector(show) {
+        const selector = document.getElementById('users-selector');
+        if (selector) {
+            selector.classList.toggle('hidden', !show);
+        }
     }
     
     renderCharacters() {
@@ -265,8 +317,16 @@ updateBranchSelects() {
         
         document.getElementById('create-dialogue-btn').addEventListener('click', () => this.createDialogue());
         
-        document.getElementById('save-dialogue-btn').addEventListener('click', () => this.saveDialogue());
+document.getElementById('save-dialogue-btn').addEventListener('click', () => this.saveDialogue());
         document.getElementById('delete-dialogue-btn').addEventListener('click', () => this.deleteDialogue());
+        
+        document.getElementById('dialogue-access').addEventListener('change', (e) => {
+            const isCustom = e.target.value === 'custom';
+            this.toggleUsersSelector(isCustom);
+            if (!isCustom) {
+                this.state.selectedAllowedUsers = [];
+            }
+        });
         
         document.getElementById('add-character-btn').addEventListener('click', () => this.openCharacterModal());
         
@@ -374,12 +434,12 @@ updateBranchSelects() {
         }
     }
     
-    async saveDialogue() {
+async saveDialogue() {
         const frequency = document.getElementById('dialogue-frequency').value.trim();
         const title = document.getElementById('dialogue-title').value.trim();
         const access = document.getElementById('dialogue-access').value;
         
-        const allowedUsers = access === 'all' ? [-1] : [];
+        const allowedUsers = access === 'all' ? [-1] : this.state.selectedAllowedUsers;
         
         try {
             const response = await fetch(`${API_URL}/editor/dialogues/${this.state.currentDialogueId}`, {

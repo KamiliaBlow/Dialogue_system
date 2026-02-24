@@ -103,6 +103,16 @@ app.use('/DIALOGUE_rework/assets', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     next();
 }, express.static(path.join(__dirname, 'assets')));
+app.use('/assets', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    next();
+}, express.static(path.join(__dirname, 'assets')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
     secret: config.SESSION_SECRET,
@@ -408,11 +418,27 @@ progressRoutes.get('/user-choices/:frequency', requireAuth, (req, res) => {
 });
 
 progressRoutes.get('/available-frequencies', requireAuth, (req, res) => {
-    db.all(`SELECT DISTINCT frequency FROM dialogue_access WHERE user_id = ? OR user_id = -1`,
+    db.all(`SELECT d.frequency, d.allowed_users 
+            FROM dialogues d
+            LEFT JOIN dialogue_access da ON d.frequency = da.frequency AND da.user_id = ?
+            WHERE d.allowed_users LIKE '%-1%' OR da.user_id IS NOT NULL`,
         [req.session.userId],
         (err, rows) => {
             if (err) return res.status(500).json({ message: 'Ошибка получения частот' });
-            res.json({ availableFrequencies: rows.map(r => r.frequency) });
+            
+            const availableFrequencies = [];
+            rows.forEach(row => {
+                try {
+                    const allowedUsers = JSON.parse(row.allowed_users || '[-1]');
+                    if (allowedUsers.includes(-1) || allowedUsers.includes(req.session.userId)) {
+                        availableFrequencies.push(row.frequency);
+                    }
+                } catch (e) {
+                    availableFrequencies.push(row.frequency);
+                }
+            });
+            
+            res.json({ availableFrequencies: [...new Set(availableFrequencies)] });
         });
 });
 

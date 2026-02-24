@@ -424,7 +424,54 @@
     display: none !important;
 }
 
-/* Адаптивность */
+.users-selector {
+    margin-top: 10px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--primary-border);
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.users-selector-header {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--primary-color);
+    border-bottom: 1px solid var(--primary-border);
+    background-color: rgba(3, 251, 141, 0.05);
+}
+
+.users-list {
+    padding: 8px;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.user-item:hover {
+    background-color: rgba(3, 251, 141, 0.1);
+}
+
+.user-item input[type="checkbox"] {
+    margin-right: 10px;
+    accent-color: var(--primary-color);
+}
+
+.user-item label {
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.users-selector.hidden {
+    display: none !important;
+}
+
 @media (max-width: 1200px) {
     .editor-layout {
         grid-template-columns: 200px 1fr 250px;

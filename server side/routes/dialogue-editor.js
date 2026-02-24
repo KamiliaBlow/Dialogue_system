@@ -557,6 +557,13 @@ const dialogueEditorRoutes = (db, upload) => {
         res.json({ id });
     });
 
+    router.get('/users', (req, res) => {
+        db.all('SELECT id, username FROM users ORDER BY username', (err, users) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения пользователей' });
+            res.json({ users });
+        });
+    });
+
     return router;
 };
 

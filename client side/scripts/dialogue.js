@@ -46,8 +46,13 @@ async function loadConfig() {
 function getAssetUrl(path) {
     if (!path) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    if (path.startsWith('/assets/')) return ASSETS_URL ? ASSETS_URL.replace('/assets', '') + path : path;
-    if (path.startsWith('assets/')) return ASSETS_URL ? ASSETS_URL + path.replace('assets/', '/') : path;
+    
+    if (!ASSETS_URL || ASSETS_URL.includes('DOMENHERE') || ASSETS_URL.includes('localhost')) {
+        return path;
+    }
+    
+    if (path.startsWith('/assets/')) return ASSETS_URL.replace('/assets', '') + path;
+    if (path.startsWith('assets/')) return ASSETS_URL + path.replace('assets/', '/');
     return path;
 }
 
