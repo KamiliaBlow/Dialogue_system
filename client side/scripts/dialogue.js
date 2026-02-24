@@ -1,14 +1,14 @@
 let games = null;
 let API_URL = null;
+let ASSETS_URL = null;
 let dialoguesCache = {};
 
 async function loadConfig() {
     try {
-        // Загружаем конфиг приложения
         const appConfigModule = await import('./config.js');
         API_URL = appConfigModule.default.API_URL;
+        ASSETS_URL = appConfigModule.default.ASSETS_URL;
         
-        // Загружаем список частот из БД
         const response = await fetch(`${API_URL}/frequencies`, {
             credentials: 'include'
         });
@@ -16,7 +16,6 @@ async function loadConfig() {
         const data = await response.json();
         const frequencies = data.frequencies || [];
         
-        // Создаём структуру совместимую с Config.js
         games = {
             customGame: {
                 frequencies: frequencies,
@@ -30,18 +29,26 @@ async function loadConfig() {
     } catch (error) {
         console.error('Failed to load config from API:', error);
         
-        // Fallback - пробуем загрузить из Config.js
         try {
             const configModule = await import('../Config.js');
             games = configModule.default;
             const appConfigModule = await import('./config.js');
             API_URL = appConfigModule.default.API_URL;
+            ASSETS_URL = appConfigModule.default.ASSETS_URL;
             console.log('Config loaded from Config.js (fallback)');
         } catch (fallbackError) {
             console.error('Critical: Failed to load config:', fallbackError);
             throw new Error('Не удалось загрузить конфигурацию');
         }
     }
+}
+
+function getAssetUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    if (path.startsWith('/assets/')) return ASSETS_URL ? ASSETS_URL.replace('/assets', '') + path : path;
+    if (path.startsWith('assets/')) return ASSETS_URL ? ASSETS_URL + path.replace('assets/', '/') : path;
+    return path;
 }
 
 // Загрузка конкретного диалога из БД
@@ -101,7 +108,7 @@ const state = {
     typingTimeout: null,
     justMadeChoice: false,
     repeatCount: {},
-    // Храним последние портреты для каждого окна
+    currentVoiceline: null,
     lastPortrait: {
         window1: null,
         window2: null
@@ -346,7 +353,7 @@ async function initializeTransmission() {
         console.log(`У пользователя нет доступа к частоте ${currentFrequency}, отображаем сообщение о блокировке`);
         $('#text').text('*ДОСТУП ЗАПРЕЩЕН*');
         $('#c-char').text('СИСТЕМА:');
-        $('#char-1, #char-2').css('background-image', 'url(assets/images/portraits/static.gif)');
+        $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
         $('.overlay').css('opacity', '0.3');
         $('#start-transmission, #repeat-transmission').addClass('hidden');
         return;
@@ -359,7 +366,7 @@ async function initializeTransmission() {
     const repeatCount = state.repeatCount[currentFrequency] || 0;
     
     // Установка статических изображений для персонажей
-    $('#char-1, #char-2').css('background-image', 'url(assets/images/portraits/static.gif)');
+    $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
     
     // Загрузка диалога - сначала из БД, потом fallback на Config.js
     state.currentDialogue = await loadDialogueFromDB(currentFrequency);
@@ -467,7 +474,7 @@ function showCompletedDialogueState() {
         
     $('#text').text('*ДИАЛОГ ЗАВЕРШЕН*');
     $('#c-char').text('');
-    $('#char-1, #char-2').css('background-image', 'url(assets/images/portraits/static.gif)');
+    $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
     $('.overlay').css('opacity', '0.3');
     $('#start-transmission').addClass('hidden');
     
@@ -1000,15 +1007,16 @@ function findSpeakerIndex(speaker) {
  * @returns {string} - Путь к изображению
  */
 function getCharacterImage(image, speakerIndex) {
-    if (image) return image;
+    if (image) return getAssetUrl(image);
     
     if (speakerIndex >= 0 && 
         state.currentDialogue.characters && 
         speakerIndex < state.currentDialogue.characters.length) {
-        return state.currentDialogue.characters[speakerIndex].image;
+        const charImage = state.currentDialogue.characters[speakerIndex].image;
+        return charImage ? getAssetUrl(charImage) : getAssetUrl('assets/images/portraits/static.gif');
     }
     
-    return 'assets/images/portraits/static.gif';
+    return getAssetUrl('assets/images/portraits/static.gif');
 }
 
 /**
@@ -1019,11 +1027,14 @@ function getCharacterImage(image, speakerIndex) {
 function getCharacterVoice(speakerIndex) {
     if (speakerIndex >= 0 && 
         state.currentDialogue.characters && 
-        speakerIndex < state.currentDialogue.characters.length && 
-        state.currentDialogue.characters[speakerIndex].voice) {
-        return new Audio(state.currentDialogue.characters[speakerIndex].voice);
+        speakerIndex < state.currentDialogue.characters.length) {
+        const char = state.currentDialogue.characters[speakerIndex];
+        return {
+            audio: char.voice ? new Audio(getAssetUrl(char.voice)) : null,
+            mode: char.voiceMode || 'none'
+        };
     }
-    return null;
+    return { audio: null, mode: 'none' };
 }
 
 /**
@@ -1099,13 +1110,11 @@ function updateCharacterDisplay(speakerIndex, image) {
  * Показывает static.gif во всех окнах, сбрасывает сохраненные портреты
  */
 function initializeCharacterPortraits() {
-    const staticImage = 'assets/images/portraits/static.gif';
+    const staticImage = getAssetUrl('assets/images/portraits/static.gif');
     
-    // Сбрасываем сохраненные портреты
     state.lastPortrait.window1 = null;
     state.lastPortrait.window2 = null;
     
-    // При старте показываем static.gif в обоих окнах
     $('#char-1, #char-2').css('background-image', `url(${staticImage})`);
     $('.overlay').css('opacity', '0.3');
 }
@@ -1116,7 +1125,11 @@ function initializeCharacterPortraits() {
 function endTransmission() {
     console.log('Завершение передачи');
     
-    // Получаем текущую частоту
+    if (state.currentVoiceline) {
+        state.currentVoiceline.pause();
+        state.currentVoiceline = null;
+    }
+    
     const currentFrequency = getCurrentFrequency();
     
     // Очищаем текст и имя говорящего
@@ -1126,7 +1139,7 @@ function endTransmission() {
     
     // Уменьшаем яркость персонажей и заменяем их изображения на статику
     $('.overlay').css('opacity', '0.3');
-    $('#char-1, #char-2').css('background-image', 'url(assets/images/portraits/static.gif)');
+    $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
     
     // Устанавливаем флаг завершения передачи
     state.isTransmissionEnded = true;
@@ -1601,10 +1614,14 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     if (!text) text = '';
     if (!characterName) characterName = 'Система';
     
+    const voiceData = characterVoice || { audio: null, mode: 'none' };
+    const voiceAudio = voiceData.audio;
+    const voiceMode = voiceData.mode || 'none';
+    
     const cleanText = checkAndActivateGlitchEffects(text);
     const { text: textWithoutPauses, pauses } = extractPauses(cleanText);
     
-    console.log(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}"`);
+    console.log(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}", режим звука: ${voiceMode}`);
     
     $('#c-char').text(characterName + ':');
     $('#text-con').addClass('typing-in-progress');
@@ -1621,6 +1638,22 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     
     if (state.typingTimeout) {
         clearTimeout(state.typingTimeout);
+    }
+    
+    if (state.currentVoiceline) {
+        state.currentVoiceline.pause();
+        state.currentVoiceline = null;
+    }
+    
+    if (voiceMode === 'voiceline' && voiceAudio) {
+        try {
+            const voicelineClone = voiceAudio.cloneNode();
+            voicelineClone.volume = 0.8;
+            state.currentVoiceline = voicelineClone;
+            voicelineClone.play().catch(err => console.warn('Не удалось воспроизвести озвучку:', err));
+        } catch (e) {
+            console.warn('Ошибка при воспроизведении озвучки:', e);
+        }
     }
     
     function typing() {
@@ -1671,9 +1704,9 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         
         const punctuationMarks = ['.', ',', '!', '?', ':', ';'];
         
-        if (characterVoice && textWithoutPauses[i] !== ' ' && textWithoutPauses[i] !== '\n') {
+        if (voiceMode === 'typing' && voiceAudio && textWithoutPauses[i] !== ' ' && textWithoutPauses[i] !== '\n') {
             try {
-                const voiceClone = characterVoice.cloneNode();
+                const voiceClone = voiceAudio.cloneNode();
                 voiceClone.currentTime = 0;
                 
                 let volume = 0.03;
@@ -1723,13 +1756,16 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
             element.text(textWithoutPauses);
             isTyping = false;
             $('#text-con').removeClass('typing-in-progress');
+            if (state.currentVoiceline) {
+                state.currentVoiceline.pause();
+                state.currentVoiceline = null;
+            }
             if (onComplete) onComplete();
         }
     }
     
     $('#text-con').one('click', skipTyping);
     
-    // Начинаем печать
     typing();
 }
 
@@ -1799,10 +1835,13 @@ async function checkRepeatCountsApiAvailability() {
 function changeFreq() {
     console.log("Изменение частоты");
     
-    // Прерываем текущую печать текста
     $('#text-con').removeClass('typing-in-progress');
     
-    // Останавливаем все звуки
+    if (state.currentVoiceline) {
+        state.currentVoiceline.pause();
+        state.currentVoiceline = null;
+    }
+    
     $('audio').each(function() {
         this.pause();
         this.currentTime = 0;
@@ -1880,7 +1919,7 @@ function changeFreq() {
     $('#c-char').text('');
     
     // Сбрасываем изображения персонажей
-    $('#char-1, #char-2').css('background-image', 'url(assets/images/portraits/static.gif)');
+    $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
     $('.overlay').css('opacity', '0.3');
     
     // Скрываем кнопки
@@ -2729,21 +2768,17 @@ function initGlitchEffects() {
  * Предварительная загрузка звуков для глюков
  */
 function preloadGlitchSounds() {
-    // Создаем звуки для эффектов глюков
     try {
-        // Можно сделать предварительную загрузку собственных аудиофайлов для глюков
         const glitchSounds = [
             'assets/sounds/voices/glitch/1.mp3',
             'assets/sounds/voices/glitch/2.mp3',
             'assets/sounds/voices/glitch/static.mp3'
         ];
         
-        // Создаем аудиоэлементы для предварительной загрузки
         glitchSounds.forEach(sound => {
             const audio = new Audio();
-            audio.src = sound;
+            audio.src = getAssetUrl(sound);
             audio.preload = 'auto';
-            // Загружаем на низкой громкости
             audio.volume = 0.01;
             audio.muted = true;
             

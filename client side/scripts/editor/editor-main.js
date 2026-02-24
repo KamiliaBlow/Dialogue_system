@@ -3,7 +3,7 @@ import AppConfig from '../config.js';
 const { API_URL } = AppConfig;
 
 class DialogueEditor {
-    constructor() {
+constructor() {
         this.state = {
             currentDialogueId: null,
             dialogues: [],
@@ -13,7 +13,9 @@ class DialogueEditor {
             choices: [],
             portraits: [],
             sounds: [],
-            selectedNodeId: null
+            voicelines: [],
+            selectedNodeId: null,
+            audioPreview: null
         };
     }
     
@@ -45,17 +47,24 @@ class DialogueEditor {
         this.renderDialogueList();
     }
     
-    async loadFiles() {
-        const [portraitsRes, soundsRes] = await Promise.all([
-            fetch(`${API_URL}/editor/files/portraits`, { credentials: 'include' }),
-            fetch(`${API_URL}/editor/files/sounds`, { credentials: 'include' })
-        ]);
-        
-        const portraitsData = await portraitsRes.json();
-        const soundsData = await soundsRes.json();
-        
-        this.state.portraits = portraitsData.files || [];
-        this.state.sounds = soundsData.files || [];
+async loadFiles() {
+        try {
+            const [portraitsRes, soundsRes, voicelinesRes] = await Promise.all([
+                fetch(`${API_URL}/editor/files/portraits`, { credentials: 'include' }),
+                fetch(`${API_URL}/editor/files/sounds`, { credentials: 'include' }),
+                fetch(`${API_URL}/editor/files/voicelines`, { credentials: 'include' })
+            ]);
+            
+            const portraitsData = await portraitsRes.json();
+            const soundsData = await soundsRes.json();
+            const voicelinesData = await voicelinesRes.json();
+            
+            this.state.portraits = portraitsData.files || [];
+            this.state.sounds = soundsData.files || [];
+            this.state.voicelines = voicelinesData.files || [];
+        } catch (error) {
+            console.error('Error loading files:', error);
+        }
     }
     
     renderDialogueList() {
@@ -220,18 +229,26 @@ class DialogueEditor {
         });
     }
     
-    updateBranchSelects() {
-        const selects = ['conversation-branch-select', 'option-target'];
-        this.state.branches.forEach(branch => {
-            selects.forEach(id => {
-                const select = document.getElementById(id);
-                if (select) {
+updateBranchSelects() {
+        const selects = ['conversation-branch-select'];
+        
+        selects.forEach(id => {
+            const select = document.getElementById(id);
+            if (!select) return;
+            
+            const currentValue = select.value;
+            select.innerHTML = '<option value="main">Главная ветка</option>';
+            
+            this.state.branches.forEach(branch => {
+                if (branch.branch_id !== 'main') {
                     const option = document.createElement('option');
                     option.value = branch.branch_id;
-                    option.textContent = branch.branch_id === 'main' ? 'Главная ветка' : branch.branch_id;
+                    option.textContent = branch.branch_id;
                     select.appendChild(option);
                 }
             });
+            
+            select.value = currentValue || 'main';
         });
     }
     
@@ -304,6 +321,14 @@ class DialogueEditor {
         });
         
         document.getElementById('upload-voice').addEventListener('change', (e) => this.uploadFile(e, 'sound'));
+        
+        document.getElementById('character-voice-mode').addEventListener('change', (e) => {
+            this.updateVoiceModeUI(e.target.value);
+        });
+        
+        document.getElementById('preview-typing-btn').addEventListener('click', () => {
+            this.previewSound('character-voice');
+        });
         
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
@@ -401,15 +426,16 @@ class DialogueEditor {
         }
     }
     
-    openCharacterModal(id = null) {
+openCharacterModal(id = null) {
         const modal = document.getElementById('character-modal');
         const portraitSelect = document.getElementById('character-portrait');
         const voiceSelect = document.getElementById('character-voice');
+        const voiceModeSelect = document.getElementById('character-voice-mode');
         
         portraitSelect.innerHTML = '<option value="">Выберите файл...</option>' +
             this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
         
-        voiceSelect.innerHTML = '<option value="">Без звука</option>' +
+        voiceSelect.innerHTML = '<option value="">Выберите файл...</option>' +
             this.state.sounds.map(s => `<option value="${s}">${s.split('/').pop()}</option>`).join('');
         
         if (id) {
@@ -420,8 +446,10 @@ class DialogueEditor {
                 document.getElementById('character-window').value = char.window;
                 document.getElementById('character-portrait').value = char.image || '';
                 document.getElementById('character-voice').value = char.voice || '';
+                document.getElementById('character-voice-mode').value = char.voice_mode || 'none';
                 document.getElementById('portrait-preview').style.backgroundImage = 
                     char.image ? `url('${char.image}')` : 'none';
+                this.updateVoiceModeUI(char.voice_mode || 'none');
             }
         } else {
             document.getElementById('character-id').value = '';
@@ -429,23 +457,53 @@ class DialogueEditor {
             document.getElementById('character-window').value = '1';
             document.getElementById('character-portrait').value = '';
             document.getElementById('character-voice').value = '';
+            document.getElementById('character-voice-mode').value = 'none';
             document.getElementById('portrait-preview').style.backgroundImage = 'none';
+            this.updateVoiceModeUI('none');
         }
         
         modal.style.display = 'flex';
     }
     
-    async saveCharacter() {
+    updateVoiceModeUI(mode) {
+        const typingSection = document.getElementById('voice-typing-section');
+        
+        typingSection.classList.add('hidden');
+        
+        if (mode === 'typing') {
+            typingSection.classList.remove('hidden');
+        }
+    }
+    
+    previewSound(selectId) {
+        const select = document.getElementById(selectId);
+        const soundPath = select.value;
+        
+        if (!soundPath) return;
+        
+        if (this.state.audioPreview) {
+            this.state.audioPreview.pause();
+            this.state.audioPreview = null;
+        }
+        
+        this.state.audioPreview = new Audio(soundPath);
+        this.state.audioPreview.play().catch(err => console.log('Audio play error:', err));
+    }
+    
+async saveCharacter() {
         const id = document.getElementById('character-id').value;
         const name = document.getElementById('character-name').value.trim();
         const window = document.getElementById('character-window').value;
         const image = document.getElementById('character-portrait').value;
+        const voiceMode = document.getElementById('character-voice-mode').value;
         const voice = document.getElementById('character-voice').value;
         
         if (!name) {
             alert('Укажите имя персонажа');
             return;
         }
+        
+        const voicePath = voiceMode === 'typing' ? voice : '';
         
         try {
             const url = id 
@@ -454,8 +512,8 @@ class DialogueEditor {
             const method = id ? 'PUT' : 'POST';
             
             const body = id 
-                ? { name, image, voice, window: parseInt(window) }
-                : { dialogueId: this.state.currentDialogueId, name, image, voice, window: parseInt(window) };
+                ? { name, image, voice: voicePath, voiceMode, window: parseInt(window) }
+                : { dialogueId: this.state.currentDialogueId, name, image, voice: voicePath, voiceMode, window: parseInt(window) };
             
             const response = await fetch(url, {
                 method,
@@ -497,7 +555,7 @@ class DialogueEditor {
         }
     }
     
-    openConversationModal(id = null) {
+openConversationModal(id = null) {
         const modal = document.getElementById('conversation-modal');
         
         this.updateCharacterSelects();
@@ -506,6 +564,10 @@ class DialogueEditor {
         const customImageSelect = document.getElementById('conversation-custom-image');
         customImageSelect.innerHTML = '<option value="">По умолчанию</option>' +
             this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
+        
+        const voicelineSelect = document.getElementById('conversation-voiceline');
+        voicelineSelect.innerHTML = '<option value="">Без озвучки (звук персонажа)</option>' +
+            this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
         
         if (id) {
             const conv = this.state.conversations.find(c => c.id == id);
@@ -516,6 +578,7 @@ class DialogueEditor {
                 document.getElementById('conversation-text').value = conv.text;
                 document.getElementById('conversation-custom-image').value = conv.custom_image || '';
                 document.getElementById('conversation-fake-name').value = conv.fake_name || '';
+                document.getElementById('conversation-voiceline').value = conv.voiceline || '';
                 
                 const choices = this.state.choices.filter(ch => ch.conversation_id == id);
                 if (choices.length > 0) {
@@ -537,6 +600,7 @@ class DialogueEditor {
             document.getElementById('conversation-text').value = '';
             document.getElementById('conversation-custom-image').value = '';
             document.getElementById('conversation-fake-name').value = '';
+            document.getElementById('conversation-voiceline').value = '';
             document.getElementById('has-choice').checked = false;
             document.getElementById('choice-options-container').classList.add('hidden');
             document.getElementById('choice-id').value = '';
@@ -735,7 +799,7 @@ class DialogueEditor {
         }
     }
     
-    async uploadFile(event, type) {
+async uploadFile(event, type) {
         const file = event.target.files[0];
         if (!file) return;
         
@@ -764,10 +828,15 @@ class DialogueEditor {
                     this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
                 select.value = data.path;
                 document.getElementById('portrait-preview').style.backgroundImage = `url('${data.path}')`;
-            } else {
+            } else if (type === 'sound') {
                 const select = document.getElementById('character-voice');
-                select.innerHTML = '<option value="">Без звука</option>' +
+                select.innerHTML = '<option value="">Выберите файл...</option>' +
                     this.state.sounds.map(s => `<option value="${s}">${s.split('/').pop()}</option>`).join('');
+                select.value = data.path;
+            } else if (type === 'voiceline') {
+                const select = document.getElementById('character-voiceline');
+                select.innerHTML = '<option value="">Выберите файл...</option>' +
+                    this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
                 select.value = data.path;
             }
             

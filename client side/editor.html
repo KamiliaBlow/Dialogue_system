@@ -154,15 +154,26 @@
                         </div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Звук печати:</label>
-                        <select id="character-voice" class="form-input">
-                            <option value="">Без звука</option>
+<div class="form-row">
+                    <div class="form-group voice-section">
+                        <label>Звук персонажа:</label>
+                        <select id="character-voice-mode" class="form-input voice-mode-select">
+                            <option value="none">Без звука</option>
+                            <option value="typing">Звук печати</option>
                         </select>
-                        <div class="upload-section">
-                            <input type="file" id="upload-voice" accept="audio/*" class="hidden">
-                            <button id="upload-voice-btn" class="btn btn-small">Загрузить новый</button>
+                        
+                        <div id="voice-typing-section" class="voice-subsection hidden">
+                            <label>Файл звука:</label>
+                            <div class="file-selector-with-preview">
+                                <select id="character-voice" class="form-input">
+                                    <option value="">Выберите файл...</option>
+                                </select>
+                                <button id="preview-typing-btn" class="btn btn-small preview-btn" type="button">▶</button>
+                            </div>
+                            <div class="upload-section">
+                                <input type="file" id="upload-voice" accept="audio/*" class="hidden">
+                                <button id="upload-voice-btn" class="btn btn-small">Загрузить новый</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -200,7 +211,7 @@
                     <textarea id="conversation-text" class="form-textarea" rows="4" placeholder="Текст диалога. Используйте [2s] для паузы 2 секунды."></textarea>
                     <div class="textarea-help">Подсказка: [1s] = пауза 1 сек, [2.5s] = пауза 2.5 сек</div>
                 </div>
-                <div class="form-row">
+<div class="form-row">
                     <div class="form-group">
                         <label>Кастомный портрет (опционально):</label>
                         <select id="conversation-custom-image" class="form-input">
@@ -210,6 +221,17 @@
                     <div class="form-group">
                         <label>Фейковое имя (опционально):</label>
                         <input type="text" id="conversation-fake-name" class="form-input">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Озвучка реплики (опционально):</label>
+                        <div class="voiceline-selector">
+                            <select id="conversation-voiceline" class="form-input">
+                                <option value="">Без озвучки (звук персонажа)</option>
+                            </select>
+                            <button id="preview-conversation-voiceline-btn" class="btn btn-small preview-btn" type="button">▶</button>
+                        </div>
                     </div>
                 </div>
                 

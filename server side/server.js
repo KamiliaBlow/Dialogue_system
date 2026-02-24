@@ -17,7 +17,7 @@ const { Validator, validateBody } = require('./utils/validator');
 // Настройка загрузки файлов
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../client side/assets/images/portraits');
+        const uploadDir = path.join(__dirname, 'assets/images/portraits');
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
@@ -93,6 +93,16 @@ const db = new sqlite3.Database(config.DB_PATH, (err) => {
 });
 
 app.use(express.json());
+app.use('/DIALOGUE_rework/assets', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    next();
+}, express.static(path.join(__dirname, 'assets')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
     secret: config.SESSION_SECRET,
@@ -215,7 +225,19 @@ function initDatabase() {
         )`
     ];
     
-    tables.forEach(sql => db.run(sql));
+tables.forEach(sql => db.run(sql));
+    
+    db.run(`ALTER TABLE characters ADD COLUMN voice_mode TEXT DEFAULT 'none'`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (voice_mode):', err.message);
+        }
+    });
+    
+    db.run(`ALTER TABLE conversations ADD COLUMN voiceline TEXT DEFAULT ''`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (voiceline):', err.message);
+        }
+    });
 }
 
 const authRoutes = express.Router();
@@ -595,6 +617,7 @@ function formatDialogueForClient(dialogue, characters, conversations, choices) {
             name: c.name,
             image: c.image,
             voice: c.voice,
+            voiceMode: c.voice_mode || 'none',
             window: c.window
         })),
         allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),

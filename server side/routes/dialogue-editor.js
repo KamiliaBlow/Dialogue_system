@@ -125,29 +125,28 @@ const dialogueEditorRoutes = (db, upload) => {
 
     // ==================== ПЕРСОНАЖИ ====================
     
-    // Создать персонажа
+// Создать персонажа
     router.post('/characters', (req, res) => {
-        const { dialogueId, name, image, voice, voiceDuration, window } = req.body;
+        const { dialogueId, name, image, voice, voiceMode, voiceDuration, window } = req.body;
         
         if (!dialogueId || !name) {
             return res.status(400).json({ message: 'dialogueId и name обязательны' });
         }
         
-        db.run(`INSERT INTO characters (dialogue_id, name, image, voice, voice_duration, window) VALUES (?, ?, ?, ?, ?, ?)`,
-            [dialogueId, name, image, voice, voiceDuration || 0, window || 1],
+        db.run(`INSERT INTO characters (dialogue_id, name, image, voice, voice_mode, voice_duration, window) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [dialogueId, name, image, voice || '', voiceMode || 'none', voiceDuration || 0, window || 1],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания персонажа' });
                 res.status(201).json({ message: 'Персонаж создан', characterId: this.lastID });
             });
     });
 
-    // Обновить персонажа
     router.put('/characters/:id', (req, res) => {
         const { id } = req.params;
-        const { name, image, voice, voiceDuration, window } = req.body;
+        const { name, image, voice, voiceMode, voiceDuration, window } = req.body;
         
-        db.run(`UPDATE characters SET name = ?, image = ?, voice = ?, voice_duration = ?, window = ? WHERE id = ?`,
-            [name, image, voice, voiceDuration, window, id],
+        db.run(`UPDATE characters SET name = ?, image = ?, voice = ?, voice_mode = ?, voice_duration = ?, window = ? WHERE id = ?`,
+            [name, image, voice || '', voiceMode || 'none', voiceDuration, window, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления персонажа' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Персонаж не найден' });
@@ -289,11 +288,15 @@ const dialogueEditorRoutes = (db, upload) => {
         });
     });
 
-    // ==================== ФАЙЛЫ ====================
+// ==================== ФАЙЛЫ ====================
     
-    // Получить список портретов
     router.get('/files/portraits', (req, res) => {
-        const portraitsDir = path.join(__dirname, '../../client side/assets/images/portraits');
+        const portraitsDir = path.join(__dirname, '../assets/images/portraits');
+        
+        if (!fs.existsSync(portraitsDir)) {
+            fs.mkdirSync(portraitsDir, { recursive: true });
+            return res.json({ files: [] });
+        }
         
         fs.readdir(portraitsDir, (err, files) => {
             if (err) {
@@ -301,13 +304,12 @@ const dialogueEditorRoutes = (db, upload) => {
             }
             
             const imageFiles = files.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
-            res.json({ files: imageFiles.map(f => `assets/images/portraits/${f}`) });
+            res.json({ files: imageFiles.map(f => `/DIALOGUE_rework/assets/images/portraits/${f}`) });
         });
     });
 
-    // Получить список звуков
     router.get('/files/sounds', (req, res) => {
-        const soundsDir = path.join(__dirname, '../../client side/assets/sounds/voices');
+        const soundsDir = path.join(__dirname, '../assets/sounds/voices');
         
         if (!fs.existsSync(soundsDir)) {
             fs.mkdirSync(soundsDir, { recursive: true });
@@ -320,30 +322,45 @@ const dialogueEditorRoutes = (db, upload) => {
             }
             
             const soundFiles = files.filter(f => /\.(wav|mp3|ogg)$/i.test(f));
-            res.json({ files: soundFiles.map(f => `assets/sounds/voices/${f}`) });
+            res.json({ files: soundFiles.map(f => `/DIALOGUE_rework/assets/sounds/voices/${f}`) });
         });
     });
 
-    // Загрузить портрет
+    router.get('/files/voicelines', (req, res) => {
+        const voicelinesDir = path.join(__dirname, '../assets/sounds/voiceline');
+        
+        if (!fs.existsSync(voicelinesDir)) {
+            fs.mkdirSync(voicelinesDir, { recursive: true });
+            return res.json({ files: [] });
+        }
+        
+        fs.readdir(voicelinesDir, (err, files) => {
+            if (err) {
+                return res.json({ files: [] });
+            }
+            
+            const soundFiles = files.filter(f => /\.(wav|mp3|ogg)$/i.test(f));
+            res.json({ files: soundFiles.map(f => `/DIALOGUE_rework/assets/sounds/voiceline/${f}`) });
+        });
+    });
+
+// Загрузить портрет
     router.post('/files/upload-portrait', upload.single('portrait'), (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: 'Файл не загружен' });
         }
         
-        const filePath = `assets/images/portraits/${req.file.filename}`;
-        
         res.json({ 
             message: 'Файл загружен',
-            path: filePath,
+            path: `/DIALOGUE_rework/assets/images/portraits/${req.file.filename}`,
             filename: req.file.filename
         });
     });
 
-    // Загрузить звук
     router.post('/files/upload-sound', (req, res) => {
         const soundStorage = multer.diskStorage({
             destination: (req, file, cb) => {
-                const uploadDir = path.join(__dirname, '../../client side/assets/sounds/voices');
+                const uploadDir = path.join(__dirname, '../assets/sounds/voices');
                 if (!fs.existsSync(uploadDir)) {
                     fs.mkdirSync(uploadDir, { recursive: true });
                 }
@@ -378,11 +395,55 @@ const dialogueEditorRoutes = (db, upload) => {
                 return res.status(400).json({ message: 'Файл не загружен' });
             }
             
-            const filePath = `assets/sounds/voices/${req.file.filename}`;
+            res.json({ 
+                message: 'Файл загружен',
+                path: `/DIALOGUE_rework/assets/sounds/voices/${req.file.filename}`,
+                filename: req.file.filename
+            });
+        });
+    });
+
+    router.post('/files/upload-voiceline', (req, res) => {
+        const voicelineStorage = multer.diskStorage({
+            destination: (req, file, cb) => {
+                const uploadDir = path.join(__dirname, '../assets/sounds/voiceline');
+                if (!fs.existsSync(uploadDir)) {
+                    fs.mkdirSync(uploadDir, { recursive: true });
+                }
+                cb(null, uploadDir);
+            },
+            filename: (req, file, cb) => {
+                const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+                const ext = path.extname(file.originalname);
+                cb(null, 'voiceline_' + uniqueSuffix + ext);
+            }
+        });
+        
+        const voicelineUpload = multer({ 
+            storage: voicelineStorage,
+            limits: { fileSize: 50 * 1024 * 1024 },
+            fileFilter: (req, file, cb) => {
+                const allowedTypes = /wav|mp3|ogg/;
+                const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+                const mimetype = /audio|wav|mp3|mpeg|ogg/.test(file.mimetype);
+                if (mimetype && extname) {
+                    return cb(null, true);
+                }
+                cb(new Error('Только аудиофайлы разрешены'));
+            }
+        });
+        
+        voicelineUpload.single('voiceline')(req, res, (err) => {
+            if (err) {
+                return res.status(400).json({ message: err.message });
+            }
+            if (!req.file) {
+                return res.status(400).json({ message: 'Файл не загружен' });
+            }
             
             res.json({ 
                 message: 'Файл загружен',
-                path: filePath,
+                path: `/DIALOGUE_rework/assets/sounds/voiceline/${req.file.filename}`,
                 filename: req.file.filename
             });
         });
@@ -426,7 +487,7 @@ const dialogueEditorRoutes = (db, upload) => {
         });
     });
 
-    // Форматирование диалога для клиента
+// Форматирование диалога для клиента
     function formatDialogueExport(dialogue, characters, conversations, choices) {
         const result = {
             frequency: dialogue.frequency,
@@ -434,6 +495,7 @@ const dialogueEditorRoutes = (db, upload) => {
                 name: c.name,
                 image: c.image,
                 voice: c.voice,
+                voiceMode: c.voice_mode || 'none',
                 voiceDuration: c.voice_duration,
                 window: c.window
             })),
