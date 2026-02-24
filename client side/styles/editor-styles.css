@@ -1,6 +1,3 @@
-/* Импорт базовых стилей админки */
-@import url('admin-styles.css');
-
 /* Специфичные стили редактора */
 .editor-layout {
     display: grid;
