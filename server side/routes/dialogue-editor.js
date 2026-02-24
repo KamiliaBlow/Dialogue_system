@@ -166,28 +166,27 @@ const dialogueEditorRoutes = (db, upload) => {
     // ==================== РЕПЛИКИ ====================
     
     // Создать реплику
-    router.post('/conversations', (req, res) => {
-        const { dialogueId, branchId, characterId, text, customImage, fakeName, sortOrder } = req.body;
+router.post('/conversations', (req, res) => {
+        const { dialogueId, branchId, characterId, text, customImage, fakeName, voiceline, sortOrder } = req.body;
         
         if (!dialogueId || !characterId || !text) {
             return res.status(400).json({ message: 'dialogueId, characterId и text обязательны' });
         }
         
-        db.run(`INSERT INTO conversations (dialogue_id, branch_id, character_id, text, custom_image, fake_name, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [dialogueId, branchId || 'main', characterId, text, customImage, fakeName, sortOrder || 0],
+        db.run(`INSERT INTO conversations (dialogue_id, branch_id, character_id, text, custom_image, fake_name, voiceline, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [dialogueId, branchId || 'main', characterId, text, customImage, fakeName, voiceline, sortOrder || 0],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания реплики' });
                 res.status(201).json({ message: 'Реплика создана', conversationId: this.lastID });
             });
     });
 
-    // Обновить реплику
     router.put('/conversations/:id', (req, res) => {
         const { id } = req.params;
-        const { branchId, characterId, text, customImage, fakeName, sortOrder } = req.body;
+        const { branchId, characterId, text, customImage, fakeName, voiceline, sortOrder } = req.body;
         
-        db.run(`UPDATE conversations SET branch_id = ?, character_id = ?, text = ?, custom_image = ?, fake_name = ?, sort_order = ? WHERE id = ?`,
-            [branchId, characterId, text, customImage, fakeName, sortOrder, id],
+        db.run(`UPDATE conversations SET branch_id = ?, character_id = ?, text = ?, custom_image = ?, fake_name = ?, voiceline = ?, sort_order = ? WHERE id = ?`,
+            [branchId, characterId, text, customImage, fakeName, voiceline, sortOrder, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления реплики' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Реплика не найдена' });
@@ -304,7 +303,7 @@ const dialogueEditorRoutes = (db, upload) => {
             }
             
             const imageFiles = files.filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
-            res.json({ files: imageFiles.map(f => `/DIALOGUE_rework/assets/images/portraits/${f}`) });
+            res.json({ files: imageFiles.map(f => `/assets/images/portraits/${f}`) });
         });
     });
 
@@ -322,7 +321,7 @@ const dialogueEditorRoutes = (db, upload) => {
             }
             
             const soundFiles = files.filter(f => /\.(wav|mp3|ogg)$/i.test(f));
-            res.json({ files: soundFiles.map(f => `/DIALOGUE_rework/assets/sounds/voices/${f}`) });
+            res.json({ files: soundFiles.map(f => `/assets/sounds/voices/${f}`) });
         });
     });
 
@@ -340,7 +339,7 @@ const dialogueEditorRoutes = (db, upload) => {
             }
             
             const soundFiles = files.filter(f => /\.(wav|mp3|ogg)$/i.test(f));
-            res.json({ files: soundFiles.map(f => `/DIALOGUE_rework/assets/sounds/voiceline/${f}`) });
+            res.json({ files: soundFiles.map(f => `/assets/sounds/voiceline/${f}`) });
         });
     });
 
@@ -352,7 +351,7 @@ const dialogueEditorRoutes = (db, upload) => {
         
         res.json({ 
             message: 'Файл загружен',
-            path: `/DIALOGUE_rework/assets/images/portraits/${req.file.filename}`,
+            path: `/assets/images/portraits/${req.file.filename}`,
             filename: req.file.filename
         });
     });
@@ -397,7 +396,7 @@ const dialogueEditorRoutes = (db, upload) => {
             
             res.json({ 
                 message: 'Файл загружен',
-                path: `/DIALOGUE_rework/assets/sounds/voices/${req.file.filename}`,
+                path: `/assets/sounds/voices/${req.file.filename}`,
                 filename: req.file.filename
             });
         });
@@ -443,7 +442,7 @@ const dialogueEditorRoutes = (db, upload) => {
             
             res.json({ 
                 message: 'Файл загружен',
-                path: `/DIALOGUE_rework/assets/sounds/voiceline/${req.file.filename}`,
+                path: `/assets/sounds/voiceline/${req.file.filename}`,
                 filename: req.file.filename
             });
         });
@@ -513,13 +512,14 @@ const dialogueEditorRoutes = (db, upload) => {
             const convChoices = choices.filter(ch => ch.conversation_id === c.id);
             const char = characters.find(ch => ch.id === c.character_id);
             
-            const convObj = {
+const convObj = {
                 speaker: char ? char.name : 'Система',
                 text: c.text
             };
             
             if (c.custom_image) convObj.image = c.custom_image;
             if (c.fake_name) convObj.fakeName = c.fake_name;
+            if (c.voiceline) convObj.voiceline = c.voiceline;
             
             if (convChoices.length > 0) {
                 const choice = convChoices[0];

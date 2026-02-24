@@ -386,9 +386,19 @@ document.getElementById('save-dialogue-btn').addEventListener('click', () => thi
             this.updateVoiceModeUI(e.target.value);
         });
         
-        document.getElementById('preview-typing-btn').addEventListener('click', () => {
+document.getElementById('preview-typing-btn').addEventListener('click', () => {
             this.previewSound('character-voice');
         });
+        
+        document.getElementById('preview-conversation-voiceline-btn').addEventListener('click', () => {
+            this.previewSound('conversation-voiceline');
+        });
+        
+        document.getElementById('upload-conversation-voiceline-btn').addEventListener('click', () => {
+            document.getElementById('upload-conversation-voiceline').click();
+        });
+        
+        document.getElementById('upload-conversation-voiceline').addEventListener('change', (e) => this.uploadFile(e, 'voiceline'));
         
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
@@ -703,13 +713,14 @@ openConversationModal(id = null) {
         container.appendChild(optionEl);
     }
     
-    async saveConversation() {
+async saveConversation() {
         const id = document.getElementById('conversation-id').value;
         const characterId = document.getElementById('conversation-character').value;
         const branchId = document.getElementById('conversation-branch-select').value;
         const text = document.getElementById('conversation-text').value;
         const customImage = document.getElementById('conversation-custom-image').value;
         const fakeName = document.getElementById('conversation-fake-name').value;
+        const voiceline = document.getElementById('conversation-voiceline').value;
         const hasChoice = document.getElementById('has-choice').checked;
         
         if (!characterId || !text) {
@@ -726,8 +737,8 @@ openConversationModal(id = null) {
             const sortOrder = id ? undefined : this.state.conversations.filter(c => c.branch_id === branchId).length;
             
             const body = id 
-                ? { branchId, characterId, text, customImage, fakeName }
-                : { dialogueId: this.state.currentDialogueId, branchId, characterId, text, customImage, fakeName, sortOrder };
+                ? { branchId, characterId, text, customImage, fakeName, voiceline }
+                : { dialogueId: this.state.currentDialogueId, branchId, characterId, text, customImage, fakeName, voiceline, sortOrder };
             
             const response = await fetch(url, {
                 method,
@@ -894,10 +905,19 @@ async uploadFile(event, type) {
                     this.state.sounds.map(s => `<option value="${s}">${s.split('/').pop()}</option>`).join('');
                 select.value = data.path;
             } else if (type === 'voiceline') {
-                const select = document.getElementById('character-voiceline');
-                select.innerHTML = '<option value="">Выберите файл...</option>' +
-                    this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
-                select.value = data.path;
+                const characterSelect = document.getElementById('character-voiceline');
+                if (characterSelect) {
+                    characterSelect.innerHTML = '<option value="">Выберите файл...</option>' +
+                        this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
+                    characterSelect.value = data.path;
+                }
+                
+                const conversationSelect = document.getElementById('conversation-voiceline');
+                if (conversationSelect) {
+                    conversationSelect.innerHTML = '<option value="">Без озвучки (звук персонажа)</option>' +
+                        this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
+                    conversationSelect.value = data.path;
+                }
             }
             
         } catch (error) {
