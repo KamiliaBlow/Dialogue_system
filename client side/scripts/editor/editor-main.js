@@ -193,7 +193,7 @@ renderDialogueInfo(dialogue) {
         
         container.innerHTML = this.state.characters.map(c => `
             <div class="character-card" data-id="${c.id}">
-                <div class="character-portrait" style="background-image: url('${c.image || 'assets/images/portraits/static.gif'}')"></div>
+                <div class="character-portrait" style="background-image: url('${getAssetUrl(c.image) || getAssetUrl('assets/images/portraits/static.gif')}')"></div>
                 <div class="character-info">
                     <div class="character-name">${c.name}</div>
                     <div class="character-window-label">Окно ${c.window}</div>
@@ -379,7 +379,7 @@ document.getElementById('save-dialogue-btn').addEventListener('click', () => thi
         
         document.getElementById('character-portrait').addEventListener('change', (e) => {
             const preview = document.getElementById('portrait-preview');
-            preview.style.backgroundImage = e.target.value ? `url('${e.target.value}')` : 'none';
+            preview.style.backgroundImage = e.target.value ? `url('${getAssetUrl(e.target.value)}')` : 'none';
         });
         
         document.getElementById('upload-portrait-btn').addEventListener('click', () => {
@@ -530,7 +530,7 @@ openCharacterModal(id = null) {
                 document.getElementById('character-voice').value = char.voice || '';
                 document.getElementById('character-voice-mode').value = char.voice_mode || 'none';
                 document.getElementById('portrait-preview').style.backgroundImage = 
-                    char.image ? `url('${char.image}')` : 'none';
+                    char.image ? `url('${getAssetUrl(char.image)}')` : 'none';
                 this.updateVoiceModeUI(char.voice_mode || 'none');
             }
         } else {
@@ -912,7 +912,7 @@ async uploadFile(event, type) {
                 select.innerHTML = '<option value="">Выберите файл...</option>' +
                     this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
                 select.value = data.path;
-                document.getElementById('portrait-preview').style.backgroundImage = `url('${data.path}')`;
+                document.getElementById('portrait-preview').style.backgroundImage = `url('${getAssetUrl(data.path)}')`;
             } else if (type === 'sound') {
                 const select = document.getElementById('character-voice');
                 select.innerHTML = '<option value="">Выберите файл...</option>' +

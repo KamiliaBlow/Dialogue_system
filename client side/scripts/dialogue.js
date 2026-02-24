@@ -2,12 +2,16 @@ let games = null;
 let API_URL = null;
 let ASSETS_URL = null;
 let dialoguesCache = {};
+let assetPreloader = null;
 
 async function loadConfig() {
     try {
         const appConfigModule = await import('./config.js');
         API_URL = appConfigModule.default.API_URL;
         ASSETS_URL = appConfigModule.default.ASSETS_URL;
+        
+        const preloaderModule = await import('./asset-preloader.js');
+        assetPreloader = preloaderModule.default;
         
         const response = await fetch(`${API_URL}/frequencies`, {
             credentials: 'include'
@@ -35,6 +39,10 @@ async function loadConfig() {
             const appConfigModule = await import('./config.js');
             API_URL = appConfigModule.default.API_URL;
             ASSETS_URL = appConfigModule.default.ASSETS_URL;
+            
+            const preloaderModule = await import('./asset-preloader.js');
+            assetPreloader = preloaderModule.default;
+            
             console.log('Config loaded from Config.js (fallback)');
         } catch (fallbackError) {
             console.error('Critical: Failed to load config:', fallbackError);
@@ -93,6 +101,13 @@ async function loadDialogueFromDB(frequency) {
         
         dialoguesCache[frequency] = dialogue;
         console.log(`Processed dialogue for ${frequency}:`, dialogue);
+        
+        if (assetPreloader) {
+            console.log(`Preloading assets for dialogue ${frequency}...`);
+            await assetPreloader.preloadDialogueAssets(dialogue);
+            console.log(`Assets preloaded for dialogue ${frequency}:`, assetPreloader.getCacheStats());
+        }
+        
         return dialogue;
         
     } catch (error) {
@@ -750,7 +765,7 @@ function handleChoiceDialog(conversation) {
     updateCharacterDisplay(speakerIndex, characterImage);
     
     // Получаем голос персонажа
-    const characterVoice = getCharacterVoice(speakerIndex);
+    const characterVoice = getCharacterVoice(speakerIndex, conversation.voiceline || null);
     
     // Проверяем, был ли уже сделан выбор для этого диалога
     const frequency = getCurrentFrequency();
@@ -968,7 +983,7 @@ function processObjectDialogLine(conversation) {
     updateCharacterDisplay(speakerIndex, characterImage);
     
     // Воспроизведение голоса персонажа
-    let characterVoice = getCharacterVoice(speakerIndex);
+    let characterVoice = getCharacterVoice(speakerIndex, conversation.voiceline || null);
     
     // НОВЫЙ КОД: Проверка на наличие маркеров глюков
     let dialogText = conversation.text || '';
@@ -1015,13 +1030,31 @@ function findSpeakerIndex(speaker) {
  * @returns {string} - Путь к изображению
  */
 function getCharacterImage(image, speakerIndex) {
-    if (image) return getAssetUrl(image);
+    if (image) {
+        const fullUrl = getAssetUrl(image);
+        if (assetPreloader) {
+            const cachedImg = assetPreloader.getCachedImage(image);
+            if (cachedImg) {
+                return cachedImg.src;
+            }
+        }
+        return fullUrl;
+    }
     
     if (speakerIndex >= 0 && 
         state.currentDialogue.characters && 
         speakerIndex < state.currentDialogue.characters.length) {
         const charImage = state.currentDialogue.characters[speakerIndex].image;
-        return charImage ? getAssetUrl(charImage) : getAssetUrl('assets/images/portraits/static.gif');
+        if (charImage) {
+            if (assetPreloader) {
+                const cachedImg = assetPreloader.getCachedImage(charImage);
+                if (cachedImg) {
+                    return cachedImg.src;
+                }
+            }
+            return getAssetUrl(charImage);
+        }
+        return getAssetUrl('assets/images/portraits/static.gif');
     }
     
     return getAssetUrl('assets/images/portraits/static.gif');
@@ -1032,11 +1065,37 @@ function getCharacterImage(image, speakerIndex) {
  * @param {number} speakerIndex - Индекс персонажа
  * @returns {Audio|null} - Аудио-объект
  */
-function getCharacterVoice(speakerIndex) {
+function getCharacterVoice(speakerIndex, voicelinePath = null) {
+    if (voicelinePath && assetPreloader) {
+        const cachedAudio = assetPreloader.getCachedAudio(voicelinePath);
+        if (cachedAudio) {
+            return {
+                audio: cachedAudio,
+                mode: 'voiceline'
+            };
+        }
+        const fullUrl = getAssetUrl(voicelinePath);
+        return {
+            audio: new Audio(fullUrl),
+            mode: 'voiceline'
+        };
+    }
+    
     if (speakerIndex >= 0 && 
         state.currentDialogue.characters && 
         speakerIndex < state.currentDialogue.characters.length) {
         const char = state.currentDialogue.characters[speakerIndex];
+        
+        if (char.voice && assetPreloader) {
+            const cachedAudio = assetPreloader.getCachedAudio(char.voice);
+            if (cachedAudio) {
+                return {
+                    audio: cachedAudio,
+                    mode: char.voiceMode || 'typing'
+                };
+            }
+        }
+        
         return {
             audio: char.voice ? new Audio(getAssetUrl(char.voice)) : null,
             mode: char.voiceMode || 'none'
