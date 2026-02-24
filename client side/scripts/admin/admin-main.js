@@ -27,7 +27,8 @@ class AdminApp {
             const authData = await this.api.checkAuth();
             
             if (!authData.isAdmin) {
-                setTimeout(() => window.location.href = 'index.html', 100);
+                this.showError('У вас нет прав администратора');
+                setTimeout(() => window.location.href = 'index.html', 2000);
                 return;
             }
             
@@ -39,8 +40,23 @@ class AdminApp {
             
         } catch (error) {
             console.error('Init error:', error);
-            alert('Ошибка загрузки. Перенаправление...');
-            window.location.href = 'index.html';
+            this.showError('Ошибка подключения к серверу. Проверьте, что сервер запущен на порту 3000');
+        }
+    }
+    
+    showError(message) {
+        const container = document.querySelector('.container');
+        if (container) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'admin-card';
+            errorDiv.innerHTML = `
+                <div class="admin-card-title" style="color: #ff3333;">Ошибка</div>
+                <p>${message}</p>
+                <button class="btn" onclick="location.reload()">Повторить</button>
+                <button class="btn" onclick="window.location.href='index.html'">На главную</button>
+            `;
+            container.innerHTML = '';
+            container.appendChild(errorDiv);
         }
     }
     

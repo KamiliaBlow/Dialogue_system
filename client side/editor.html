@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактор диалогов - Терминал GMS-4521</title>
+    <link href="https://fonts.googleapis.com/css?family=Orbitron:700" rel="stylesheet">
+    <link rel="stylesheet" href="styles/editor-styles.css">
+</head>
+<body>
+    <div class="background-code" id="bgCode"></div>
+    
+    <div class="container">
+        <header class="admin-header">
+            <div class="admin-title">ТЕРМИНАЛ GMS-4521 - РЕДАКТОР ДИАЛОГОВ</div>
+            <div class="header-buttons">
+                <a href="admin.html" class="btn">Админ-панель</a>
+                <button id="logout-btn" class="admin-logout">ВЫХОД</button>
+            </div>
+        </header>
+        
+        <div class="editor-layout">
+            <!-- Левая панель: список диалогов -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3>ДИАЛОГИ</h3>
+                    <button id="new-dialogue-btn" class="btn">+ Новый</button>
+                </div>
+                <div class="dialogue-list" id="dialogue-list">
+                    <div class="loading"><div class="loading-spinner"></div></div>
+                </div>
+            </aside>
+            
+            <!-- Центральная панель: редактор -->
+            <main class="editor-main">
+                <div id="editor-placeholder" class="editor-placeholder">
+                    <div class="placeholder-icon">&#128172;</div>
+                    <p>Выберите диалог для редактирования</p>
+                    <p>или создайте новый</p>
+                </div>
+                
+                <div id="editor-content" class="editor-content hidden">
+                    <!-- Информация о диалоге -->
+                    <section class="editor-section">
+                        <h3 class="section-title">ИНФОРМАЦИЯ О ДИАЛОГЕ</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Частота:</label>
+                                <input type="text" id="dialogue-frequency" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label>Название:</label>
+                                <input type="text" id="dialogue-title" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label>Доступ:</label>
+                                <select id="dialogue-access" class="form-input">
+                                    <option value="all">Все пользователи</option>
+                                    <option value="custom">Выбранные</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="save-dialogue-btn" class="btn">Сохранить</button>
+                            <button id="delete-dialogue-btn" class="btn btn-danger">Удалить диалог</button>
+                        </div>
+                    </section>
+                    
+                    <!-- Персонажи -->
+                    <section class="editor-section">
+                        <h3 class="section-title">ПЕРСОНАЖИ</h3>
+                        <div class="characters-container" id="characters-container">
+                            <!-- Персонажи будут добавлены здесь -->
+                        </div>
+                        <button id="add-character-btn" class="btn">+ Добавить персонажа</button>
+                    </section>
+                    
+                    <!-- Визуальное дерево диалога -->
+                    <section class="editor-section">
+                        <h3 class="section-title">ДЕРЕВО ДИАЛОГА</h3>
+                        <div class="tree-controls">
+                            <button id="add-conversation-btn" class="btn">+ Добавить реплику</button>
+                            <button id="add-branch-btn" class="btn">+ Добавить ветку</button>
+                        </div>
+                        <div class="dialogue-tree" id="dialogue-tree">
+                            <!-- Дерево будет построено здесь -->
+                        </div>
+                    </section>
+                </div>
+            </main>
+            
+            <!-- Правая панель: редактирование элемента -->
+            <aside class="properties-panel" id="properties-panel">
+                <div class="panel-placeholder">
+                    <p>Выберите элемент для редактирования</p>
+                </div>
+            </aside>
+        </div>
+    </div>
+    
+    <!-- Модальное окно: Создание диалога -->
+    <div id="new-dialogue-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Создать новый диалог</div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Частота (идентификатор):</label>
+                    <input type="text" id="new-dialogue-frequency" class="form-input" placeholder="Например: DIALOG_001">
+                </div>
+                <div class="form-group">
+                    <label>Название:</label>
+                    <input type="text" id="new-dialogue-title" class="form-input" placeholder="Название диалога">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-new-dialogue" class="btn">Отмена</button>
+                <button id="create-dialogue-btn" class="btn">Создать</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно: Редактор персонажа -->
+    <div id="character-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-title">Редактор персонажа</div>
+            <div class="modal-body">
+                <input type="hidden" id="character-id">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Имя персонажа:</label>
+                        <input type="text" id="character-name" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Окно отображения:</label>
+                        <select id="character-window" class="form-input">
+                            <option value="1">Окно 1 (слева)</option>
+                            <option value="2">Окно 2 (справа)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Портрет:</label>
+                        <div class="file-selector">
+                            <select id="character-portrait" class="form-input">
+                                <option value="">Выберите файл...</option>
+                            </select>
+                            <div class="portrait-preview" id="portrait-preview"></div>
+                        </div>
+                        <div class="upload-section">
+                            <input type="file" id="upload-portrait" accept="image/*" class="hidden">
+                            <button id="upload-portrait-btn" class="btn btn-small">Загрузить новый</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Звук печати:</label>
+                        <select id="character-voice" class="form-input">
+                            <option value="">Без звука</option>
+                        </select>
+                        <div class="upload-section">
+                            <input type="file" id="upload-voice" accept="audio/*" class="hidden">
+                            <button id="upload-voice-btn" class="btn btn-small">Загрузить новый</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-character" class="btn">Отмена</button>
+                <button id="save-character-btn" class="btn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно: Редактор реплики -->
+    <div id="conversation-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-title">Редактор реплики</div>
+            <div class="modal-body">
+                <input type="hidden" id="conversation-id">
+                <input type="hidden" id="conversation-branch">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Персонаж:</label>
+                        <select id="conversation-character" class="form-input">
+                            <option value="">Выберите персонажа</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Ветка:</label>
+                        <select id="conversation-branch-select" class="form-input">
+                            <option value="main">Главная ветка</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Текст реплики:</label>
+                    <textarea id="conversation-text" class="form-textarea" rows="4" placeholder="Текст диалога. Используйте [2s] для паузы 2 секунды."></textarea>
+                    <div class="textarea-help">Подсказка: [1s] = пауза 1 сек, [2.5s] = пауза 2.5 сек</div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Кастомный портрет (опционально):</label>
+                        <select id="conversation-custom-image" class="form-input">
+                            <option value="">По умолчанию</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Фейковое имя (опционально):</label>
+                        <input type="text" id="conversation-fake-name" class="form-input">
+                    </div>
+                </div>
+                
+                <!-- Выбор -->
+                <div class="choice-section">
+                    <div class="choice-header">
+                        <label>
+                            <input type="checkbox" id="has-choice"> Добавить выбор
+                        </label>
+                    </div>
+                    <div id="choice-options-container" class="choice-options-container hidden">
+                        <input type="hidden" id="choice-id">
+                        <div id="choice-options-list"></div>
+                        <button id="add-choice-option-btn" class="btn btn-small">+ Добавить вариант</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-conversation" class="btn">Отмена</button>
+                <button id="save-conversation-btn" class="btn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно: Новая ветка -->
+    <div id="branch-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Создать новую ветку</div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>ID ветки:</label>
+                    <input type="text" id="new-branch-id" class="form-input" placeholder="Например: branch_001">
+                    <button id="generate-branch-id" class="btn btn-small">Сгенерировать</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-branch" class="btn">Отмена</button>
+                <button id="create-branch-btn" class="btn">Создать</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Шаблон персонажа -->
+    <template id="character-card-template">
+        <div class="character-card" data-id="">
+            <div class="character-portrait"></div>
+            <div class="character-info">
+                <div class="character-name"></div>
+                <div class="character-window-label"></div>
+            </div>
+            <div class="character-actions">
+                <button class="btn btn-small edit-character-btn">Редактировать</button>
+                <button class="btn btn-small btn-danger delete-character-btn">Удалить</button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- Шаблон элемента дерева -->
+    <template id="tree-node-template">
+        <div class="tree-node" data-id="" data-type="">
+            <div class="node-content">
+                <div class="node-speaker"></div>
+                <div class="node-text"></div>
+                <div class="node-choice hidden"></div>
+            </div>
+            <div class="node-actions">
+                <button class="btn btn-small edit-node-btn">Редактировать</button>
+                <button class="btn btn-small btn-danger delete-node-btn">Удалить</button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- Шаблон ветки -->
+    <template id="tree-branch-template">
+        <div class="tree-branch" data-branch-id="">
+            <div class="branch-header">
+                <span class="branch-title"></span>
+                <button class="btn btn-small delete-branch-btn">Удалить ветку</button>
+            </div>
+            <div class="branch-content"></div>
+        </div>
+    </template>
+    
+    <!-- Шаблон варианта выбора -->
+    <template id="choice-option-template">
+        <div class="choice-option" data-option-id="">
+            <input type="text" class="option-text form-input" placeholder="Текст варианта">
+            <select class="option-target form-input">
+                <option value="">Новая ветка</option>
+            </select>
+            <button class="btn btn-small btn-danger remove-option-btn">×</button>
+        </div>
+    </template>
+    
+    <script type="module" src="scripts/editor/editor-main.js"></script>
+</body>
+</html>

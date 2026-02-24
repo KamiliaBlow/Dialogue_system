@@ -4,42 +4,84 @@ const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 
 const config = require('./config');
 const Logger = require('./utils/logger');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const { Validator, validateBody } = require('./utils/validator');
 
+// Настройка загрузки файлов
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, '../client side/assets/images/portraits');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, 'portrait_' + uniqueSuffix + ext);
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error('Только изображения разрешены'));
+    }
+});
+
 config.validate();
+
+const sslKeyPath = path.join(__dirname, config.SSL_KEY_PATH);
+const sslCertPath = path.join(__dirname, config.SSL_CERT_PATH);
+const hasSSL = fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath);
 
 const app = express();
 
+const allowedHeadersList = 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, expires, pragma, if-modified-since, cache-control, x-request-id';
+
 // CORS middleware с расширенной конфигурацией
 const corsOptions = {
-    origin: function (origin, callback) {
-        // Разрешаем запросы без origin (например, мобильные приложения, curl)
-        if (!origin) return callback(null, true);
-        
-        // Проверяем, есть ли origin в списке разрешенных
-        if (config.CORS_ORIGINS.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            Logger.warn(`CORS blocked origin: ${origin}`);
-            callback(null, true); // Временно разрешаем все для отладки
-        }
-    },
+    origin: true,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    optionsSuccessStatus: 200
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+    allowedHeaders: allowedHeadersList.split(', '),
+    exposedHeaders: ['Set-Cookie', 'Content-Length', 'X-Request-Id'],
+    optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
 
-// Обработка preflight запросов
-app.options('*', cors(corsOptions));
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
+    res.setHeader('Access-Control-Allow-Headers', allowedHeadersList);
+    
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    next();
+});
 
 const db = new sqlite3.Database(config.DB_PATH, (err) => {
     if (err) {
@@ -57,10 +99,13 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: false, // Отключаем secure для работы с HTTP в разработке
+        secure: hasSSL,
         maxAge: config.SESSION_MAX_AGE,
-        sameSite: 'lax'
-    }
+        sameSite: hasSSL ? 'none' : 'lax',
+        httpOnly: true,
+        path: '/'
+    },
+    name: 'sessionId'
 }));
 app.use(Logger.request);
 
@@ -107,6 +152,66 @@ function initDatabase() {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id),
             UNIQUE(user_id, frequency)
+        )`,
+        `CREATE TABLE IF NOT EXISTS dialogues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            frequency TEXT UNIQUE NOT NULL,
+            title TEXT,
+            allowed_users TEXT DEFAULT '[-1]',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS characters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dialogue_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            image TEXT,
+            voice TEXT,
+            voice_duration REAL DEFAULT 0,
+            window INTEGER DEFAULT 1,
+            sort_order INTEGER DEFAULT 0,
+            FOREIGN KEY (dialogue_id) REFERENCES dialogues(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS conversation_branches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dialogue_id INTEGER NOT NULL,
+            branch_id TEXT NOT NULL,
+            parent_choice_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (dialogue_id) REFERENCES dialogues(id) ON DELETE CASCADE,
+            UNIQUE(dialogue_id, branch_id)
+        )`,
+        `CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dialogue_id INTEGER NOT NULL,
+            branch_id TEXT NOT NULL DEFAULT 'main',
+            character_id INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            custom_image TEXT,
+            fake_name TEXT,
+            sort_order INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (dialogue_id) REFERENCES dialogues(id) ON DELETE CASCADE,
+            FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE SET NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS choice_options (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            choice_id TEXT NOT NULL,
+            option_id TEXT NOT NULL,
+            option_text TEXT NOT NULL,
+            target_branch TEXT,
+            sort_order INTEGER DEFAULT 0,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS uploaded_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_size INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`
     ];
     
@@ -447,6 +552,106 @@ adminRoutes.post('/set-dialogue-access', adminMiddleware, (req, res) => {
 
 app.use('/api/admin', adminRoutes);
 
+// Роуты редактора диалогов
+const dialogueEditorRoutes = require('./routes/dialogue-editor');
+app.use('/api/editor', requireAuth, dialogueEditorRoutes(db, upload));
+
+// API для получения диалогов клиентом
+app.get('/api/dialogue/:frequency', (req, res) => {
+    const { frequency } = req.params;
+    
+    db.get('SELECT * FROM dialogues WHERE frequency = ?', [frequency], (err, dialogue) => {
+        if (err) return res.status(500).json({ message: 'Ошибка' });
+        if (!dialogue) return res.status(404).json({ message: 'Диалог не найден' });
+        
+        const dialogueId = dialogue.id;
+        
+        db.all('SELECT * FROM characters WHERE dialogue_id = ? ORDER BY sort_order', [dialogueId], (err, characters) => {
+            if (err) return res.status(500).json({ message: 'Ошибка' });
+            
+            db.all(`SELECT * FROM conversations WHERE dialogue_id = ? ORDER BY branch_id, sort_order`, 
+                [dialogueId], (err, conversations) => {
+                if (err) return res.status(500).json({ message: 'Ошибка' });
+                
+                const convIds = conversations.map(c => c.id);
+                if (convIds.length === 0) {
+                    res.json(formatDialogueForClient(dialogue, characters, [], []));
+                    return;
+                }
+                
+                db.all(`SELECT * FROM choice_options WHERE conversation_id IN (${convIds.map(() => '?').join(',')}) ORDER BY sort_order`, 
+                    convIds, (err, choices) => {
+                    if (err) return res.status(500).json({ message: 'Ошибка' });
+                    res.json(formatDialogueForClient(dialogue, characters, conversations, choices));
+                });
+            });
+        });
+    });
+});
+
+function formatDialogueForClient(dialogue, characters, conversations, choices) {
+    const result = {
+        characters: characters.map(c => ({
+            name: c.name,
+            image: c.image,
+            voice: c.voice,
+            window: c.window
+        })),
+        allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),
+        conversations: []
+    };
+    
+    const branches = {};
+    conversations.forEach(c => {
+        if (!branches[c.branch_id]) branches[c.branch_id] = [];
+        
+        const convChoices = choices.filter(ch => ch.conversation_id === c.id);
+        const char = characters.find(ch => ch.id === c.character_id);
+        
+        const convObj = {
+            speaker: char ? char.name : 'Система',
+            text: c.text
+        };
+        
+        if (c.custom_image) convObj.image = c.custom_image;
+        if (c.fake_name) convObj.fakeName = c.fake_name;
+        
+        if (convChoices.length > 0) {
+            convObj.choice = {
+                choiceId: convChoices[0].choice_id,
+                options: convChoices.map(ch => ({
+                    id: ch.option_id,
+                    text: ch.option_text,
+                    targetBranch: ch.target_branch
+                }))
+            };
+        }
+        
+        branches[c.branch_id].push(convObj);
+    });
+    
+    result.conversations = branches['main'] || [];
+    
+    Object.keys(branches).forEach(branchId => {
+        if (branchId !== 'main') {
+            result[branchId] = {
+                choiceId: branchId,
+                responses: branches[branchId]
+            };
+        }
+    });
+    
+    return result;
+}
+
+// Получить список всех частот
+app.get('/api/frequencies', (req, res) => {
+    db.all('SELECT frequency, title FROM dialogues ORDER BY frequency', (err, dialogues) => {
+        if (err) return res.status(500).json({ message: 'Ошибка' });
+        res.json({ frequencies: dialogues.map(d => d.frequency) });
+    });
+});
+
 app.post('/api/setup/first-admin', (req, res) => {
     const { setupKey } = req.body;
     
@@ -470,11 +675,6 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: 'Внутренняя ошибка сервера' });
 });
 
-// Проверяем наличие SSL сертификатов
-const sslKeyPath = path.join(__dirname, config.SSL_KEY_PATH);
-const sslCertPath = path.join(__dirname, config.SSL_CERT_PATH);
-const hasSSL = fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath);
-
 if (hasSSL) {
     const sslOptions = {
         key: fs.readFileSync(sslKeyPath),
@@ -486,8 +686,6 @@ if (hasSSL) {
         Logger.info(`CORS origins: ${config.CORS_ORIGINS.join(', ')}`);
     });
 } else {
-    // Запуск HTTP сервера если нет SSL сертификатов
-    const http = require('http');
     http.createServer(app).listen(config.PORT, () => {
         Logger.info(`HTTP server started on port ${config.PORT}`);
         Logger.info(`CORS origins: ${config.CORS_ORIGINS.join(', ')}`);

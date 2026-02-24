@@ -1,36 +1,89 @@
 let games = null;
 let API_URL = null;
+let dialoguesCache = {};
 
 async function loadConfig() {
-    const timestamp = Date.now();
-    
     try {
-        // Динамический импорт с уникальным URL для обхода кэша
-        const configModule = await import(`../Config.js?t=${timestamp}`);
-        const appConfigModule = await import(`./config.js?t=${timestamp}`);
-        
-        games = configModule.default;
+        // Загружаем конфиг приложения
+        const appConfigModule = await import('./config.js');
         API_URL = appConfigModule.default.API_URL;
         
-        console.log('Config loaded successfully');
-        console.log('Available frequencies:', games?.customGame?.frequencies);
+        // Загружаем список частот из БД
+        const response = await fetch(`${API_URL}/frequencies`, {
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        const frequencies = data.frequencies || [];
+        
+        // Создаём структуру совместимую с Config.js
+        games = {
+            customGame: {
+                frequencies: frequencies,
+                dialogues: {}
+            }
+        };
+        
+        console.log('Config loaded from API');
+        console.log('Available frequencies:', frequencies);
         
     } catch (error) {
-        console.error('Failed to load config with cache busting:', error);
+        console.error('Failed to load config from API:', error);
         
-        // Fallback - пробуем без cache buster
+        // Fallback - пробуем загрузить из Config.js
         try {
             const configModule = await import('../Config.js');
-            const appConfigModule = await import('./config.js');
-            
             games = configModule.default;
+            const appConfigModule = await import('./config.js');
             API_URL = appConfigModule.default.API_URL;
-            
-            console.log('Config loaded (fallback mode)');
+            console.log('Config loaded from Config.js (fallback)');
         } catch (fallbackError) {
             console.error('Critical: Failed to load config:', fallbackError);
             throw new Error('Не удалось загрузить конфигурацию');
         }
+    }
+}
+
+// Загрузка конкретного диалога из БД
+async function loadDialogueFromDB(frequency) {
+    if (dialoguesCache[frequency]) {
+        return dialoguesCache[frequency];
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/dialogue/${frequency}`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            console.warn(`Dialogue ${frequency} not found in DB`);
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        // Преобразуем формат БД в формат Config.js
+        const dialogue = {
+            characters: data.characters || [],
+            allowedUsers: data.allowedUsers || [-1],
+            conversations: data.conversations || []
+        };
+        
+        // Добавляем ветки
+        if (data.branches) {
+            Object.keys(data.branches).forEach(key => {
+                if (key !== 'conversations') {
+                    dialogue[key] = data.branches[key];
+                }
+            });
+        }
+        
+        dialoguesCache[frequency] = dialogue;
+        return dialogue;
+        
+    } catch (error) {
+        console.error('Error loading dialogue:', error);
+        return null;
     }
 }
 
@@ -308,8 +361,12 @@ async function initializeTransmission() {
     // Установка статических изображений для персонажей
     $('#char-1, #char-2').css('background-image', 'url(assets/images/portraits/static.gif)');
     
-    // Загрузка диалога для текущей частоты
-    state.currentDialogue = games[state.currentGame]['dialogues'][currentFrequency];
+    // Загрузка диалога - сначала из БД, потом fallback на Config.js
+    state.currentDialogue = await loadDialogueFromDB(currentFrequency);
+    
+    if (!state.currentDialogue && games[state.currentGame] && games[state.currentGame]['dialogues']) {
+        state.currentDialogue = games[state.currentGame]['dialogues'][currentFrequency];
+    }
     
     if (!state.currentDialogue) {
         $('#text').text('*НЕТ СВЯЗИ*');
@@ -1500,6 +1557,39 @@ function checkAndActivateGlitchEffects(text) {
 }
 
 /**
+ * Извлечение пауз из текста
+ * Формат паузы: [2s], [1.5s], [0.5s] и т.д.
+ * @param {string} text - Исходный текст
+ * @returns {Object} - Объект с текстом без пауз и массивом пауз
+ */
+function extractPauses(text) {
+    const pauses = [];
+    let cleanText = '';
+    let currentIndex = 0;
+    
+    const pauseRegex = /\[(\d+\.?\d*)s\]/g;
+    let match;
+    let lastIndex = 0;
+    
+    while ((match = pauseRegex.exec(text)) !== null) {
+        // Добавляем текст до паузы
+        const textBefore = text.substring(lastIndex, match.index);
+        cleanText += textBefore;
+        
+        // Записываем паузу для позиции после добавленного текста
+        const pauseDuration = parseFloat(match[1]);
+        pauses[cleanText.length] = pauseDuration;
+        
+        lastIndex = match.index + match[0].length;
+    }
+    
+    // Добавляем оставшийся текст
+    cleanText += text.substring(lastIndex);
+    
+    return { text: cleanText, pauses };
+}
+
+/**
  * Модифицированная функция typeText для поддержки эффектов глюков
  * @param {string} text - Текст для вывода
  * @param {jQuery} element - Элемент для вывода текста
@@ -1508,26 +1598,19 @@ function checkAndActivateGlitchEffects(text) {
  * @param {function} onComplete - Функция для вызова после завершения
  */
 function typeText(text, element, characterVoice, characterName, onComplete = null) {
-    // Проверяем входные параметры
     if (!text) text = '';
     if (!characterName) characterName = 'Система';
     
-    // Проверяем и активируем эффекты глюков, очищаем текст от маркеров
     const cleanText = checkAndActivateGlitchEffects(text);
+    const { text: textWithoutPauses, pauses } = extractPauses(cleanText);
     
-    console.log(`Печать текста: "${cleanText.substring(0, 30)}..." от персонажа "${characterName}"`);
+    console.log(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}"`);
     
-    // Сразу устанавливаем имя персонажа
     $('#c-char').text(characterName + ':');
-    
-    // Блокируем клики во время печати
     $('#text-con').addClass('typing-in-progress');
-    
-    // Очищаем предыдущий текст
     element.text('');
     
-    // Если текст пустой, просто вызываем колбэк завершения
-    if (!cleanText) {
+    if (!textWithoutPauses) {
         $('#text-con').removeClass('typing-in-progress');
         if (onComplete) onComplete();
         return;
@@ -1536,138 +1619,114 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     let i = 0;
     let isTyping = true;
     
-    // Останавливаем предыдущий таймаут, если он есть
     if (state.typingTimeout) {
         clearTimeout(state.typingTimeout);
     }
-	
-	function typing() {
-        // Проверяем, активен ли глюк на частоте PER
+    
+    function typing() {
         const isGlitchActive = glitchEffects.isActive && getCurrentFrequency() === 'PER';
         
-        if (i < cleanText.length && $('#text-con').hasClass('typing-in-progress')) {
-            // Добавление символа
-            element.text(cleanText.slice(0, i + 1));
-            
-            // Определяем задержку на основе текущего и предыдущего символов
-            let delay = Math.random() * 40 + 30; // Базовая случайная задержка (30-70 мс)
-            
-            // Если активен глюк, добавляем случайную задержку
-            if (isGlitchActive) {
-                // В режиме глюка иногда добавляем значительную задержку
-                if (Math.random() < (glitchEffects.intensity / 50)) {
-                    delay += Math.random() * 300;
-                }
-                
-                // В режиме глюка иногда искажаем текст на короткое время
-                if (Math.random() < (glitchEffects.intensity / 40)) {
-                    const originalText = element.text();
-                    const scrambledText = scrambleText(originalText);
-                    element.text(scrambledText);
-                    
-                    // Возвращаем оригинальный текст через короткое время
-                    setTimeout(() => {
-                        if (i < cleanText.length) {
-                            element.text(cleanText.slice(0, i + 1));
-                        }
-                    }, 50 + Math.random() * 150);
-                }
+        if (i < textWithoutPauses.length && $('#text-con').hasClass('typing-in-progress')) {
+            const pauseBefore = pauses[i];
+            if (pauseBefore > 0) {
+                state.typingTimeout = setTimeout(() => {
+                    processCharacter();
+                }, pauseBefore * 1000);
+                return;
             }
             
-            // Проверяем, является ли текущий символ знаком препинания
-            const punctuationMarks = ['.', ',', '!', '?', ':', ';'];
-            
-            // Воспроизведение голоса персонажа для каждого символа с вариативностью
-            if (characterVoice && cleanText[i] !== ' ' && cleanText[i] !== '\n') {
-                try {
-                    const voiceClone = characterVoice.cloneNode();
-                    voiceClone.currentTime = 0;
-                    
-                    // Добавляем вариативность громкости в зависимости от символа
-                    let volume = 0.03; // Базовая громкость 3%
-                    
-                    // Для знаков препинания - чуть тише
-                    if (punctuationMarks.includes(cleanText[i])) {
-                        volume = 0.015; // 1.5% громкости
-                    }
-                    // Для заглавных букв - чуть громче
-                    else if (cleanText[i] === cleanText[i].toUpperCase() && cleanText[i].match(/[A-ZА-Я]/)) {
-                        volume = 0.045; // 4.5% громкости
-                    }
-                    
-                    // В режиме глюка иногда изменяем звук
-                    if (isGlitchActive && Math.random() < (glitchEffects.intensity / 30)) {
-                        // Случайно искажаем звук
-                        volume *= 2;
-                        voiceClone.playbackRate = 0.7 + Math.random() * 0.8;
-                    }
-                    
-                    voiceClone.volume = volume;
-					
-					// Добавляем вариативность скорости воспроизведения
-                    // Это создаст эффект изменения тона
-                    const pitchVariation = 0.9 + Math.random() * 0.3; // От 0.9 до 1.2
-                    voiceClone.playbackRate = pitchVariation;
-                    
-                    voiceClone.play().catch(err => console.warn('Не удалось воспроизвести звук:', err));
-                } catch (e) {
-                    console.warn('Ошибка при воспроизведении звука:', e);
-                }
-            }
-            
-            // Добавляем дополнительную задержку после знаков препинания
-            if (i > 0 && punctuationMarks.includes(cleanText[i-1])) {
-                // Разные задержки для разных знаков препинания
-                if (cleanText[i-1] === '.') {
-                    delay += 350; // Более длинная пауза после точки
-                } else if (cleanText[i-1] === '!' || cleanText[i-1] === '?') {
-                    delay += 300; // Длинная пауза после ! и ?
-                } else if (cleanText[i-1] === ':' || cleanText[i-1] === ';') {
-                    delay += 250; // Средняя пауза после : и ;
-                } else if (cleanText[i-1] === ',') {
-                    delay += 150; // Короткая пауза после запятой
-                }
-            }
-            
-            // Добавляем случайную вариацию задержки для более естественного эффекта
-            delay *= (0.9 + Math.random() * 0.2); // Множитель от 0.9 до 1.1
-            
-            i++;
-            // Сохраняем таймаут для возможности прерывания
-            state.typingTimeout = setTimeout(typing, delay);
+            processCharacter();
         } else {
             isTyping = false;
-            
-            // Разблокируем клики после завершения печати
             $('#text-con').removeClass('typing-in-progress');
-            
-            // Убедимся, что весь текст отображен
-            element.text(cleanText);
-            
-            if (onComplete) {
-                onComplete();
-            }
+            element.text(textWithoutPauses);
+            if (onComplete) onComplete();
         }
     }
     
-    // Обработчик клика для пропуска анимации
+    function processCharacter() {
+        element.text(textWithoutPauses.slice(0, i + 1));
+        
+        let delay = Math.random() * 40 + 30;
+        
+        const isGlitchActive = glitchEffects.isActive && getCurrentFrequency() === 'PER';
+        
+        if (isGlitchActive) {
+            if (Math.random() < (glitchEffects.intensity / 50)) {
+                delay += Math.random() * 300;
+            }
+            
+            if (Math.random() < (glitchEffects.intensity / 40)) {
+                const originalText = element.text();
+                const scrambledText = scrambleText(originalText);
+                element.text(scrambledText);
+                
+                setTimeout(() => {
+                    if (i < textWithoutPauses.length) {
+                        element.text(textWithoutPauses.slice(0, i + 1));
+                    }
+                }, 50 + Math.random() * 150);
+            }
+        }
+        
+        const punctuationMarks = ['.', ',', '!', '?', ':', ';'];
+        
+        if (characterVoice && textWithoutPauses[i] !== ' ' && textWithoutPauses[i] !== '\n') {
+            try {
+                const voiceClone = characterVoice.cloneNode();
+                voiceClone.currentTime = 0;
+                
+                let volume = 0.03;
+                
+                if (punctuationMarks.includes(textWithoutPauses[i])) {
+                    volume = 0.015;
+                } else if (textWithoutPauses[i] === textWithoutPauses[i].toUpperCase() && textWithoutPauses[i].match(/[A-ZА-Я]/)) {
+                    volume = 0.045;
+                }
+                
+                if (isGlitchActive && Math.random() < (glitchEffects.intensity / 30)) {
+                    volume *= 2;
+                    voiceClone.playbackRate = 0.7 + Math.random() * 0.8;
+                }
+                
+                voiceClone.volume = volume;
+                voiceClone.playbackRate = 0.9 + Math.random() * 0.3;
+                
+                voiceClone.play().catch(err => console.warn('Не удалось воспроизвести звук:', err));
+            } catch (e) {
+                console.warn('Ошибка при воспроизведении звука:', e);
+            }
+        }
+        
+        if (i > 0 && punctuationMarks.includes(textWithoutPauses[i-1])) {
+            if (textWithoutPauses[i-1] === '.') {
+                delay += 350;
+            } else if (textWithoutPauses[i-1] === '!' || textWithoutPauses[i-1] === '?') {
+                delay += 300;
+            } else if (textWithoutPauses[i-1] === ':' || textWithoutPauses[i-1] === ';') {
+                delay += 250;
+            } else if (textWithoutPauses[i-1] === ',') {
+                delay += 150;
+            }
+        }
+        
+        delay *= (0.9 + Math.random() * 0.2);
+        
+        i++;
+        
+        state.typingTimeout = setTimeout(typing, delay);
+    }
+    
     function skipTyping() {
         if (isTyping) {
-            // Если анимация еще идет, пропускаем ее
             clearTimeout(state.typingTimeout);
-            element.text(cleanText);
+            element.text(textWithoutPauses);
             isTyping = false;
-            
-            // Разблокируем клики после завершения печати
             $('#text-con').removeClass('typing-in-progress');
-            
-            if (onComplete) {
-                onComplete();
-            }
+            if (onComplete) onComplete();
         }
     }
     
-    // Добавляем обработчик клика для пропуска анимации
     $('#text-con').one('click', skipTyping);
     
     // Начинаем печать
