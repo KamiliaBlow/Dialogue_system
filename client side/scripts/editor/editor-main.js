@@ -1,6 +1,18 @@
 import AppConfig from '../config.js';
 
-const { API_URL } = AppConfig;
+const { API_URL, ASSETS_URL } = AppConfig;
+
+function getAssetUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    
+    if (ASSETS_URL && !ASSETS_URL.includes('DOMENHERE')) {
+        if (path.startsWith('/assets/')) return ASSETS_URL.replace('/assets', '') + path;
+        if (path.startsWith('assets/')) return ASSETS_URL + path.replace('assets/', '/');
+    }
+    
+    return path;
+}
 
 class DialogueEditor {
  constructor() {
@@ -556,7 +568,9 @@ openCharacterModal(id = null) {
             this.state.audioPreview = null;
         }
         
-        this.state.audioPreview = new Audio(soundPath);
+        const fullUrl = getAssetUrl(soundPath);
+        console.log('Playing sound:', fullUrl);
+        this.state.audioPreview = new Audio(fullUrl);
         this.state.audioPreview.play().catch(err => console.log('Audio play error:', err));
     }
     

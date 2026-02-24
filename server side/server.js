@@ -418,28 +418,23 @@ progressRoutes.get('/user-choices/:frequency', requireAuth, (req, res) => {
 });
 
 progressRoutes.get('/available-frequencies', requireAuth, (req, res) => {
-    db.all(`SELECT d.frequency, d.allowed_users 
-            FROM dialogues d
-            LEFT JOIN dialogue_access da ON d.frequency = da.frequency AND da.user_id = ?
-            WHERE d.allowed_users LIKE '%-1%' OR da.user_id IS NOT NULL`,
-        [req.session.userId],
-        (err, rows) => {
-            if (err) return res.status(500).json({ message: 'Ошибка получения частот' });
-            
-            const availableFrequencies = [];
-            rows.forEach(row => {
-                try {
-                    const allowedUsers = JSON.parse(row.allowed_users || '[-1]');
-                    if (allowedUsers.includes(-1) || allowedUsers.includes(req.session.userId)) {
-                        availableFrequencies.push(row.frequency);
-                    }
-                } catch (e) {
+    db.all(`SELECT frequency, allowed_users FROM dialogues`, [], (err, rows) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения частот' });
+        
+        const availableFrequencies = [];
+        rows.forEach(row => {
+            try {
+                const allowedUsers = JSON.parse(row.allowed_users || '[-1]');
+                if (allowedUsers.includes(-1) || allowedUsers.includes(req.session.userId)) {
                     availableFrequencies.push(row.frequency);
                 }
-            });
-            
-            res.json({ availableFrequencies: [...new Set(availableFrequencies)] });
+            } catch (e) {
+                availableFrequencies.push(row.frequency);
+            }
         });
+        
+        res.json({ availableFrequencies });
+    });
 });
 
 progressRoutes.get('/repeat-counts', requireAuth, (req, res) => {
@@ -657,13 +652,14 @@ function formatDialogueForClient(dialogue, characters, conversations, choices) {
         const convChoices = choices.filter(ch => ch.conversation_id === c.id);
         const char = characters.find(ch => ch.id === c.character_id);
         
-        const convObj = {
+const convObj = {
             speaker: char ? char.name : 'Система',
             text: c.text
         };
         
         if (c.custom_image) convObj.image = c.custom_image;
         if (c.fake_name) convObj.fakeName = c.fake_name;
+        if (c.voiceline) convObj.voiceline = c.voiceline;
         
         if (convChoices.length > 0) {
             convObj.choice = {

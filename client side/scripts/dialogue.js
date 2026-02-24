@@ -59,29 +59,30 @@ function getAssetUrl(path) {
 // Загрузка конкретного диалога из БД
 async function loadDialogueFromDB(frequency) {
     if (dialoguesCache[frequency]) {
+        console.log(`Dialogue ${frequency} loaded from cache`);
         return dialoguesCache[frequency];
     }
     
     try {
+        console.log(`Loading dialogue ${frequency} from API...`);
         const response = await fetch(`${API_URL}/dialogue/${frequency}`, {
             credentials: 'include'
         });
         
         if (!response.ok) {
-            console.warn(`Dialogue ${frequency} not found in DB`);
+            console.warn(`Dialogue ${frequency} not found in DB, status: ${response.status}`);
             return null;
         }
         
         const data = await response.json();
+        console.log(`Dialogue ${frequency} loaded from DB:`, data);
         
-        // Преобразуем формат БД в формат Config.js
         const dialogue = {
             characters: data.characters || [],
             allowedUsers: data.allowedUsers || [-1],
             conversations: data.conversations || []
         };
         
-        // Добавляем ветки
         if (data.branches) {
             Object.keys(data.branches).forEach(key => {
                 if (key !== 'conversations') {
@@ -91,6 +92,7 @@ async function loadDialogueFromDB(frequency) {
         }
         
         dialoguesCache[frequency] = dialogue;
+        console.log(`Processed dialogue for ${frequency}:`, dialogue);
         return dialogue;
         
     } catch (error) {
@@ -259,8 +261,9 @@ function checkLocalDialogueAccess() {
  * @returns {boolean} - Доступна ли частота
  */
 function hasAccessToFrequency(frequency) {
-    // Если нет списка доступных частот, считаем что доступно всё
-    if (!state.availableFrequencies) return true;
+    if (!state.availableFrequencies || state.availableFrequencies.length === 0) {
+        return true;
+    }
     
     return state.availableFrequencies.includes(frequency);
 }
@@ -1981,12 +1984,24 @@ document.addEventListener('DOMContentLoaded', initializePage);
 $('.arrow').off('click').on('click', changeFreq);
 
 // Обработчик для кнопки "Прослушать передачу"
-$('#start-transmission').on('click', function(event) {
+$('#start-transmission').on('click', async function(event) {
     event.stopPropagation();
     
-    // Проверяем, есть ли диалог для текущей частоты
     var currentFrequency = getCurrentFrequency();
-    state.currentDialogue = games[state.currentGame]['dialogues'][currentFrequency];
+    console.log(`Loading dialogue for frequency: ${currentFrequency}`);
+    
+    if (!state.currentDialogue) {
+        state.currentDialogue = games[state.currentGame]['dialogues'][currentFrequency];
+        console.log(`From local games: ${state.currentDialogue ? 'found' : 'not found'}`);
+    }
+    
+    if (!state.currentDialogue) {
+        state.currentDialogue = await loadDialogueFromDB(currentFrequency);
+        console.log(`From DB: ${state.currentDialogue ? 'found' : 'not found'}`);
+        if (state.currentDialogue && !games[state.currentGame]['dialogues'][currentFrequency]) {
+            games[state.currentGame]['dialogues'][currentFrequency] = state.currentDialogue;
+        }
+    }
     
     if (state.currentDialogue) {
         // Получаем текст кнопки, чтобы определить, продолжаем мы диалог или начинаем заново
@@ -2011,14 +2026,18 @@ $('#start-transmission').on('click', function(event) {
             // ВАЖНОЕ ИЗМЕНЕНИЕ: Убедимся, что при восстановлении будет показана текущая строка
             // а не следующая. Это особенно важно если count === 0.
             restoreDialoguePosition();
-        } else {
-            // Начинаем диалог заново
+} else {
             console.log('Начинаем диалог заново');
             currentConversation(true);
         }
+    } else {
+        console.error(`Диалог для частоты ${currentFrequency} не найден`);
+        $('#text').text('*НЕТ СВЯЗИ*');
+        $('#c-char').text('');
+        $('#start-transmission').addClass('hidden');
     }
     
-    logDialogueState(); // Добавляем логирование состояния
+    logDialogueState();
 });
 
 // Обработчик для кнопки повтора
