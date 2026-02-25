@@ -267,20 +267,7 @@ renderDialogueInfo(dialogue) {
         const branchId = afterNode ? afterNode.branchId : 'main';
         const afterSortOrder = afterNode ? afterNode.sortOrder : -1;
         
-        document.getElementById('conversation-id').value = '';
-        document.getElementById('conversation-character').value = '';
-        document.getElementById('conversation-branch-select').value = branchId;
-        document.getElementById('conversation-text').value = '';
-        document.getElementById('conversation-custom-image').value = '';
-        document.getElementById('conversation-fake-name').value = '';
-        document.getElementById('conversation-voiceline').value = '';
-        document.getElementById('conversation-typing-speed').value = 0;
-        document.getElementById('has-choice').checked = false;
-        document.getElementById('choice-options-container').classList.add('hidden');
-        document.getElementById('choice-id').value = '';
-        document.getElementById('choice-options-list').innerHTML = '';
-        
-        this.openConversationModal();
+        this.openConversationModal(null, branchId);
     }
     
     createChoiceConnection(fromNode, toNode) {
@@ -741,7 +728,7 @@ async saveCharacter() {
         }
     }
     
-openConversationModal(id = null) {
+openConversationModal(id = null, defaultBranch = 'main') {
         const modal = document.getElementById('conversation-modal');
         
         this.updateCharacterSelects();
@@ -783,7 +770,7 @@ openConversationModal(id = null) {
         } else {
             document.getElementById('conversation-id').value = '';
             document.getElementById('conversation-character').value = '';
-            document.getElementById('conversation-branch-select').value = 'main';
+            document.getElementById('conversation-branch-select').value = defaultBranch;
             document.getElementById('conversation-text').value = '';
             document.getElementById('conversation-custom-image').value = '';
             document.getElementById('conversation-fake-name').value = '';

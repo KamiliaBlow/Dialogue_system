@@ -1,7 +1,7 @@
 /* Специфичные стили редактора */
 .editor-layout {
     display: grid;
-    grid-template-columns: 250px 1fr 300px;
+    grid-template-columns: 250px 1fr;
     gap: 20px;
     min-height: calc(100vh - 150px);
 }
@@ -266,24 +266,6 @@
     gap: 5px;
 }
 
-/* Правая панель свойств */
-.properties-panel {
-    background-color: var(--bg-card);
-    border: 1px solid var(--primary-color);
-    padding: 20px;
-    max-height: calc(100vh - 150px);
-    overflow-y: auto;
-}
-
-.panel-placeholder {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    opacity: 0.5;
-    text-align: center;
-}
-
 /* Модальные окна */
 .modal-large {
     max-width: 700px;
@@ -502,7 +484,7 @@
 
 @media (max-width: 1200px) {
     .editor-layout {
-        grid-template-columns: 200px 1fr 250px;
+        grid-template-columns: 200px 1fr;
     }
 }
 
@@ -511,7 +493,7 @@
         grid-template-columns: 1fr;
     }
     
-    .sidebar, .properties-panel {
+    .sidebar {
         max-height: 300px;
     }
     

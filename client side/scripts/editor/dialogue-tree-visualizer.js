@@ -240,6 +240,10 @@ class DialogueTreeVisualizer {
     renderEdges() {
         this.edgesGroup.innerHTML = '';
         
+        const zoom = this.state.zoom;
+        const panX = this.state.panX;
+        const panY = this.state.panY;
+        
         this.edges.forEach(edge => {
             const sourceNode = this.nodes.get(edge.source);
             const targetNode = this.nodes.get(edge.target);
@@ -248,10 +252,10 @@ class DialogueTreeVisualizer {
             
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             
-            const startX = sourceNode.x + this.options.nodeWidth / 2;
-            const startY = sourceNode.y + this.options.nodeHeight;
-            const endX = targetNode.x + this.options.nodeWidth / 2;
-            const endY = targetNode.y;
+            const startX = (sourceNode.x + this.options.nodeWidth / 2) * zoom + panX;
+            const startY = (sourceNode.y + this.options.nodeHeight) * zoom + panY;
+            const endX = (targetNode.x + this.options.nodeWidth / 2) * zoom + panX;
+            const endY = targetNode.y * zoom + panY;
             
             const midY = (startY + endY) / 2;
             const d = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
@@ -260,15 +264,21 @@ class DialogueTreeVisualizer {
             path.setAttribute('class', `tree-edge ${edge.type === 'choice' ? 'choice-edge' : ''}`);
             path.setAttribute('data-edge-id', edge.id);
             path.setAttribute('marker-end', edge.type === 'choice' ? 'url(#arrowhead-choice)' : 'url(#arrowhead)');
+            path.setAttribute('stroke-width', 2 * zoom);
+            
+            if (edge.type === 'choice') {
+                path.setAttribute('stroke-dasharray', `${5 * zoom}, ${3 * zoom}`);
+            }
             
             this.edgesGroup.appendChild(path);
             
             if (edge.label) {
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 text.setAttribute('x', (startX + endX) / 2);
-                text.setAttribute('y', midY - 5);
+                text.setAttribute('y', midY - 5 * zoom);
                 text.setAttribute('class', 'tree-edge-label');
                 text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('font-size', `${10 * zoom}px`);
                 const label = edge.label.length > 20 ? edge.label.substring(0, 20) + '...' : edge.label;
                 text.textContent = label;
                 this.edgesGroup.appendChild(text);
@@ -336,7 +346,7 @@ class DialogueTreeVisualizer {
             <div class="tree-node-header">
                 <span class="tree-node-speaker">${this.escapeHtml(nodeData.speaker)}</span>
                 ${nodeData.hasChoice ? '<span class="tree-node-badge choice-badge">Выбор</span>' : ''}
-                ${isFirstInBranch && nodeData.branchId !== 'main' ? `<span class="tree-node-badge">${nodeData.branchId}</span>` : ''}
+            </div>
             </div>
             <div class="tree-node-text">${this.escapeHtml(textPreview)}</div>
         `;
@@ -626,7 +636,7 @@ class DialogueTreeVisualizer {
     updateTransform() {
         const transform = `translate(${this.state.panX}px, ${this.state.panY}px) scale(${this.state.zoom})`;
         this.nodesContainer.style.transform = transform;
-        this.edgesGroup.setAttribute('transform', `translate(${this.state.panX}, ${this.state.panY}) scale(${this.state.zoom})`);
+        this.renderEdges();
     }
     
     updateZoomDisplay() {
