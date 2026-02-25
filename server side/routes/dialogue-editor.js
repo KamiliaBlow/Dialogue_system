@@ -205,6 +205,53 @@ router.post('/conversations', (req, res) => {
 
     // ==================== ВЕТКИ ====================
     
+    // Создать ветку с репликой и выбором (для новых веток из choices)
+    router.post('/branches/with-conversation', (req, res) => {
+        const { dialogueId, branchId, characterId, conversationId, choiceId, optionId, optionText, sortOrder } = req.body;
+        
+        if (!dialogueId || !branchId || !characterId) {
+            return res.status(400).json({ message: 'dialogueId, branchId и characterId обязательны' });
+        }
+        
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+            
+            db.run(`INSERT INTO conversation_branches (dialogue_id, branch_id) VALUES (?, ?)`,
+                [dialogueId, branchId], (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        if (err.message.includes('UNIQUE')) {
+                            return res.status(400).json({ message: 'Ветка с таким ID уже существует' });
+                        }
+                        return res.status(500).json({ message: 'Ошибка создания ветки' });
+                    }
+                    
+                    db.run(`INSERT INTO conversations (dialogue_id, branch_id, character_id, text, sort_order) VALUES (?, ?, ?, ?, ?)`,
+                        [dialogueId, branchId, characterId, '[Новая реплика - отредактируйте]', 0], (err) => {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ message: 'Ошибка создания реплики' });
+                            }
+                            
+                            db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
+                                [conversationId, choiceId, optionId, optionText, branchId, sortOrder || 0], (err) => {
+                                    if (err) {
+                                        db.run('ROLLBACK');
+                                        return res.status(500).json({ message: 'Ошибка создания выбора' });
+                                    }
+                                    
+                                    db.run('COMMIT');
+                                    res.status(201).json({ 
+                                        message: 'Ветка, реплика и выбор созданы', 
+                                        branchId,
+                                        choiceOptionId: this.lastID 
+                                    });
+                                });
+                        });
+                });
+        });
+    });
+    
     // Создать ветку
     router.post('/branches', (req, res) => {
         const { dialogueId, branchId, parentChoiceId } = req.body;

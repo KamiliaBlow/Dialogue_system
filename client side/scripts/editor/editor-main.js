@@ -803,7 +803,16 @@ openConversationModal(id = null) {
         container.innerHTML = '';
         
         choices.forEach(ch => {
+            const isNewBranch = !ch.target_branch;
             this.addChoiceOption(ch.option_id, ch.option_text, ch.target_branch);
+            
+            if (isNewBranch) {
+                const lastOption = container.lastElementChild;
+                const characterSelect = lastOption.querySelector('.option-character');
+                if (characterSelect) {
+                    characterSelect.classList.remove('hidden');
+                }
+            }
         });
     }
     
@@ -823,6 +832,20 @@ openConversationModal(id = null) {
                 `<option value="${b.branch_id}">${b.branch_id}</option>`
             ).join('');
         targetSelect.value = target;
+        
+        const characterSelect = optionEl.querySelector('.option-character');
+        characterSelect.innerHTML = '<option value="">Выберите персонажа</option>' +
+            this.state.characters.map(c => 
+                `<option value="${c.id}">${c.name}</option>`
+            ).join('');
+        
+        targetSelect.addEventListener('change', (e) => {
+            characterSelect.classList.toggle('hidden', e.target.value !== '');
+        });
+        
+        if (!target) {
+            characterSelect.classList.remove('hidden');
+        }
         
         optionEl.querySelector('.remove-option-btn').addEventListener('click', () => {
             optionDiv.remove();
@@ -894,16 +917,65 @@ async saveConversation() {
         
         const options = [];
         document.querySelectorAll('.choice-option').forEach((opt, i) => {
+            const targetBranch = opt.querySelector('.option-target').value;
+            const characterSelect = opt.querySelector('.option-character');
+            const characterId = characterSelect ? characterSelect.value : '';
+            
             options.push({
                 optionId: opt.dataset.optionId || `opt_${i}_${Date.now()}`,
                 optionText: opt.querySelector('.option-text').value,
-                targetBranch: opt.querySelector('.option-target').value,
+                targetBranch: targetBranch,
+                characterId: characterId,
+                isNewBranch: !targetBranch,
                 sortOrder: i
             });
         });
         
         for (const opt of options) {
             if (!opt.optionText) continue;
+            
+            let targetBranch = opt.targetBranch;
+            
+            if (opt.isNewBranch) {
+                if (!opt.characterId) {
+                    alert(`Выберите персонажа для варианта "${opt.optionText}" или укажите существующую ветку`);
+                    return;
+                }
+                
+                const branchId = `branch_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                
+                try {
+                    const createResponse = await fetch(`${API_URL}/editor/branches/with-conversation`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            dialogueId: this.state.currentDialogueId,
+                            branchId: branchId,
+                            characterId: opt.characterId,
+                            conversationId: conversationId,
+                            choiceId: choiceId,
+                            optionId: opt.optionId,
+                            optionText: opt.optionText,
+                            sortOrder: opt.sortOrder
+                        })
+                    });
+                    
+                    const createData = await createResponse.json();
+                    
+                    if (!createResponse.ok) {
+                        alert(createData.message || 'Ошибка создания ветки');
+                        return;
+                    }
+                    
+                    targetBranch = branchId;
+                    continue;
+                } catch (err) {
+                    console.error('Error creating branch with conversation:', err);
+                    alert('Ошибка создания ветки');
+                    return;
+                }
+            }
             
             await fetch(`${API_URL}/editor/choices`, {
                 method: 'POST',
@@ -912,7 +984,8 @@ async saveConversation() {
                 body: JSON.stringify({
                     conversationId,
                     choiceId,
-                    ...opt
+                    ...opt,
+                    targetBranch
                 })
             });
         }

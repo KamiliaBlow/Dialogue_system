@@ -329,14 +329,22 @@
     gap: 10px;
     margin-bottom: 10px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .choice-option .option-text {
     flex: 2;
+    min-width: 200px;
 }
 
 .choice-option .option-target {
     flex: 1;
+    min-width: 150px;
+}
+
+.choice-option .option-character {
+    flex: 1;
+    min-width: 150px;
 }
 
 /* Кнопки */

@@ -317,6 +317,26 @@
         </div>
     </div>
     
+    <!-- Модальное окно: Выбор персонажа для новой ветки -->
+    <div id="new-branch-character-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Выберите персонажа для новой ветки</div>
+            <div class="modal-body">
+                <input type="hidden" id="pending-choice-data">
+                <div class="form-group">
+                    <label>Персонаж для первой реплики:</label>
+                    <select id="new-branch-character-select" class="form-input">
+                        <option value="">Выберите персонажа</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-new-branch-character" class="btn">Отмена</button>
+                <button id="confirm-new-branch-character" class="btn">Создать ветку</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Шаблон персонажа -->
     <template id="character-card-template">
         <div class="character-card" data-id="">
@@ -364,6 +384,9 @@
             <input type="text" class="option-text form-input" placeholder="Текст варианта">
             <select class="option-target form-input">
                 <option value="">Новая ветка</option>
+            </select>
+            <select class="option-character form-input hidden" title="Персонаж для новой ветки">
+                <option value="">Выберите персонажа</option>
             </select>
             <button class="btn btn-small btn-danger remove-option-btn">×</button>
         </div>
