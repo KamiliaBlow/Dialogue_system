@@ -7,6 +7,9 @@
     <link href="https://fonts.googleapis.com/css?family=Orbitron:700" rel="stylesheet">
     <link rel="stylesheet" href="styles/admin-styles.css">
     <link rel="stylesheet" href="styles/editor-styles.css">
+    <link rel="stylesheet" href="styles/dialogue-tree.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
 </head>
 <body>
     <div class="background-code" id="bgCode"></div>
@@ -81,14 +84,38 @@
                     </section>
                     
                     <!-- Визуальное дерево диалога -->
-                    <section class="editor-section">
+                    <section class="editor-section tree-section">
                         <h3 class="section-title">ДЕРЕВО ДИАЛОГА</h3>
                         <div class="tree-controls">
                             <button id="add-conversation-btn" class="btn">+ Добавить реплику</button>
                             <button id="add-branch-btn" class="btn">+ Добавить ветку</button>
+                            <button id="auto-layout-btn" class="btn btn-secondary">⟳ Авто-компоновка</button>
+                            <button id="zoom-fit-btn" class="btn btn-secondary">⌖ По размеру</button>
+                            <div class="tree-zoom">
+                                <button id="zoom-in-btn" class="btn btn-small">+</button>
+                                <span id="zoom-level">100%</span>
+                                <button id="zoom-out-btn" class="btn btn-small">−</button>
+                            </div>
                         </div>
-                        <div class="dialogue-tree" id="dialogue-tree">
-                            <!-- Дерево будет построено здесь -->
+                        <div class="dialogue-tree-container" id="dialogue-tree-container">
+                            <svg id="dialogue-tree-svg" class="dialogue-tree-svg">
+                                <defs>
+                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                        <polygon points="0 0, 10 3.5, 0 7" fill="#03fb8d"/>
+                                    </marker>
+                                    <marker id="arrowhead-choice" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                        <polygon points="0 0, 10 3.5, 0 7" fill="#f39c12"/>
+                                    </marker>
+                                </defs>
+                                <g id="tree-edges"></g>
+                                <g id="tree-nodes"></g>
+                            </svg>
+                            <div id="dialogue-tree-nodes-container" class="tree-nodes-container"></div>
+                        </div>
+                        <div class="tree-legend">
+                            <span class="legend-item"><span class="legend-color legend-normal"></span> Реплика</span>
+                            <span class="legend-item"><span class="legend-color legend-choice"></span> С выбором</span>
+                            <span class="legend-item"><span class="legend-color legend-branch"></span> Начало ветки</span>
                         </div>
                     </section>
                 </div>

@@ -1,4 +1,5 @@
 import AppConfig from '../config.js';
+import DialogueTreeVisualizer from './dialogue-tree-visualizer.js';
 
 const { API_URL, ASSETS_URL } = AppConfig;
 
@@ -31,6 +32,7 @@ class DialogueEditor {
             selectedNodeId: null,
             audioPreview: null
         };
+        this.treeVisualizer = null;
     }
     
 async init() {
@@ -39,12 +41,44 @@ async init() {
             await this.loadDialogues();
             await this.loadFiles();
             await this.loadUsers();
+            this.initTreeVisualizer();
             this.initEventListeners();
             this.generateBackgroundCode();
         } catch (error) {
             console.error('Init error:', error);
             alert('Ошибка загрузки');
         }
+    }
+    
+    initTreeVisualizer() {
+        this.treeVisualizer = new DialogueTreeVisualizer('dialogue-tree-container', {
+            nodeWidth: 200,
+            nodeHeight: 80,
+            rankSeparation: 120,
+            nodeSeparation: 70
+        });
+        
+        this.treeVisualizer.on('nodeClick', (nodeData) => {
+            this.state.selectedNodeId = nodeData.conversationId;
+        });
+        
+        this.treeVisualizer.on('nodeEdit', (nodeData) => {
+            this.openConversationModal(nodeData.conversationId);
+        });
+        
+        this.treeVisualizer.on('nodeDelete', (nodeData) => {
+            if (confirm('Удалить эту реплику?')) {
+                this.deleteConversation(nodeData.conversationId);
+            }
+        });
+        
+        this.treeVisualizer.on('nodeAdd', (afterNode, position) => {
+            this.addConversationAfter(afterNode, position);
+        });
+        
+        this.treeVisualizer.on('connectionCreate', (fromNode, toNode) => {
+            this.createChoiceConnection(fromNode, toNode);
+        });
     }
     
     async checkAuth() {
@@ -218,63 +252,77 @@ renderDialogueInfo(dialogue) {
     }
     
     renderDialogueTree() {
-        const container = document.getElementById('dialogue-tree');
-        container.innerHTML = '';
-        
-        const branchTemplate = document.getElementById('tree-branch-template');
-        const nodeTemplate = document.getElementById('tree-node-template');
-        
-        this.state.branches.forEach(branch => {
-            const branchEl = branchTemplate.content.cloneNode(true);
-            const branchDiv = branchEl.querySelector('.tree-branch');
-            branchDiv.dataset.branchId = branch.branch_id;
-            branchEl.querySelector('.branch-title').textContent = 
-                branch.branch_id === 'main' ? 'Главная ветка' : `Ветка: ${branch.branch_id}`;
-            
-            const conversations = this.state.conversations.filter(c => c.branch_id === branch.branch_id);
-            const contentDiv = branchEl.querySelector('.branch-content');
-            
-            conversations.forEach(conv => {
-                const nodeEl = nodeTemplate.content.cloneNode(true);
-                const nodeDiv = nodeEl.querySelector('.tree-node');
-                nodeDiv.dataset.id = conv.id;
-                nodeDiv.dataset.type = 'conversation';
-                
-                const char = this.state.characters.find(c => c.id === conv.character_id);
-                nodeEl.querySelector('.node-speaker').textContent = char ? char.name : 'Система';
-                
-                let text = conv.text.substring(0, 100);
-                if (conv.text.length > 100) text += '...';
-                nodeEl.querySelector('.node-text').textContent = text;
-                
-                const choices = this.state.choices.filter(ch => ch.conversation_id === conv.id);
-                if (choices.length > 0) {
-                    const choiceDiv = nodeEl.querySelector('.node-choice');
-                    choiceDiv.classList.remove('hidden');
-                    choiceDiv.innerHTML = '<strong>Выбор:</strong><br>' + 
-                        choices.map(ch => `• ${ch.option_text}`).join('<br>');
-                }
-                
-                nodeEl.querySelector('.edit-node-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.openConversationModal(conv.id);
-                });
-                
-                nodeEl.querySelector('.delete-node-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.deleteConversation(conv.id);
-                });
-                
-                contentDiv.appendChild(nodeEl);
+        if (this.treeVisualizer) {
+            this.treeVisualizer.setData({
+                conversations: this.state.conversations,
+                branches: this.state.branches,
+                choices: this.state.choices,
+                characters: this.state.characters
             });
-            
-            branchEl.querySelector('.delete-branch-btn').addEventListener('click', () => {
-                if (branch.branch_id !== 'main') {
-                    this.deleteBranch(branch.branch_id);
-                }
-            });
-            
-            container.appendChild(branchEl);
+            this.treeVisualizer.autoLayout();
+        }
+    }
+    
+    addConversationAfter(afterNode, position) {
+        const branchId = afterNode ? afterNode.branchId : 'main';
+        const afterSortOrder = afterNode ? afterNode.sortOrder : -1;
+        
+        document.getElementById('conversation-id').value = '';
+        document.getElementById('conversation-character').value = '';
+        document.getElementById('conversation-branch-select').value = branchId;
+        document.getElementById('conversation-text').value = '';
+        document.getElementById('conversation-custom-image').value = '';
+        document.getElementById('conversation-fake-name').value = '';
+        document.getElementById('conversation-voiceline').value = '';
+        document.getElementById('conversation-typing-speed').value = 0;
+        document.getElementById('has-choice').checked = false;
+        document.getElementById('choice-options-container').classList.add('hidden');
+        document.getElementById('choice-id').value = '';
+        document.getElementById('choice-options-list').innerHTML = '';
+        
+        this.openConversationModal();
+    }
+    
+    createChoiceConnection(fromNode, toNode) {
+        const fromChoices = this.state.choices.filter(ch => ch.conversation_id === fromNode.conversationId);
+        
+        if (fromChoices.length === 0) {
+            alert('Исходная реплика не имеет вариантов выбора. Добавьте выбор к реплике сначала.');
+            return;
+        }
+        
+        const targetBranch = toNode.branchId;
+        const existingChoice = fromChoices.find(ch => ch.target_branch === targetBranch);
+        
+        if (existingChoice) {
+            alert('Связь с этой веткой уже существует.');
+            return;
+        }
+        
+        const choiceId = fromChoices[0].choice_id;
+        const optionId = `opt_${Date.now()}`;
+        
+        fetch(`${API_URL}/editor/choices`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                conversationId: fromNode.conversationId,
+                choiceId: choiceId,
+                optionId: optionId,
+                optionText: `Перейти к: ${targetBranch}`,
+                targetBranch: targetBranch
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.message) {
+                this.selectDialogue(this.state.currentDialogueId);
+            }
+        })
+        .catch(err => {
+            console.error('Error creating connection:', err);
+            alert('Ошибка создания связи');
         });
     }
     
