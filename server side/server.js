@@ -248,6 +248,12 @@ tables.forEach(sql => db.run(sql));
             Logger.error('Migration error (voiceline):', err.message);
         }
     });
+    
+    db.run(`ALTER TABLE conversations ADD COLUMN typing_speed REAL DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (typing_speed):', err.message);
+        }
+    });
 }
 
 const authRoutes = express.Router();
@@ -660,6 +666,7 @@ const convObj = {
         if (c.custom_image) convObj.image = c.custom_image;
         if (c.fake_name) convObj.fakeName = c.fake_name;
         if (c.voiceline) convObj.voiceline = c.voiceline;
+        if (c.typing_speed && c.typing_speed > 0) convObj.typingSpeed = c.typing_speed;
         
         if (convChoices.length > 0) {
             convObj.choice = {

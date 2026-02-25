@@ -472,6 +472,22 @@
     display: none !important;
 }
 
+.typing-speed-section {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.typing-speed-section .form-input {
+    flex: 1;
+}
+
+.typing-speed-help {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 4px;
+}
+
 @media (max-width: 1200px) {
     .editor-layout {
         grid-template-columns: 200px 1fr 250px;

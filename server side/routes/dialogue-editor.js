@@ -167,14 +167,14 @@ const dialogueEditorRoutes = (db, upload) => {
     
     // Создать реплику
 router.post('/conversations', (req, res) => {
-        const { dialogueId, branchId, characterId, text, customImage, fakeName, voiceline, sortOrder } = req.body;
+        const { dialogueId, branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder } = req.body;
         
         if (!dialogueId || !characterId || !text) {
             return res.status(400).json({ message: 'dialogueId, characterId и text обязательны' });
         }
         
-        db.run(`INSERT INTO conversations (dialogue_id, branch_id, character_id, text, custom_image, fake_name, voiceline, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [dialogueId, branchId || 'main', characterId, text, customImage, fakeName, voiceline, sortOrder || 0],
+        db.run(`INSERT INTO conversations (dialogue_id, branch_id, character_id, text, custom_image, fake_name, voiceline, typing_speed, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [dialogueId, branchId || 'main', characterId, text, customImage, fakeName, voiceline, typingSpeed || 0, sortOrder || 0],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания реплики' });
                 res.status(201).json({ message: 'Реплика создана', conversationId: this.lastID });
@@ -183,10 +183,10 @@ router.post('/conversations', (req, res) => {
 
     router.put('/conversations/:id', (req, res) => {
         const { id } = req.params;
-        const { branchId, characterId, text, customImage, fakeName, voiceline, sortOrder } = req.body;
+        const { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder } = req.body;
         
-        db.run(`UPDATE conversations SET branch_id = ?, character_id = ?, text = ?, custom_image = ?, fake_name = ?, voiceline = ?, sort_order = ? WHERE id = ?`,
-            [branchId, characterId, text, customImage, fakeName, voiceline, sortOrder, id],
+        db.run(`UPDATE conversations SET branch_id = ?, character_id = ?, text = ?, custom_image = ?, fake_name = ?, voiceline = ?, typing_speed = ?, sort_order = ? WHERE id = ?`,
+            [branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed || 0, sortOrder, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления реплики' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Реплика не найдена' });
@@ -520,6 +520,7 @@ const convObj = {
             if (c.custom_image) convObj.image = c.custom_image;
             if (c.fake_name) convObj.fakeName = c.fake_name;
             if (c.voiceline) convObj.voiceline = c.voiceline;
+            if (c.typing_speed && c.typing_speed > 0) convObj.typingSpeed = c.typing_speed;
             
             if (convChoices.length > 0) {
                 const choice = convChoices[0];

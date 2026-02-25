@@ -799,7 +799,8 @@ function handleChoiceDialog(conversation) {
             
             // Сохраняем ID выбора для дальнейшего ветвления
             state.currentChoiceId = conversation.choiceId;
-        }
+        },
+        conversation.typingSpeed || 0
     );
 }
 
@@ -1002,7 +1003,8 @@ function processObjectDialogLine(conversation) {
             // Сохраняем обновленный прогресс ТОЛЬКО после завершения анимации
             const currentFrequency = getCurrentFrequency();
             saveDialogueProgress(currentFrequency, false);
-        }
+        },
+        conversation.typingSpeed || 0
     );
 }
 
@@ -1676,8 +1678,9 @@ function extractPauses(text) {
  * @param {Audio} characterVoice - Голос персонажа
  * @param {string} characterName - Имя персонажа
  * @param {function} onComplete - Функция для вызова после завершения
+ * @param {number} customTypingSpeed - Кастомная скорость печати (мс/символ)
  */
-function typeText(text, element, characterVoice, characterName, onComplete = null) {
+function typeText(text, element, characterVoice, characterName, onComplete = null, customTypingSpeed = 0) {
     if (!text) text = '';
     if (!characterName) characterName = 'Система';
     
@@ -1688,7 +1691,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     const cleanText = checkAndActivateGlitchEffects(text);
     const { text: textWithoutPauses, pauses } = extractPauses(cleanText);
     
-    console.log(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}", режим звука: ${voiceMode}`);
+    console.log(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}", режим звука: ${voiceMode}, скорость: ${customTypingSpeed || 'авто'}`);
     
     $('#c-char').text(characterName + ':');
     $('#text-con').addClass('typing-in-progress');
@@ -1747,7 +1750,12 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     function processCharacter() {
         element.text(textWithoutPauses.slice(0, i + 1));
         
-        let delay = Math.random() * 40 + 30;
+        let delay;
+        if (customTypingSpeed > 0) {
+            delay = customTypingSpeed + (Math.random() * 10 - 5);
+        } else {
+            delay = Math.random() * 40 + 30;
+        }
         
         const isGlitchActive = glitchEffects.isActive && getCurrentFrequency() === 'PER';
         

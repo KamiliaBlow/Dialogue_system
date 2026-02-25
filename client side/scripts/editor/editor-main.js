@@ -412,6 +412,8 @@ document.getElementById('preview-typing-btn').addEventListener('click', () => {
         
         document.getElementById('upload-conversation-voiceline').addEventListener('change', (e) => this.uploadFile(e, 'voiceline'));
         
+        document.getElementById('auto-calc-speed-btn').addEventListener('click', () => this.autoCalculateTypingSpeed());
+        
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.style.display = 'none';
@@ -574,6 +576,58 @@ openCharacterModal(id = null) {
         this.state.audioPreview.play().catch(err => console.log('Audio play error:', err));
     }
     
+    autoCalculateTypingSpeed() {
+        const voicelineSelect = document.getElementById('conversation-voiceline');
+        const textArea = document.getElementById('conversation-text');
+        const typingSpeedInput = document.getElementById('conversation-typing-speed');
+        
+        const voicelinePath = voicelineSelect.value;
+        const text = textArea.value;
+        
+        if (!voicelinePath) {
+            alert('Сначала выберите файл озвучки');
+            return;
+        }
+        
+        if (!text || text.trim().length === 0) {
+            alert('Сначала введите текст реплики');
+            return;
+        }
+        
+        const cleanText = text.replace(/\[\d+\.?\d*s\]/g, '').trim();
+        const charCount = cleanText.length;
+        
+        if (charCount === 0) {
+            alert('Текст реплики пуст');
+            return;
+        }
+        
+        const fullUrl = getAssetUrl(voicelinePath);
+        const audio = new Audio(fullUrl);
+        
+        audio.addEventListener('loadedmetadata', () => {
+            const duration = audio.duration;
+            
+            if (duration <= 0 || !isFinite(duration)) {
+                alert('Не удалось получить длительность аудиофайла');
+                return;
+            }
+            
+            const totalTypingTime = duration * 1000;
+            const speedPerChar = Math.round(totalTypingTime / charCount);
+            
+            typingSpeedInput.value = speedPerChar;
+            
+            console.log(`Auto-calculated typing speed: ${speedPerChar}ms/char (${duration}s audio, ${charCount} chars)`);
+        });
+        
+        audio.addEventListener('error', () => {
+            alert('Не удалось загрузить аудиофайл для расчёта');
+        });
+        
+        audio.load();
+    }
+    
 async saveCharacter() {
         const id = document.getElementById('character-id').value;
         const name = document.getElementById('character-name').value.trim();
@@ -663,6 +717,7 @@ openConversationModal(id = null) {
                 document.getElementById('conversation-custom-image').value = conv.custom_image || '';
                 document.getElementById('conversation-fake-name').value = conv.fake_name || '';
                 document.getElementById('conversation-voiceline').value = conv.voiceline || '';
+                document.getElementById('conversation-typing-speed').value = conv.typing_speed || 0;
                 
                 const choices = this.state.choices.filter(ch => ch.conversation_id == id);
                 if (choices.length > 0) {
@@ -685,6 +740,7 @@ openConversationModal(id = null) {
             document.getElementById('conversation-custom-image').value = '';
             document.getElementById('conversation-fake-name').value = '';
             document.getElementById('conversation-voiceline').value = '';
+            document.getElementById('conversation-typing-speed').value = 0;
             document.getElementById('has-choice').checked = false;
             document.getElementById('choice-options-container').classList.add('hidden');
             document.getElementById('choice-id').value = '';
@@ -735,6 +791,7 @@ async saveConversation() {
         const customImage = document.getElementById('conversation-custom-image').value;
         const fakeName = document.getElementById('conversation-fake-name').value;
         const voiceline = document.getElementById('conversation-voiceline').value;
+        const typingSpeed = parseFloat(document.getElementById('conversation-typing-speed').value) || 0;
         const hasChoice = document.getElementById('has-choice').checked;
         
         if (!characterId || !text) {
@@ -751,8 +808,8 @@ async saveConversation() {
             const sortOrder = id ? undefined : this.state.conversations.filter(c => c.branch_id === branchId).length;
             
             const body = id 
-                ? { branchId, characterId, text, customImage, fakeName, voiceline }
-                : { dialogueId: this.state.currentDialogueId, branchId, characterId, text, customImage, fakeName, voiceline, sortOrder };
+                ? { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed }
+                : { dialogueId: this.state.currentDialogueId, branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder };
             
             const response = await fetch(url, {
                 method,
