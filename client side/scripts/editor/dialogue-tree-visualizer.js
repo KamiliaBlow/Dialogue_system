@@ -337,16 +337,19 @@ class DialogueTreeVisualizer {
             ? nodeData.text.substring(0, 60) + '...' 
             : nodeData.text;
         
+        const connectBtn = nodeData.hasChoice 
+            ? '<button class="tree-node-action-btn connect disabled" title="Недоступно для реплик с выбором" disabled>↗</button>'
+            : '<button class="tree-node-action-btn connect" title="Создать связь" data-action="connect">↗</button>';
+        
         node.innerHTML = `
             <div class="tree-node-actions">
-                <button class="tree-node-action-btn connect" title="Создать связь" data-action="connect">↗</button>
+                ${connectBtn}
                 <button class="tree-node-action-btn edit" title="Редактировать" data-action="edit">✎</button>
                 <button class="tree-node-action-btn delete" title="Удалить" data-action="delete">×</button>
             </div>
             <div class="tree-node-header">
                 <span class="tree-node-speaker">${this.escapeHtml(nodeData.speaker)}</span>
                 ${nodeData.hasChoice ? '<span class="tree-node-badge choice-badge">Выбор</span>' : ''}
-            </div>
             </div>
             <div class="tree-node-text">${this.escapeHtml(textPreview)}</div>
         `;
@@ -375,6 +378,15 @@ class DialogueTreeVisualizer {
     
     handleNodeClick(e, nodeData) {
         if (this.state.connectingFrom && this.state.connectingFrom !== nodeData.id) {
+            const fromNode = this.nodes.get(this.state.connectingFrom);
+            if (fromNode && fromNode.hasChoice) {
+                this.cancelConnecting();
+                return;
+            }
+            if (nodeData.hasChoice) {
+                this.cancelConnecting();
+                return;
+            }
             this.createConnection(this.state.connectingFrom, nodeData.id);
             this.cancelConnecting();
             return;
@@ -406,7 +418,9 @@ class DialogueTreeVisualizer {
                 }
                 break;
             case 'connect':
-                this.toggleConnecting(nodeData.id);
+                if (!nodeData.hasChoice) {
+                    this.toggleConnecting(nodeData.id);
+                }
                 break;
         }
     }
@@ -562,13 +576,28 @@ class DialogueTreeVisualizer {
         this.contextMenu.style.top = `${y}px`;
         
         if (nodeData) {
-            this.contextMenu.innerHTML = `
+            let menuItems = `
                 <div class="tree-context-menu-item" data-action="edit">✏️ Редактировать</div>
-                <div class="tree-context-menu-item" data-action="add-after">➕ Добавить после</div>
-                <div class="tree-context-menu-item" data-action="connect">🔗 Создать связь</div>
+            `;
+            
+            if (!nodeData.hasChoice) {
+                menuItems += `
+                    <div class="tree-context-menu-item" data-action="add-after">➕ Добавить после</div>
+                    <div class="tree-context-menu-item" data-action="connect">🔗 Создать связь</div>
+                `;
+            } else {
+                menuItems += `
+                    <div class="tree-context-menu-item disabled" title="Недоступно для реплик с выбором">➕ Добавить после</div>
+                    <div class="tree-context-menu-item disabled" title="Недоступно для реплик с выбором">🔗 Создать связь</div>
+                `;
+            }
+            
+            menuItems += `
                 <div class="tree-context-menu-divider"></div>
                 <div class="tree-context-menu-item danger" data-action="delete">🗑️ Удалить</div>
             `;
+            
+            this.contextMenu.innerHTML = menuItems;
         } else {
             this.contextMenu.innerHTML = `
                 <div class="tree-context-menu-item" data-action="add-here">➕ Добавить реплику здесь</div>
@@ -582,7 +611,7 @@ class DialogueTreeVisualizer {
             }
         }
         
-        this.contextMenu.querySelectorAll('.tree-context-menu-item').forEach(item => {
+        this.contextMenu.querySelectorAll('.tree-context-menu-item:not(.disabled)').forEach(item => {
             item.addEventListener('click', (e) => {
                 const action = item.dataset.action;
                 this.handleContextAction(action, nodeData);
