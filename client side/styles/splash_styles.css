@@ -3,6 +3,10 @@
     --bg-color: #000;
 }
 
+* {
+    box-sizing: border-box;
+}
+
 body, html {
     margin: 0;
     padding: 0;
@@ -57,6 +61,10 @@ body, html {
     height: 100%;
 }
 
+#welcome-message {
+    display: none;
+}
+
 .container {
     display: flex;
     height: 100%;
@@ -89,6 +97,7 @@ body, html {
     transition: opacity 0.05s ease;
     white-space: nowrap;
     overflow: hidden;
+    text-shadow: 0 0 3px var(--terminal-color), 0 0 6px var(--terminal-color);
 }
 
 .terminal-line.visible {
@@ -101,10 +110,25 @@ body, html {
     justify-content: center;
     align-items: center;
     text-align: center;
+    min-height: 400px;
+}
+
+#welcome-message {
+    font-size: 1.2em;
+    margin-bottom: 30px;
+    min-height: 1.5em;
+    white-space: nowrap;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px var(--terminal-color), 0 0 10px var(--terminal-color);
+}
+
+#welcome-message span {
+    text-shadow: 0 0 5px var(--terminal-color), 0 0 10px var(--terminal-color);
 }
 
 .typing {
     width: 30ch;
+    min-height: 1.2em;
     animation:
         typing 3s steps(30),
         terminal-blink 0.7s step-end infinite alternate;
@@ -113,6 +137,17 @@ body, html {
     border-right: 3px solid var(--terminal-color);
     font-family: monospace;
     font-size: 2em;
+    box-sizing: content-box;
+    text-shadow: 0 0 5px var(--terminal-color), 0 0 10px var(--terminal-color);
+}
+
+#status {
+    min-height: 1.5em;
+    margin: 10px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 1.2em;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px var(--terminal-color), 0 0 10px var(--terminal-color);
 }
 
 @keyframes terminal-blink {

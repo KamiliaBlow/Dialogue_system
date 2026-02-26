@@ -1,5 +1,10 @@
 let API_URL = null;
 
+function capitalizeName(name) {
+    if (!name) return '';
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+}
+
 async function initLogin() {
     try {
         const timestamp = Date.now();
@@ -125,6 +130,7 @@ async function handleRegister() {
         }
 
         localStorage.setItem('username', data.username);
+
         window.location.href = 'splash.html';
     } catch (error) {
         console.error('Ошибка:', error);

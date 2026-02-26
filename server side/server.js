@@ -276,8 +276,9 @@ authRoutes.post('/register', validateBody({
     password: Validator.password
 }), async (req, res) => {
     const { username, password } = req.sanitizedBody;
+    const normalizedUsername = username.charAt(0).toUpperCase() + username.slice(1).toLowerCase();
     
-    db.get('SELECT id FROM users WHERE username = ?', [username], async (err, user) => {
+    db.get('SELECT id FROM users WHERE LOWER(username) = LOWER(?)', [normalizedUsername], async (err, user) => {
         if (err) {
             return res.status(500).json({ message: 'Ошибка сервера' });
         }
@@ -290,19 +291,19 @@ authRoutes.post('/register', validateBody({
             const hashedPassword = await bcrypt.hash(password, 10);
             
             db.run('INSERT INTO users (username, password) VALUES (?, ?)',
-                [username, hashedPassword],
+                [normalizedUsername, hashedPassword],
                 function(err) {
                     if (err) {
                         return res.status(500).json({ message: 'Ошибка создания пользователя' });
                     }
                     
                     req.session.userId = this.lastID;
-                    req.session.username = username;
+                    req.session.username = normalizedUsername;
                     
                     res.status(201).json({
                         message: 'Пользователь создан',
                         userId: this.lastID,
-                        username
+                        username: normalizedUsername
                     });
                 });
         } catch (error) {
@@ -317,7 +318,7 @@ authRoutes.post('/login', validateBody({
 }), async (req, res) => {
     const { username, password } = req.sanitizedBody;
     
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
+    db.get('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', [username], async (err, user) => {
         if (err) {
             return res.status(500).json({ message: 'Ошибка сервера' });
         }

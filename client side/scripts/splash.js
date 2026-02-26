@@ -8,8 +8,61 @@ const elements = {
     codeScroll: document.getElementById('code-scroll'),
     powerSound: document.getElementById('power-sound'),
     loadingBar: document.getElementById('loading-bar'),
-    status: document.getElementById('status')
+    status: document.getElementById('status'),
+    usernameElement: document.getElementById('username')
 };
+
+let API_URL = null;
+
+function capitalizeName(name) {
+    if (!name) return '';
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+}
+
+async function loadConfig() {
+    try {
+        const timestamp = Date.now();
+        const module = await import(`./config.js?t=${timestamp}`);
+        API_URL = module.default.API_URL;
+    } catch (error) {
+        console.error('Failed to load config:', error);
+        API_URL = window.location.origin + '/api';
+    }
+}
+
+async function loadUsername() {
+    if (!API_URL) await loadConfig();
+    
+    try {
+        const url = `${API_URL}/check-auth`;
+        console.log('Fetching:', url);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(url, {
+            credentials: 'include',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            elements.usernameElement.textContent = 'ГОСТЬ';
+            return;
+        }
+        
+        const data = await response.json();
+        if (data.isAuthenticated && data.username) {
+            elements.usernameElement.textContent = capitalizeName(data.username);
+        } else {
+            elements.usernameElement.textContent = 'ГОСТЬ';
+        }
+    } catch (error) {
+        console.error('Error loading username:', error);
+        elements.usernameElement.textContent = 'ГОСТЬ';
+    }
+}
 
 // Статусы загрузки
 const statuses = [
@@ -44,11 +97,11 @@ function initTerminalCodeScroll() {
     }
 
     function animateScroll() {
-        // Быстрая прокрутка
-        elements.codeScroll.style.transform = `translateY(-${lineCount * 1.2}px)`;
+        // Медленная прокрутка
+        elements.codeScroll.style.transform = `translateY(-${lineCount * 0.3}px)`;
 
         // Добавляем новую строку с небольшой задержкой
-        if (Math.random() < 0.3) {  // Случайность добавления строк
+        if (Math.random() < 0.08) {  // Случайность добавления строк (замедлено)
             addCodeLine();
         }
         requestAnimationFrame(animateScroll);
@@ -211,6 +264,9 @@ function initEventListeners() {
             elements.powerButton.style.display = 'none';
             elements.terminalContainer.style.display = 'block';
 
+            // Показываем приветствие
+            document.getElementById('welcome-message').style.display = 'block';
+
             initTerminalCodeScroll();
             typeStatus();
 
@@ -231,6 +287,9 @@ function initEventListeners() {
 document.addEventListener('DOMContentLoaded', () => {
     // Показываем кнопку "Пропустить запуск"
     elements.skipButton.hidden = false;
+
+    // Загружаем имя пользователя
+    loadUsername();
 
     // Инициализируем обработчики событий
     initEventListeners();
