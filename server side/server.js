@@ -249,9 +249,15 @@ tables.forEach(sql => db.run(sql));
         }
     });
     
-    db.run(`ALTER TABLE conversations ADD COLUMN typing_speed REAL DEFAULT 0`, (err) => {
+    db.run(`ALTER TABLE dialogues ADD COLUMN is_active INTEGER DEFAULT 1`, (err) => {
         if (err && !err.message.includes('duplicate column')) {
-            Logger.error('Migration error (typing_speed):', err.message);
+            Logger.error('Migration error (is_active):', err.message);
+        }
+    });
+    
+    db.run(`ALTER TABLE dialogues ADD COLUMN max_repeats INTEGER DEFAULT 1`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (max_repeats):', err.message);
         }
     });
 }
@@ -424,7 +430,7 @@ progressRoutes.get('/user-choices/:frequency', requireAuth, (req, res) => {
 });
 
 progressRoutes.get('/available-frequencies', requireAuth, (req, res) => {
-    db.all(`SELECT frequency, allowed_users FROM dialogues`, [], (err, rows) => {
+    db.all(`SELECT frequency, allowed_users FROM dialogues WHERE is_active != 0`, [], (err, rows) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения частот' });
         
         const availableFrequencies = [];
@@ -648,6 +654,8 @@ function formatDialogueForClient(dialogue, characters, conversations, choices) {
             window: c.window
         })),
         allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),
+        isActive: dialogue.is_active !== 0,
+        maxRepeats: dialogue.max_repeats !== undefined ? dialogue.max_repeats : 1,
         conversations: []
     };
     
@@ -669,6 +677,7 @@ const convObj = {
         if (c.typing_speed && c.typing_speed > 0) convObj.typingSpeed = c.typing_speed;
         
         if (convChoices.length > 0) {
+            convObj.hasChoice = true;
             convObj.choice = {
                 choiceId: convChoices[0].choice_id,
                 options: convChoices.map(ch => ({
@@ -698,7 +707,7 @@ const convObj = {
 
 // Получить список всех частот
 app.get('/api/frequencies', (req, res) => {
-    db.all('SELECT frequency, title FROM dialogues ORDER BY frequency', (err, dialogues) => {
+    db.all('SELECT frequency, title FROM dialogues WHERE is_active != 0 ORDER BY frequency', (err, dialogues) => {
         if (err) return res.status(500).json({ message: 'Ошибка' });
         res.json({ frequencies: dialogues.map(d => d.frequency) });
     });

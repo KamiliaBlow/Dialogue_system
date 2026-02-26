@@ -136,9 +136,10 @@ async loadFiles() {
         }
         
         container.innerHTML = this.state.dialogues.map(d => `
-            <div class="dialogue-item" data-id="${d.id}">
+            <div class="dialogue-item ${d.is_active === 0 ? 'dialogue-inactive' : ''}" data-id="${d.id}">
                 <div class="dialogue-item-frequency">${d.frequency}</div>
                 <div class="dialogue-item-title">${d.title || 'Без названия'}</div>
+                ${d.is_active === 0 ? '<div class="dialogue-inactive-badge">Неактивен</div>' : ''}
             </div>
         `).join('');
         
@@ -179,6 +180,9 @@ renderDialogueInfo(dialogue) {
         const isAllUsers = allowedUsers.includes(-1);
         document.getElementById('dialogue-access').value = isAllUsers ? 'all' : 'custom';
         this.state.selectedAllowedUsers = isAllUsers ? [] : allowedUsers;
+        
+        document.getElementById('dialogue-active').checked = dialogue.is_active !== 0;
+        document.getElementById('dialogue-max-repeats').value = dialogue.max_repeats !== undefined ? dialogue.max_repeats : 1;
         
         this.updateUsersSelector();
         this.toggleUsersSelector(!isAllUsers);
@@ -499,6 +503,8 @@ async saveDialogue() {
         const frequency = document.getElementById('dialogue-frequency').value.trim();
         const title = document.getElementById('dialogue-title').value.trim();
         const access = document.getElementById('dialogue-access').value;
+        const isActive = document.getElementById('dialogue-active').checked;
+        const maxRepeats = parseInt(document.getElementById('dialogue-max-repeats').value) || 1;
         
         const allowedUsers = access === 'all' ? [-1] : this.state.selectedAllowedUsers;
         
@@ -507,7 +513,7 @@ async saveDialogue() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ frequency, title, allowedUsers })
+                body: JSON.stringify({ frequency, title, allowedUsers, isActive, maxRepeats })
             });
             
             const data = await response.json();
@@ -793,7 +799,8 @@ openConversationModal(id = null, defaultBranch = 'main') {
         
         choices.forEach(ch => {
             const isNewBranch = !ch.target_branch;
-            this.addChoiceOption(ch.option_id, ch.option_text, ch.target_branch);
+            // Сохраняем реальный ID строки из БД в dataset.dbId
+            this.addChoiceOption(ch.option_id, ch.option_text, ch.target_branch, ch.id);
             
             if (isNewBranch) {
                 const lastOption = container.lastElementChild;
@@ -805,13 +812,17 @@ openConversationModal(id = null, defaultBranch = 'main') {
         });
     }
     
-    addChoiceOption(id = '', text = '', target = '') {
+    addChoiceOption(id = '', text = '', target = '', dbId = null) {
         const container = document.getElementById('choice-options-list');
         const template = document.getElementById('choice-option-template');
         const optionEl = template.content.cloneNode(true);
         
         const optionDiv = optionEl.querySelector('.choice-option');
         optionDiv.dataset.optionId = id || Date.now();
+        // Сохраняем реальный ID строки из БД
+        if (dbId) {
+            optionDiv.dataset.dbId = dbId;
+        }
         
         optionEl.querySelector('.option-text').value = text;
         
@@ -911,6 +922,7 @@ async saveConversation() {
             const characterId = characterSelect ? characterSelect.value : '';
             
             options.push({
+                dbId: opt.dataset.dbId || null, // Реальный ID строки из БД
                 optionId: opt.dataset.optionId || `opt_${i}_${Date.now()}`,
                 optionText: opt.querySelector('.option-text').value,
                 targetBranch: targetBranch,
@@ -966,17 +978,38 @@ async saveConversation() {
                 }
             }
             
-            await fetch(`${API_URL}/editor/choices`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({
-                    conversationId,
-                    choiceId,
-                    ...opt,
-                    targetBranch
-                })
-            });
+            // Проверяем, есть ли реальный ID строки из БД
+            if (opt.dbId) {
+                // Обновляем существующий выбор по ID строки
+                await fetch(`${API_URL}/editor/choices/${opt.dbId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        conversationId,
+                        choiceId,
+                        optionId: opt.optionId,
+                        optionText: opt.optionText,
+                        targetBranch: targetBranch,
+                        sortOrder: opt.sortOrder
+                    })
+                });
+            } else {
+                // Создаем новый выбор
+                await fetch(`${API_URL}/editor/choices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        conversationId,
+                        choiceId,
+                        optionId: opt.optionId,
+                        optionText: opt.optionText,
+                        targetBranch: targetBranch,
+                        sortOrder: opt.sortOrder
+                    })
+                });
+            }
         }
     }
     

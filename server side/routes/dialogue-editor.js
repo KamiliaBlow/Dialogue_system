@@ -69,14 +69,14 @@ const dialogueEditorRoutes = (db, upload) => {
 
     // Создать диалог
     router.post('/dialogues', (req, res) => {
-        const { frequency, title, allowedUsers } = req.body;
+        const { frequency, title, allowedUsers, isActive, maxRepeats } = req.body;
         
         if (!frequency) {
             return res.status(400).json({ message: 'Frequency обязательна' });
         }
         
-        db.run(`INSERT INTO dialogues (frequency, title, allowed_users) VALUES (?, ?, ?)`,
-            [frequency, title || frequency, JSON.stringify(allowedUsers || [-1])],
+        db.run(`INSERT INTO dialogues (frequency, title, allowed_users, is_active, max_repeats) VALUES (?, ?, ?, ?, ?)`,
+            [frequency, title || frequency, JSON.stringify(allowedUsers || [-1]), isActive !== undefined ? (isActive ? 1 : 0) : 1, maxRepeats !== undefined ? maxRepeats : 1],
             function(err) {
                 if (err) {
                     if (err.message.includes('UNIQUE')) {
@@ -101,10 +101,10 @@ const dialogueEditorRoutes = (db, upload) => {
     // Обновить диалог
     router.put('/dialogues/:id', (req, res) => {
         const { id } = req.params;
-        const { frequency, title, allowedUsers } = req.body;
+        const { frequency, title, allowedUsers, isActive, maxRepeats } = req.body;
         
-        db.run(`UPDATE dialogues SET frequency = ?, title = ?, allowed_users = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [frequency, title, JSON.stringify(allowedUsers || [-1]), id],
+        db.run(`UPDATE dialogues SET frequency = ?, title = ?, allowed_users = ?, is_active = ?, max_repeats = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [frequency, title, JSON.stringify(allowedUsers || [-1]), isActive !== undefined ? (isActive ? 1 : 0) : 1, maxRepeats !== undefined ? maxRepeats : 1, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления диалога' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Диалог не найден' });
@@ -768,6 +768,8 @@ router.post('/conversations', (req, res) => {
                 window: c.window
             })),
             allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),
+            isActive: dialogue.is_active !== 0,
+            maxRepeats: dialogue.max_repeats !== undefined ? dialogue.max_repeats : 1,
             conversations: []
         };
         
@@ -793,6 +795,7 @@ const convObj = {
             
             if (convChoices.length > 0) {
                 const choice = convChoices[0];
+                convObj.hasChoice = true;
                 convObj.choice = {
                     choiceId: choice.choice_id,
                     options: convChoices.map(ch => ({
@@ -809,10 +812,13 @@ const convObj = {
         // Главная ветка
         result.conversations = branches['main'] || [];
         
-        // Добавляем ветки
+        // Добавляем ветки в нужном формате
         Object.keys(branches).forEach(branchId => {
             if (branchId !== 'main') {
-                result[branchId] = branches[branchId];
+                result[branchId] = {
+                    choiceId: branchId,
+                    responses: branches[branchId]
+                };
             }
         });
         

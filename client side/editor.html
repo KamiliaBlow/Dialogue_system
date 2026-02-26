@@ -68,6 +68,20 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="dialogue-active" checked>
+                                    Диалог активен
+                                </label>
+                                <div class="form-help">Неактивные диалоги не видны пользователям</div>
+                            </div>
+                            <div class="form-group">
+                                <label>Количество повторений:</label>
+                                <input type="number" id="dialogue-max-repeats" class="form-input" value="1" min="-1" step="1">
+                                <div class="form-help">Сколько раз можно переслушать диалог. -1 = бесконечно</div>
+                            </div>
+                        </div>
                         <div class="form-actions">
                             <button id="save-dialogue-btn" class="btn">Сохранить</button>
                             <button id="delete-dialogue-btn" class="btn btn-danger">Удалить диалог</button>
