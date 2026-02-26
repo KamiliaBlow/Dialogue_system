@@ -671,6 +671,13 @@ adminRoutes.get('/choice-statistics', adminMiddleware, (req, res) => {
     });
 });
 
+adminRoutes.get('/dialogues-count', adminMiddleware, (req, res) => {
+    db.get('SELECT COUNT(*) as count FROM dialogues WHERE is_active != 0', (err, row) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения количества диалогов' });
+        res.json({ count: row?.count || 0 });
+    });
+});
+
 adminRoutes.get('/choice-details/:frequency/:choiceId', adminMiddleware, (req, res) => {
     const query = `
         SELECT u.username, uc.choice_text, uc.created_at
@@ -690,16 +697,97 @@ adminRoutes.get('/choice-details/:frequency/:choiceId', adminMiddleware, (req, r
 });
 
 adminRoutes.get('/user-progress', adminMiddleware, (req, res) => {
-    const query = `
-        SELECT u.username, dp.frequency, dp.progress, dp.completed, dp.last_line
-        FROM dialogue_progress dp JOIN users u ON dp.user_id = u.id
-        ORDER BY u.username, dp.frequency
-    `;
+    const getProgress = () => {
+        return new Promise((resolve, reject) => {
+            db.all(`
+                SELECT 
+                    u.id as user_id,
+                    u.username, 
+                    dp.frequency, 
+                    dp.progress, 
+                    dp.completed, 
+                    dp.last_line,
+                    COALESCE(d.max_repeats, 1) as max_repeats,
+                    COALESCE(dr.repeat_count, 0) as repeat_count
+                FROM users u
+                LEFT JOIN dialogue_progress dp ON u.id = dp.user_id
+                LEFT JOIN dialogues d ON dp.frequency = d.frequency OR d.frequency IS NULL
+                LEFT JOIN dialogue_repeats dr ON u.id = dr.user_id AND (dp.frequency = dr.frequency OR dp.frequency IS NULL)
+                WHERE d.frequency IS NOT NULL
+                ORDER BY u.username, d.frequency
+            `, (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            });
+        });
+    };
     
-    db.all(query, (err, progress) => {
-        if (err) return res.status(500).json({ message: 'Ошибка прогресса' });
-        res.json({ progress });
-    });
+    const getFrequencies = () => {
+        return new Promise((resolve, reject) => {
+            db.all('SELECT frequency FROM dialogues WHERE is_active != 0', (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows.map(r => r.frequency));
+            });
+        });
+    };
+    
+    Promise.all([getProgress(), getFrequencies()])
+        .then(([progress, frequencies]) => {
+            const result = [];
+            const userProgressMap = {};
+            
+            progress.forEach(p => {
+                const key = `${p.user_id}-${p.frequency}`;
+                userProgressMap[key] = p;
+            });
+            
+            const users = [...new Set(progress.map(p => ({ id: p.user_id, username: p.username })))];
+            
+            users.forEach(user => {
+                frequencies.forEach(freq => {
+                    const key = `${user.id}-${freq}`;
+                    const p = userProgressMap[key];
+                    
+                    if (p) {
+                        const repeatCount = p.repeat_count || 0;
+                        const completed = p.completed === 1;
+                        
+                        let status;
+                        if (completed) {
+                            status = repeatCount > 1 ? 'Да (перепрохождение)' : 'Да';
+                        } else {
+                            status = p.progress > 0 || p.last_line > 0 ? 'В процессе' : 'Не начато';
+                        }
+                        
+                        result.push({
+                            username: user.username,
+                            frequency: freq,
+                            status: status,
+                            max_repeats: p.max_repeats || 1,
+                            repeat_count: p.repeat_count || 0
+                        });
+                    } else {
+                        result.push({
+                            username: user.username,
+                            frequency: freq,
+                            status: 'Не начато',
+                            max_repeats: 1,
+                            repeat_count: 0
+                        });
+                    }
+                });
+            });
+            
+            result.sort((a, b) => {
+                if (a.username !== b.username) return a.username.localeCompare(b.username);
+                return a.frequency.localeCompare(b.frequency);
+            });
+            
+            res.json({ progress: result });
+        })
+        .catch(err => {
+            res.status(500).json({ message: 'Ошибка прогресса' });
+        });
 });
 
 adminRoutes.post('/set-dialogue-access', adminMiddleware, (req, res) => {

@@ -60,7 +60,7 @@ class ChartManager {
             const key = `${stat.frequency}-${stat.choice_id}`;
             if (!choiceGroups[key]) {
                 choiceGroups[key] = {
-                    label: `${stat.frequency}: ${stat.choice_id}`,
+                    label: `${stat.frequency}: ${stat.choice_text || stat.choice_id}`,
                     total: 0
                 };
             }
@@ -69,7 +69,7 @@ class ChartManager {
         
         const sortedChoices = Object.values(choiceGroups)
             .sort((a, b) => b.total - a.total)
-            .slice(0, 5);
+            .slice(0, 10);
         
         if (sortedChoices.length === 0) {
             this.showNoData(canvasId);
@@ -96,7 +96,7 @@ class ChartManager {
                 }]
             },
             options: {
-                ...this.getBaseOptions('Топ-5 популярных выборов'),
+                ...this.getBaseOptions('Топ-10 популярных выборов'),
                 plugins: { ...this.getBaseOptions().plugins, legend: { display: false } },
                 scales: this.getChartScales()
             }
@@ -115,13 +115,22 @@ class ChartManager {
             if (!progress.frequency) return;
             
             if (!frequencyGroups[progress.frequency]) {
-                frequencyGroups[progress.frequency] = { completed: 0, inProgress: 0 };
+                frequencyGroups[progress.frequency] = { 
+                    notStarted: 0, 
+                    inProgress: 0, 
+                    completed: 0,
+                    replay: 0 
+                };
             }
             
-            if (progress.completed) {
-                frequencyGroups[progress.frequency].completed++;
-            } else {
+            if (progress.status === 'Не начато') {
+                frequencyGroups[progress.frequency].notStarted++;
+            } else if (progress.status === 'В процессе') {
                 frequencyGroups[progress.frequency].inProgress++;
+            } else if (progress.status === 'Да') {
+                frequencyGroups[progress.frequency].completed++;
+            } else if (progress.status === 'Да (перепрохождение)') {
+                frequencyGroups[progress.frequency].replay++;
             }
         });
         
@@ -131,8 +140,10 @@ class ChartManager {
         }
         
         const labels = Object.keys(frequencyGroups);
-        const completedData = labels.map(f => frequencyGroups[f].completed);
+        const notStartedData = labels.map(f => frequencyGroups[f].notStarted);
         const inProgressData = labels.map(f => frequencyGroups[f].inProgress);
+        const completedData = labels.map(f => frequencyGroups[f].completed);
+        const replayData = labels.map(f => frequencyGroups[f].replay);
         
         this.destroyChart('progressChart');
         
@@ -145,6 +156,20 @@ class ChartManager {
                 labels: labels,
                 datasets: [
                     {
+                        label: 'Не начато',
+                        data: notStartedData,
+                        backgroundColor: 'rgba(128, 128, 128, 0.7)',
+                        borderColor: 'rgba(128, 128, 128, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'В процессе',
+                        data: inProgressData,
+                        backgroundColor: 'rgba(255, 193, 7, 0.7)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 1
+                    },
+                    {
                         label: 'Завершено',
                         data: completedData,
                         backgroundColor: 'rgba(3, 251, 141, 0.7)',
@@ -152,10 +177,10 @@ class ChartManager {
                         borderWidth: 1
                     },
                     {
-                        label: 'В процессе',
-                        data: inProgressData,
-                        backgroundColor: 'rgba(75, 192, 192, 0.7)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
+                        label: 'Перепрохождение',
+                        data: replayData,
+                        backgroundColor: 'rgba(0, 123, 255, 0.7)',
+                        borderColor: 'rgba(0, 123, 255, 1)',
                         borderWidth: 1
                     }
                 ]

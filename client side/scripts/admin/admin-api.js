@@ -50,6 +50,10 @@ class AdminAPI {
         return this.safeFetch(`${API_URL}/admin/choice-statistics`);
     }
     
+    static async getDialoguesCount() {
+        return this.safeFetch(`${API_URL}/admin/dialogues-count`);
+    }
+    
     static async getChoiceDetails(frequency, choiceId) {
         return this.safeFetch(`${API_URL}/admin/choice-details/${frequency}/${choiceId}`);
     }

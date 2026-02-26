@@ -134,11 +134,21 @@ class AdminApp {
     }
     
     async updateFrequencyTabs() {
-        const frequencies = await this.utils.loadFrequenciesFromConfig();
-        this.state.frequencies = frequencies;
-        
         const container = document.querySelector('.sub-tabs');
         if (!container) return;
+        
+        let frequencies = [];
+        
+        try {
+            const data = await this.api.getFrequencies();
+            if (data?.frequencies) {
+                frequencies = data.frequencies.map(f => f.frequency);
+            }
+        } catch (error) {
+            console.error('Error loading frequencies:', error);
+        }
+        
+        this.state.frequencies = frequencies;
         
         container.innerHTML = '';
         
@@ -176,25 +186,25 @@ class AdminApp {
         this.utils.showLoading('statistics');
         
         try {
-            const [usersData, choicesData, progressData] = await Promise.all([
+            const [usersData, dialoguesData, choicesData] = await Promise.all([
                 this.api.getUsers().catch(() => null),
-                this.api.getChoiceStatistics().catch(() => null),
-                this.api.getUserProgress().catch(() => null)
+                this.api.getDialoguesCount().catch(() => null),
+                this.api.getChoiceStatistics().catch(() => null)
             ]);
             
             if (usersData?.users) {
                 document.getElementById('total-users').textContent = usersData.users.length;
             }
             
-            if (choicesData?.statistics) {
-                document.getElementById('total-choices').textContent = choicesData.statistics.length;
-                this.chartManager.createFrequencyChart(choicesData.statistics);
-                this.chartManager.createChoicesChart(choicesData.statistics);
+            if (dialoguesData?.count !== undefined) {
+                document.getElementById('total-dialogues').textContent = dialoguesData.count;
             }
             
-            if (progressData?.progress) {
-                const completed = progressData.progress.filter(p => p.completed).length;
-                document.getElementById('completed-dialogues').textContent = completed;
+            if (choicesData?.statistics) {
+                const totalChoices = choicesData.statistics.reduce((sum, s) => sum + (parseInt(s.count) || 0), 0);
+                document.getElementById('total-choices').textContent = totalChoices;
+                this.chartManager.createFrequencyChart(choicesData.statistics);
+                this.chartManager.createChoicesChart(choicesData.statistics);
             }
             
             this.utils.hideLoading('statistics');
@@ -512,6 +522,15 @@ class AdminApp {
             return a.choiceId.localeCompare(b.choiceId);
         });
         
+        const frequencyIndices = {};
+        sorted.forEach(choice => {
+            if (!frequencyIndices[choice.frequency]) {
+                frequencyIndices[choice.frequency] = 0;
+            }
+            frequencyIndices[choice.frequency]++;
+            choice.indexInFrequency = frequencyIndices[choice.frequency];
+        });
+        
         if (!sorted.length) {
             list.innerHTML = '<li class="choice-item">Нет данных для выбранной частоты</li>';
             return;
@@ -523,7 +542,7 @@ class AdminApp {
             return `
                 <li class="choice-item" data-frequency="${choice.frequency}" data-choice="${choice.choiceId}">
                     <div class="choice-header">
-                        <div class="choice-title">${choice.frequency}: ${choice.choiceId}</div>
+                        <div class="choice-title">Выборы на частоте: ${choice.frequency} #${choice.indexInFrequency}</div>
                         <div class="choice-count">${choice.total} выборов</div>
                     </div>
                     <div class="choice-options">
@@ -565,7 +584,6 @@ class AdminApp {
         modal.style.display = 'flex';
         
         document.getElementById('detail-frequency').textContent = frequency;
-        document.getElementById('detail-choice-id').textContent = choiceId;
         
         document.getElementById('choice-details-loading').style.display = 'flex';
         document.getElementById('choice-details-content').style.display = 'none';
@@ -669,19 +687,21 @@ class AdminApp {
         });
         
         tbody.innerHTML = sorted.map(progress => {
-            const percent = Math.max(0, Math.min(100, this.utils.parseProgress(progress.progress)));
+            const maxRepeats = progress.max_repeats || 1;
+            const repeatCount = progress.repeat_count || 0;
+            
+            let statusClass = '';
+            if (progress.status === 'Не начато') statusClass = 'status-not-started';
+            else if (progress.status === 'В процессе') statusClass = 'status-in-progress';
+            else if (progress.status === 'Да') statusClass = 'status-completed';
+            else if (progress.status === 'Да (перепрохождение)') statusClass = 'status-replay';
             
             return `
                 <tr>
                     <td>${progress.username}</td>
                     <td>${progress.frequency}</td>
-                    <td>
-                        <div style="width: 100%; background: rgba(3, 251, 141, 0.1); height: 10px;">
-                            <div style="width: ${percent}%; background: #03FB8D; height: 100%;"></div>
-                        </div>
-                        <div style="text-align: center; margin-top: 5px;">${percent}% (${progress.progress || '0'})</div>
-                    </td>
-                    <td>${progress.completed ? 'Да' : 'Нет'}</td>
+                    <td>${repeatCount} / ${maxRepeats}</td>
+                    <td><span class="status-badge ${statusClass}">${progress.status}</span></td>
                 </tr>
             `;
         }).join('');

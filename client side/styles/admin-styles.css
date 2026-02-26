@@ -563,3 +563,35 @@ input[type="range"]::-webkit-slider-thumb {
         font-size: 12px;
     }
 }
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.status-not-started {
+    background-color: rgba(128, 128, 128, 0.2);
+    color: #888;
+    border: 1px solid #888;
+}
+
+.status-in-progress {
+    background-color: rgba(255, 193, 7, 0.2);
+    color: #FFC107;
+    border: 1px solid #FFC107;
+}
+
+.status-completed {
+    background-color: rgba(3, 251, 141, 0.2);
+    color: #03FB8D;
+    border: 1px solid #03FB8D;
+}
+
+.status-replay {
+    background-color: rgba(0, 123, 255, 0.2);
+    color: #007BFF;
+    border: 1px solid #007BFF;
+}
