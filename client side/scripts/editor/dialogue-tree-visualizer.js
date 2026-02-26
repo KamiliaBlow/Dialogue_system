@@ -411,6 +411,7 @@ class DialogueTreeVisualizer {
     }
     
     handleNodeAction(action, nodeData, e) {
+        console.log('handleNodeAction:', action, nodeData);
         switch (action) {
             case 'edit':
                 if (this.callbacks.onNodeEdit) {

@@ -160,6 +160,7 @@ function initDatabase() {
             user_id INTEGER NOT NULL,
             frequency TEXT NOT NULL,
             choice_id TEXT NOT NULL,
+            option_id TEXT,
             choice_text TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
@@ -258,6 +259,12 @@ tables.forEach(sql => db.run(sql));
     db.run(`ALTER TABLE dialogues ADD COLUMN max_repeats INTEGER DEFAULT 1`, (err) => {
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (max_repeats):', err.message);
+        }
+    });
+    
+    db.run(`ALTER TABLE user_choices ADD COLUMN option_id TEXT`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (option_id):', err.message);
         }
     });
 }
@@ -409,14 +416,22 @@ progressRoutes.post('/dialogue-progress', requireAuth, (req, res) => {
 });
 
 progressRoutes.post('/user-choice', requireAuth, (req, res) => {
-    const { frequency, choiceId, choiceText } = req.body;
+    const { frequency, choiceId, optionId, choiceText } = req.body;
     const userId = req.session.userId;
     
-    db.run('INSERT INTO user_choices (user_id, frequency, choice_id, choice_text) VALUES (?, ?, ?, ?)',
-        [userId, frequency, choiceId, choiceText],
+    // Сначала удаляем старые выборы для этой частоты и этого choiceId
+    db.run('DELETE FROM user_choices WHERE user_id = ? AND frequency = ? AND choice_id = ?',
+        [userId, frequency, choiceId],
         function(err) {
-            if (err) return res.status(500).json({ message: 'Ошибка сохранения выбора' });
-            res.json({ message: 'Выбор сохранен', choiceId: this.lastID });
+            if (err) return res.status(500).json({ message: 'Ошибка удаления старого выбора' });
+            
+            // Теперь вставляем новый выбор
+            db.run('INSERT INTO user_choices (user_id, frequency, choice_id, option_id, choice_text) VALUES (?, ?, ?, ?, ?)',
+                [userId, frequency, choiceId, optionId, choiceText],
+                function(err) {
+                    if (err) return res.status(500).json({ message: 'Ошибка сохранения выбора' });
+                    res.json({ message: 'Выбор сохранен', choiceId: this.lastID });
+                });
         });
 });
 
@@ -426,6 +441,15 @@ progressRoutes.get('/user-choices/:frequency', requireAuth, (req, res) => {
         (err, rows) => {
             if (err) return res.status(500).json({ message: 'Ошибка получения выборов' });
             res.json({ choices: rows });
+        });
+});
+
+progressRoutes.delete('/user-choices/:frequency', requireAuth, (req, res) => {
+    db.run('DELETE FROM user_choices WHERE user_id = ? AND frequency = ?',
+        [req.session.userId, req.params.frequency],
+        function(err) {
+            if (err) return res.status(500).json({ message: 'Ошибка удаления выборов' });
+            res.json({ message: 'Выборы удалены' });
         });
 });
 

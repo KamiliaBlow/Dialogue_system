@@ -63,6 +63,7 @@ async init() {
         });
         
         this.treeVisualizer.on('nodeEdit', (nodeData) => {
+            console.log('Edit node:', nodeData);
             this.openConversationModal(nodeData.conversationId);
         });
         
@@ -737,6 +738,7 @@ async saveCharacter() {
     }
     
 openConversationModal(id = null, defaultBranch = 'main') {
+        console.log('openConversationModal called with id:', id, 'defaultBranch:', defaultBranch);
         const modal = document.getElementById('conversation-modal');
         
         this.updateCharacterSelects();
@@ -751,7 +753,7 @@ openConversationModal(id = null, defaultBranch = 'main') {
             this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
         
         if (id) {
-            const conv = this.state.conversations.find(c => c.id == id);
+            const conv = this.state.conversations.find(c => String(c.id) === String(id));
             if (conv) {
                 document.getElementById('conversation-id').value = conv.id;
                 document.getElementById('conversation-character').value = conv.character_id;
@@ -762,7 +764,7 @@ openConversationModal(id = null, defaultBranch = 'main') {
                 document.getElementById('conversation-voiceline').value = conv.voiceline || '';
                 document.getElementById('conversation-typing-speed').value = conv.typing_speed || 0;
                 
-                const choices = this.state.choices.filter(ch => ch.conversation_id == id);
+                const choices = this.state.choices.filter(ch => String(ch.conversation_id) === String(id));
                 if (choices.length > 0) {
                     document.getElementById('has-choice').checked = true;
                     document.getElementById('choice-options-container').classList.remove('hidden');
@@ -774,6 +776,8 @@ openConversationModal(id = null, defaultBranch = 'main') {
                     document.getElementById('choice-id').value = '';
                     document.getElementById('choice-options-list').innerHTML = '';
                 }
+            } else {
+                console.warn('Conversation not found:', id, 'Available:', this.state.conversations.map(c => c.id));
             }
         } else {
             document.getElementById('conversation-id').value = '';
@@ -876,7 +880,13 @@ async saveConversation() {
                 : `${API_URL}/editor/conversations`;
             const method = id ? 'PUT' : 'POST';
             
-            const sortOrder = id ? undefined : this.state.conversations.filter(c => c.branch_id === branchId).length;
+            // Вычисляем правильный sortOrder - берем максимальный + 1
+            let sortOrder;
+            if (!id) {
+                const branchConvs = this.state.conversations.filter(c => c.branch_id === branchId);
+                const maxSortOrder = branchConvs.reduce((max, c) => Math.max(max, c.sort_order || 0), -1);
+                sortOrder = maxSortOrder + 1;
+            }
             
             const body = id 
                 ? { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed }

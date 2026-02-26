@@ -427,7 +427,7 @@ async function initializeTransmission() {
                     console.log(`Сохраненная позиция ${savedCount} выходит за пределы диалога длиной ${state.currentDialogue.conversations.length}`);
                     
                     if (dialogueProgress.completed) {
-                        // Если диалог был завершен, сбрасываем на начало
+                        // Если диалог был завершен, сбрасываем позицию на начало
                         savedCount = 0;
                         console.log('Диалог был завершен, сбрасываем позицию на 0');
                     } else {
@@ -502,14 +502,20 @@ function showCompletedDialogueState() {
     $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
     $('.overlay').css('opacity', '0.3');
     $('#start-transmission').addClass('hidden');
+    $('#repeat-transmission').addClass('hidden');
     
     const canRepeat = maxRepeats === -1 || repeatCount < maxRepeats;
+    
     if (canRepeat) {
+        // Можно повторять - показываем кнопку повтора
         $('#repeat-transmission').removeClass('hidden');
         console.log(`Диалог на частоте ${currentFrequency} - повторений: ${repeatCount}/${maxRepeats === -1 ? '∞' : maxRepeats}, показываем кнопку повтора`);
+    } else if (maxRepeats === -1) {
+        // Бесконечный режим - показываем кнопку повтора
+        $('#repeat-transmission').removeClass('hidden');
     } else {
-        $('#repeat-transmission').addClass('hidden');
-        console.log(`Диалог на частоте ${currentFrequency} - повторений: ${repeatCount}/${maxRepeats}, кнопка повтора скрыта`);
+        // Лимит исчерпан - не показываем никакую кнопку
+        console.log(`Диалог на частоте ${currentFrequency} - повторений: ${repeatCount}/${maxRepeats}, лимит исчерпан, кнопки скрыты`);
     }
     
     state.isTransmissionEnded = true;
@@ -1210,15 +1216,6 @@ function endTransmission() {
     
     const currentFrequency = getCurrentFrequency();
     
-    // Очищаем текст и имя говорящего
-    $('#text').text('*КОНЕЦ ПЕРЕДАЧИ*');
-    $('#c-char').text('');
-    $('#repeat-transmission').addClass('hidden');
-    
-    // Уменьшаем яркость персонажей и заменяем их изображения на статику
-    $('.overlay').css('opacity', '0.3');
-    $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
-    
     // Устанавливаем флаг завершения передачи
     state.isTransmissionEnded = true;
     
@@ -1232,11 +1229,11 @@ function endTransmission() {
     // Сохраняем обновленные счетчики
     saveRepeatCounts();
     
-    // Скрываем кнопку старта
-    $('#start-transmission').addClass('hidden');
-    
     // Сохраняем прогресс как завершенный
     saveDialogueProgress(currentFrequency, true);
+    
+    // Показываем состояние завершенного диалога (включая кнопку повтора)
+    showCompletedDialogueState();
     
     // Логируем состояние диалога
     logDialogueState();
@@ -1909,7 +1906,7 @@ function logDialogueState() {
 // Проверяем доступность API для счетчиков повторений
 async function checkRepeatCountsApiAvailability() {
     try {
-        const response = await fetch(`${API_URL}/repeat-counts-check`, {
+        const response = await fetch(`${API_URL}/repeat-counts`, {
             method: 'GET',
             credentials: 'include',
             headers: {
@@ -2079,6 +2076,20 @@ $('#start-transmission').on('click', async function(event) {
     event.stopPropagation();
     
     var currentFrequency = getCurrentFrequency();
+    
+    // Проверяем лимит повторений
+    const repeatCount = state.repeatCount[currentFrequency] || 0;
+    const maxRepeats = state.currentDialogue?.maxRepeats || 1;
+    
+    // Если лимит повторений исчерпан (и это не бесконечный режим)
+    if (maxRepeats > 0 && repeatCount >= maxRepeats) {
+        console.log(`Лимит повторений исчерпан: ${repeatCount}/${maxRepeats}`);
+        $('#text').text('*ПОВТОРЕНИЯ ЗАВЕРШЕНЫ*');
+        $('#c-char').text('');
+        $('#start-transmission').addClass('hidden');
+        return;
+    }
+    
     console.log(`Loading dialogue for frequency: ${currentFrequency}`);
     
     if (!state.currentDialogue) {
@@ -2140,8 +2151,11 @@ $('#repeat-transmission').on('click', async function() {
         
         console.log(`Повторное прослушивание диалога на частоте ${currentFrequency}`);
         
-        // Очищаем выборы для этой частоты
+        // Очищаем выборы для этой частоты в state
         delete state.userChoices[currentFrequency];
+        
+        // Очищаем выборы в localStorage
+        localStorage.removeItem(`dialogueUserChoices_${state.userName}_${currentFrequency}`);
         
         // Сохраняем выборы на сервере (пустой массив = сброс)
         try {
