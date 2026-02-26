@@ -66,6 +66,10 @@ function getAssetUrl(path) {
 
 // Загрузка конкретного диалога из БД
 async function loadDialogueFromDB(frequency) {
+    if (!frequency) {
+        return null;
+    }
+    
     if (dialoguesCache[frequency]) {
         console.log(`Dialogue ${frequency} loaded from cache`);
         return dialoguesCache[frequency];
@@ -78,7 +82,6 @@ async function loadDialogueFromDB(frequency) {
         });
         
         if (!response.ok) {
-            console.warn(`Dialogue ${frequency} not found in DB, status: ${response.status}`);
             return null;
         }
         
@@ -136,7 +139,8 @@ const state = {
     lastPortrait: {
         window1: null,
         window2: null
-    }
+    },
+    autoPlayMusic: true
 };
 
 /**
@@ -185,6 +189,9 @@ async function initializePage() {
         // Загрузка выборов пользователя
         await loadUserChoices();
         
+        // Загрузка настроек пользователя
+        await loadUserSettings();
+        
         // Инициализация текущей частоты
         await initializeTransmission();
     } catch (error) {
@@ -199,7 +206,6 @@ async function initializePage() {
 async function loadAvailableFrequencies() {
     // Проверяем, что конфигурация загружена
     if (!games || !games[state.currentGame]) {
-        console.error('Конфигурация не загружена в loadAvailableFrequencies');
         state.availableFrequencies = [];
         return;
     }
@@ -210,7 +216,6 @@ async function loadAvailableFrequencies() {
         });
         
         if (!response.ok) {
-            console.error('Ошибка при получении доступных частот');
             checkLocalDialogueAccess();
             return;
         }
@@ -220,13 +225,9 @@ async function loadAvailableFrequencies() {
         
         console.log("Доступные частоты для пользователя:", state.availableFrequencies);
         
-        // Если у нас нет явного API, мы также можем проверить доступ на клиенте
-        // на основе информации в объекте диалогов
         checkLocalDialogueAccess();
         
     } catch (error) {
-        console.error('Ошибка при загрузке доступных частот:', error);
-        // В случае ошибки используем все частоты из конфигурации
         state.availableFrequencies = [...games[state.currentGame]['frequencies']];
     }
 }
@@ -237,7 +238,6 @@ async function loadAvailableFrequencies() {
 function checkLocalDialogueAccess() {
     // Проверяем, что конфигурация загружена
     if (!games || !games[state.currentGame]) {
-        console.error('Конфигурация не загружена в checkLocalDialogueAccess');
         return;
     }
     
@@ -295,18 +295,20 @@ async function loadUserChoices() {
         });
         
         if (!progressResponse.ok) {
-            console.error('Ошибка при получении прогресса диалогов');
             return;
         }
         
         const progressData = await progressResponse.json();
-        const allFrequencies = (progressData.progress || []).map(p => p.frequency);
+        let allFrequencies = (progressData.progress || []).map(p => p.frequency);
         
         // Добавляем текущую частоту, если её нет в списке
         const currentFrequency = getCurrentFrequency();
-        if (!allFrequencies.includes(currentFrequency)) {
+        if (currentFrequency && !allFrequencies.includes(currentFrequency)) {
             allFrequencies.push(currentFrequency);
         }
+        
+        // Фильтруем пустые значения
+        allFrequencies = allFrequencies.filter(f => f);
         
         console.log("Загружаем выборы для частот:", allFrequencies);
         
@@ -323,7 +325,53 @@ async function loadUserChoices() {
             }
         }
     } catch (error) {
-        console.error('Ошибка при загрузке выборов пользователя:', error);
+        // Молча обрабатываем ошибку
+    }
+}
+
+async function loadUserSettings() {
+    try {
+        const response = await fetch(`${API_URL}/user-settings`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            const saved = localStorage.getItem('autoPlayMusic');
+            if (saved !== null) {
+                state.autoPlayMusic = saved === '1';
+            }
+            return;
+        }
+        
+        const data = await response.json();
+        state.autoPlayMusic = data.auto_play_music !== 0;
+        localStorage.setItem('autoPlayMusic', state.autoPlayMusic ? '1' : '0');
+    } catch (error) {
+        const saved = localStorage.getItem('autoPlayMusic');
+        if (saved !== null) {
+            state.autoPlayMusic = saved === '1';
+        }
+    }
+}
+
+async function saveUserSettings() {
+    localStorage.setItem('autoPlayMusic', state.autoPlayMusic ? '1' : '0');
+    
+    try {
+        const response = await fetch(`${API_URL}/user-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ auto_play_music: state.autoPlayMusic ? 1 : 0 })
+        });
+        
+        if (!response.ok) {
+            return;
+        }
+        
+        const data = await response.json();
+    } catch (error) {
+        // localStorage уже сохранен выше
     }
 }
 
@@ -333,11 +381,15 @@ async function loadUserChoices() {
 function getCurrentFrequency() {
     // Проверяем, загружена ли конфигурация
     if (!games || !games[state.currentGame] || !games[state.currentGame]['frequencies']) {
-        console.error('Конфигурация не загружена или отсутствуют частоты');
-        return 'UNKNOWN';
+        return null;
     }
     
     const frequencies = games[state.currentGame]['frequencies'];
+    
+    // Если массив пустой
+    if (!frequencies || frequencies.length === 0) {
+        return null;
+    }
     
     // Проверяем, существует ли частота по текущему индексу
     if (state.freqCount >= 0 && state.freqCount < frequencies.length) {
@@ -345,7 +397,6 @@ function getCurrentFrequency() {
     }
     
     // Если индекс некорректный, возвращаем первую доступную частоту
-    console.warn(`freqCount ${state.freqCount} вне диапазона, сброс на 0`);
     state.freqCount = 0;
     return frequencies[0];
 }
@@ -363,7 +414,6 @@ function updateFrequencyDisplay() {
 async function initializeTransmission() {
     // Проверяем, что конфигурация загружена
     if (!games || !games[state.currentGame]) {
-        console.error('Конфигурация не загружена в initializeTransmission');
         $('#text').text('*ОШИБКА КОНФИГУРАЦИИ*');
         $('#c-char').text('СИСТЕМА:');
         $('#start-transmission, #repeat-transmission').addClass('hidden');
@@ -371,6 +421,17 @@ async function initializeTransmission() {
     }
     
     const currentFrequency = getCurrentFrequency();
+    
+    // Если частоты не определены (пустая база данных)
+    if (!currentFrequency) {
+        $('#text').text('*НЕТ СВЯЗИ*');
+        $('#c-char').text('');
+        $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
+        $('.overlay').css('opacity', '0.3');
+        $('#start-transmission, #repeat-transmission').addClass('hidden');
+        return;
+    }
+    
     console.log(`Инициализация передачи для частоты ${currentFrequency}`);
     
     // Проверяем доступ к текущей частоте
@@ -1709,6 +1770,8 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     const voiceAudio = voiceData.audio;
     const voiceMode = voiceData.mode || 'none';
     
+    console.log(`typeText: voiceMode=${voiceMode}, autoPlayMusic=${state.autoPlayMusic}`);
+    
     const cleanText = checkAndActivateGlitchEffects(text);
     const { text: textWithoutPauses, pauses } = extractPauses(cleanText);
     
@@ -2806,18 +2869,31 @@ $('<style>')
 
 // Добавляем кнопку выхода из системы
 $(document).ready(function() {
-    // Создаем кнопку выхода и добавляем ее на страницу
+    // Создаем контейнер для кнопок
+    const buttonsContainer = $('<div id="header-buttons"></div>');
     const logoutButton = $('<div id="logout-btn">ВЫХОД</div>');
-    $('body').append(logoutButton);
+    const settingsButton = $('<div id="settings-btn">Настройки</div>');
+    const dossierButton = $('<div id="dossier-btn">Досье</div>');
+    
+    buttonsContainer.append(logoutButton).append(settingsButton).append(dossierButton);
+    $('body').append(buttonsContainer);
     
 	// Инициализация эффектов глюков
     initGlitchEffects();
 	
-    // Стилизуем кнопку выхода
-    $('#logout-btn').css({
+    // Стилизуем контейнер кнопок
+    $('#header-buttons').css({
         'position': 'fixed',
         'top': '20px',
         'right': '20px',
+        'display': 'flex',
+        'flex-direction': 'column',
+        'gap': '5px',
+        'z-index': '9999'
+    });
+    
+    // Стилизуем кнопки
+    $('#header-buttons div').css({
         'background-color': 'black',
         'color': '#03FB8D',
         'border': '1px solid #03FB8D',
@@ -2825,12 +2901,18 @@ $(document).ready(function() {
         'font-family': 'Orbitron, sans-serif',
         'font-size': '12px',
         'cursor': 'pointer',
-        'z-index': '9999',
-        'box-shadow': '0 0 10px rgba(3, 251, 141, 0.5)'
+        'box-shadow': '0 0 10px rgba(3, 251, 141, 0.5)',
+        'text-align': 'center'
+    });
+    
+    // Стилизуем отключенную кнопку
+    $('#dossier-btn').css({
+        'opacity': '0.5',
+        'cursor': 'not-allowed'
     });
     
     // Добавляем эффект наведения
-    $('#logout-btn').hover(
+    $('#header-buttons div:not(#dossier-btn)').hover(
         function() {
             $(this).css({
                 'background-color': '#03FB8D',
@@ -2860,6 +2942,152 @@ $(document).ready(function() {
             console.error('Ошибка при выходе:', error);
         }
     });
+    
+    // Добавляем обработчик события для настроек
+    $('#settings-btn').on('click', function() {
+        console.log('Settings button clicked');
+        showSettingsModal();
+    });
+    
+    function showSettingsModal() {
+        console.log('Opening settings modal, autoPlayMusic:', state.autoPlayMusic);
+        const modal = $('<div id="settings-modal" class="modal-overlay"></div>');
+        const modalContent = $('<div class="modal-content"></div>');
+        
+        const title = $('<h2>НАСТРОЙКИ</h2>');
+        const closeBtn = $('<span class="modal-close">&times;</span>');
+        
+        const settingRow = $('<div class="setting-row"></div>');
+        const settingLabel = $('<label for="auto-play-music">Авто-Проигрывание музыки</label>');
+        const toggle = $('<div class="toggle-switch"></div>');
+        const toggleInput = $('<input type="checkbox" id="auto-play-music">');
+        const toggleSlider = $('<span class="toggle-slider"></span>');
+        
+        toggle.append(toggleInput).append(toggleSlider);
+        settingRow.append(settingLabel).append(toggle);
+        
+        modalContent.append(closeBtn).append(title).append(settingRow);
+        modal.append(modalContent);
+        $('body').append(modal);
+        
+        toggleInput.prop('checked', state.autoPlayMusic);
+        
+        closeBtn.on('click', function() {
+            modal.remove();
+        });
+        
+        modal.on('click', function(e) {
+            if (e.target === modal[0]) {
+                modal.remove();
+            }
+        });
+        
+        toggleInput.on('change', function() {
+            console.log('Toggle changed, new value:', $(this).prop('checked'));
+            state.autoPlayMusic = $(this).prop('checked');
+            saveUserSettings();
+            
+            if (!state.autoPlayMusic && state.currentVoiceline) {
+                state.currentVoiceline.pause();
+                state.currentVoiceline = null;
+            }
+        });
+        
+        toggle.on('click', function() {
+            const isChecked = toggleInput.prop('checked');
+            toggleInput.prop('checked', !isChecked).trigger('change');
+        });
+        
+        $('<style>')
+        .prop('type', 'text/css')
+        .html(`
+            .modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 10000;
+            }
+            .modal-content {
+                background: black;
+                border: 2px solid #03FB8D;
+                padding: 30px;
+                min-width: 300px;
+                box-shadow: 0 0 30px rgba(3, 251, 141, 0.5);
+                font-family: 'Orbitron', sans-serif;
+            }
+            .modal-content h2 {
+                color: #03FB8D;
+                margin-top: 0;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+            .modal-close {
+                position: absolute;
+                top: 10px;
+                right: 15px;
+                color: #03FB8D;
+                font-size: 28px;
+                cursor: pointer;
+            }
+            .setting-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin: 15px 0;
+                color: #03FB8D;
+            }
+            .toggle-switch {
+                position: relative;
+                width: 50px;
+                height: 24px;
+                cursor: pointer;
+                display: inline-block;
+            }
+            .toggle-switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+                position: absolute;
+            }
+            .toggle-slider {
+                position: absolute;
+                cursor: pointer;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: #333;
+                transition: 0.3s;
+                border-radius: 24px;
+                border: 1px solid #03FB8D;
+                pointer-events: none;
+            }
+            .toggle-slider:before {
+                position: absolute;
+                content: "";
+                height: 16px;
+                width: 16px;
+                left: 3px;
+                bottom: 3px;
+                background-color: #03FB8D;
+                transition: 0.3s;
+                border-radius: 50%;
+            }
+            .toggle-switch input:checked + .toggle-slider {
+                background-color: rgba(3, 251, 141, 0.3);
+            }
+            .toggle-switch input:checked + .toggle-slider:before {
+                transform: translateX(26px);
+            }
+        `)
+        .appendTo('head');
+    }
     
     // Добавляем индикатор прогресса диалога, если его еще нет
     if ($('.dialogue-progress').length === 0) {

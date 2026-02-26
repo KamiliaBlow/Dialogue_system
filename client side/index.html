@@ -117,24 +117,72 @@
         const floatBtn = document.getElementById('music-float-btn');
         const musicPopup = document.getElementById('music-popup');
         const music = document.getElementById('background-music');
-		
-		// Добавляем обработчик первого клика на странице
-        function enableAutoplay() {
-            music.play().catch(error => {
-                console.log('Autoplay was prevented:', error);
-            });
-            
-            // Убираем обработчик после первого клика
-            document.removeEventListener('click', enableAutoplay);
-        }
         
-        // Добавляем временный обработчик клика
-        document.addEventListener('click', enableAutoplay);
-		
+        // Динамически определяем API_URL из текущего хоста
+        const API_URL = `${window.location.protocol}//${window.location.host}/api`;
+        
+        let autoPlayMusic = true;
+        let musicAutoPlayHandled = false;
+        
         const playPauseBtn = document.getElementById('play-pause-btn');
         const volumeControl = document.getElementById('volume-control');
         const trackName = document.getElementById('track-name');
-
+        
+        function updatePlayPauseButton() {
+            if (music.paused) {
+                playPauseBtn.textContent = '▶️';
+            } else {
+                playPauseBtn.textContent = '⏸️';
+            }
+        }
+        
+        // Инициализируем кнопку play/pause сразу при загрузке
+        const savedSetting = localStorage.getItem('autoPlayMusic');
+        if (savedSetting !== null) {
+            autoPlayMusic = savedSetting === '1';
+        }
+        updatePlayPauseButton();
+        
+        async function loadMusicSettings() {
+            try {
+                const response = await fetch(`${API_URL}/user-settings`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    autoPlayMusic = data.auto_play_music !== 0;
+                    localStorage.setItem('autoPlayMusic', autoPlayMusic ? '1' : '0');
+                    console.log('Авто-проигрывание музыки:', autoPlayMusic);
+                }
+            } catch (e) {
+                const saved = localStorage.getItem('autoPlayMusic');
+                if (saved !== null) {
+                    autoPlayMusic = saved === '1';
+                } else {
+                    autoPlayMusic = true;
+                }
+                console.log('Не удалось загрузить настройки, используем сохранённые:', autoPlayMusic);
+            }
+        }
+        
+        async function checkAndPlayMusic() {
+            if (musicAutoPlayHandled) return;
+            musicAutoPlayHandled = true;
+            
+            await loadMusicSettings();
+            
+            if (autoPlayMusic) {
+                music.play().catch(error => {
+                    console.log('Autoplay was prevented:', error);
+                });
+            }
+            updatePlayPauseButton();
+            
+            document.removeEventListener('click', checkAndPlayMusic);
+        }
+        
+        document.addEventListener('click', checkAndPlayMusic);
+        
         // Список треков
         const tracks = [
             { 
@@ -149,7 +197,8 @@
         volumeControl.value = 0.2;
 
         // Переключение видимости плеера
-        floatBtn.addEventListener('click', () => {
+        floatBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             if (musicPopup.style.display === 'none' || musicPopup.style.display === '') {
                 musicPopup.style.display = 'flex';
             } else {
@@ -158,13 +207,20 @@
         });
 
         // Управление воспроизведением
-        playPauseBtn.addEventListener('click', () => {
+        playPauseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             if (music.paused) {
+                music.play();
                 playPauseBtn.textContent = '⏸️';
             } else {
                 music.pause();
                 playPauseBtn.textContent = '▶️';
             }
+        });
+        
+        // Также обрабатываем клик на сам popup, чтобы не закрывался при клике внутри
+        musicPopup.addEventListener('click', (e) => {
+            e.stopPropagation();
         });
 
         // Контроль громкости

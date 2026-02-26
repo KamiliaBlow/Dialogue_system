@@ -233,6 +233,12 @@ function initDatabase() {
             file_path TEXT NOT NULL,
             file_size INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS user_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE NOT NULL,
+            auto_play_music INTEGER DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )`
     ];
     
@@ -297,12 +303,22 @@ authRoutes.post('/register', validateBody({
                         return res.status(500).json({ message: 'Ошибка создания пользователя' });
                     }
                     
-                    req.session.userId = this.lastID;
+                    const userId = this.lastID;
+                    
+                    db.run('INSERT INTO user_settings (user_id, auto_play_music) VALUES (?, 1)',
+                        [userId],
+                        function(err) {
+                            if (err) {
+                                Logger.error('Error creating user settings:', err.message);
+                            }
+                        });
+                    
+                    req.session.userId = userId;
                     req.session.username = normalizedUsername;
                     
                     res.status(201).json({
                         message: 'Пользователь создан',
-                        userId: this.lastID,
+                        userId: userId,
                         username: normalizedUsername
                     });
                 });
@@ -941,6 +957,46 @@ app.post('/api/setup/first-admin', (req, res) => {
             res.json({ message: 'Администратор назначен', userId: user.id });
         });
     });
+});
+
+app.get('/api/user-settings', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ message: 'Не авторизован' });
+    }
+    
+    db.get('SELECT auto_play_music FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
+        
+        if (!settings) {
+            db.run('INSERT INTO user_settings (user_id, auto_play_music) VALUES (?, 1)', [req.session.userId], (err) => {
+                if (err) Logger.error('Error creating user settings:', err.message);
+            });
+            return res.json({ auto_play_music: 1 });
+        }
+        
+        res.json({ auto_play_music: settings.auto_play_music });
+    });
+});
+
+app.post('/api/user-settings', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ message: 'Не авторизован' });
+    }
+    
+    const { auto_play_music } = req.body;
+    
+    if (auto_play_music === undefined) {
+        return res.status(400).json({ message: 'Отсутствует параметр auto_play_music' });
+    }
+    
+    const value = auto_play_music ? 1 : 0;
+    
+    db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music) VALUES (?, ?)', 
+        [req.session.userId, value],
+        function(err) {
+            if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
+            res.json({ success: true, auto_play_music: value });
+        });
 });
 
 app.use((err, req, res, next) => {
