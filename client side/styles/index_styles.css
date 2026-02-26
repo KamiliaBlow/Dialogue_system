@@ -11,6 +11,13 @@ html, body {
     padding: 0;
     height: 100%;
     overflow: hidden;
+    position: relative;
+}
+
+#mCodec {
+	position: relative;
+	min-height: 350px;
+	margin-top: 20px;
 }
 
 #main-receiver {
@@ -85,12 +92,12 @@ html, body {
 #freq-con {
 	align-items: flex-end;
 	display: flex;
-	justify-content: end;
+	justify-content: flex-end;
 	margin: 10px;
 	position: absolute;
 	height: unset;
-	top: 170px;
-	margin-left: 160px;
+	bottom: -35px;
+	right: 10px;
 }
 
 #bars-con {
@@ -127,6 +134,7 @@ html, body {
 	width: 300px;
 	background-color: #0F1E17;
 	margin: 10px;
+	position: relative;
 }
 
 .bar {
@@ -205,8 +213,8 @@ html, body {
 	}
 
 	#freq-con {
-		top: 130px;
-		margin-left: 90px;
+		bottom: 5px;
+		right: 5px;
 	}
 	
 	#text-con {
@@ -476,12 +484,12 @@ html, body {
 	
 	
     #terminal-background {
-		position: fixed;
+		position: absolute;
 		left: 50%;
-		bottom: 10vh; /* Фиксированное положение снизу */
+		bottom: -160px;
 		transform: translateX(-50%);
-		width: 90%; /* Процентная ширина */
-		max-width: 1100px; /* Максимальная ширина */
+		width: 90%;
+		max-width: 1100px;
 		height: 150px;
 		z-index: 1000;
 		display: flex;
