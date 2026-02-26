@@ -2431,7 +2431,7 @@ function clearGlitchEffects() {
 	
 	// Удаляем все активные классы эффектов
     $('#mCodec, .char-box, #text-con, #c-char, #text').removeClass(
-        'glitch-effect text-flicker glitch-lines jitter broken-pixels ' +
+        'text-flicker glitch-lines jitter broken-pixels ' +
         'terminal-glitch critical-state signal-interference screen-shift ' +
         'image-distortion rgb-split per-glitch-effect'
     );
