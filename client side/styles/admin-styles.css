@@ -164,6 +164,18 @@ body {
     color: var(--bg-dark);
 }
 
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background-color: var(--bg-dark);
+    color: var(--primary-color);
+}
+
+.btn:disabled:hover {
+    background-color: var(--bg-dark);
+    color: var(--primary-color);
+}
+
 .btn-danger {
     border-color: var(--danger-color);
     color: var(--danger-color);

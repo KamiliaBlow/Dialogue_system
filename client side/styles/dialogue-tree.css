@@ -79,6 +79,7 @@
 .tree-node-visual.has-choice {
     border-color: #f39c12;
     background: linear-gradient(135deg, var(--bg-card) 0%, rgba(243, 156, 18, 0.1) 100%);
+    min-height: 80px;
 }
 
 .tree-node-visual.branch-start {

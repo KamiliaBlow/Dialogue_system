@@ -252,6 +252,14 @@ renderDialogueInfo(dialogue) {
     }
     
     renderDialogueTree() {
+        const addConvBtn = document.getElementById('add-conversation-btn');
+        const hasConversations = this.state.conversations.length > 0;
+        
+        if (addConvBtn) {
+            addConvBtn.disabled = hasConversations;
+            addConvBtn.title = hasConversations ? 'Используйте контекстное меню для добавления реплик' : '';
+        }
+        
         if (this.treeVisualizer) {
             this.treeVisualizer.setData({
                 conversations: this.state.conversations,
@@ -264,48 +272,42 @@ renderDialogueInfo(dialogue) {
     }
     
     addConversationAfter(afterNode, position) {
-        const branchId = afterNode ? afterNode.branchId : 'main';
-        const afterSortOrder = afterNode ? afterNode.sortOrder : -1;
+        if (afterNode && afterNode.hasChoice) {
+            alert('Нельзя добавить реплику после ячейки с выбором');
+            return;
+        }
         
+        const branchId = afterNode ? afterNode.branchId : 'main';
         this.openConversationModal(null, branchId);
     }
     
     createChoiceConnection(fromNode, toNode) {
-        const fromChoices = this.state.choices.filter(ch => ch.conversation_id === fromNode.conversationId);
-        
-        if (fromChoices.length === 0) {
-            alert('Исходная реплика не имеет вариантов выбора. Добавьте выбор к реплике сначала.');
+        if (fromNode.hasChoice) {
+            alert('Нельзя создать связь от реплики с выбором');
             return;
         }
         
-        const targetBranch = toNode.branchId;
-        const existingChoice = fromChoices.find(ch => ch.target_branch === targetBranch);
-        
-        if (existingChoice) {
-            alert('Связь с этой веткой уже существует.');
+        if (toNode.hasChoice) {
+            alert('Нельзя создать связь к реплике с выбором');
             return;
         }
         
-        const choiceId = fromChoices[0].choice_id;
-        const optionId = `opt_${Date.now()}`;
-        
-        fetch(`${API_URL}/editor/choices`, {
+        fetch(`${API_URL}/editor/conversations/link`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
-                conversationId: fromNode.conversationId,
-                choiceId: choiceId,
-                optionId: optionId,
-                optionText: `Перейти к: ${targetBranch}`,
-                targetBranch: targetBranch
+                fromConversationId: toNode.conversationId,
+                toConversationId: fromNode.conversationId
             })
         })
-        .then(res => res.json())
-        .then(data => {
-            if (data.message) {
-                this.selectDialogue(this.state.currentDialogueId);
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok) {
+                alert(data.message || 'Ошибка создания связи');
+                return;
             }
+            this.selectDialogue(this.state.currentDialogueId);
         })
         .catch(err => {
             console.error('Error creating connection:', err);

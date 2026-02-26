@@ -116,10 +116,87 @@ const dialogueEditorRoutes = (db, upload) => {
     router.delete('/dialogues/:id', (req, res) => {
         const { id } = req.params;
         
-        db.run('DELETE FROM dialogues WHERE id = ?', [id], function(err) {
-            if (err) return res.status(500).json({ message: 'Ошибка удаления диалога' });
-            if (this.changes === 0) return res.status(404).json({ message: 'Диалог не найден' });
-            res.json({ message: 'Диалог удален' });
+        db.get('SELECT frequency FROM dialogues WHERE id = ?', [id], (err, dialogue) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения диалога' });
+            if (!dialogue) return res.status(404).json({ message: 'Диалог не найден' });
+            
+            const frequency = dialogue.frequency;
+            
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
+                
+                db.run('DELETE FROM dialogue_access WHERE frequency = ?', [frequency], (err) => {
+                    if (err) console.error('Error deleting dialogue_access:', err);
+                });
+                
+                db.run('DELETE FROM dialogue_progress WHERE frequency = ?', [frequency], (err) => {
+                    if (err) console.error('Error deleting dialogue_progress:', err);
+                });
+                
+                db.run('DELETE FROM user_choices WHERE frequency = ?', [frequency], (err) => {
+                    if (err) console.error('Error deleting user_choices:', err);
+                });
+                
+                db.run('DELETE FROM dialogue_repeats WHERE frequency = ?', [frequency], (err) => {
+                    if (err) console.error('Error deleting dialogue_repeats:', err);
+                });
+                
+                db.all('SELECT id FROM conversations WHERE dialogue_id = ?', [id], (err, conversations) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ message: 'Ошибка получения реплик' });
+                    }
+                    
+                    const convIds = conversations.map(c => c.id);
+                    let deleteChoices = Promise.resolve();
+                    
+                    if (convIds.length > 0) {
+                        const placeholders = convIds.map(() => '?').join(',');
+                        deleteChoices = new Promise((resolve, reject) => {
+                            db.run(`DELETE FROM choice_options WHERE conversation_id IN (${placeholders})`, convIds, (err) => {
+                                if (err) reject(err);
+                                else resolve();
+                            });
+                        });
+                    }
+                    
+                    deleteChoices.then(() => {
+                        db.run('DELETE FROM conversations WHERE dialogue_id = ?', [id], (err) => {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ message: 'Ошибка удаления реплик' });
+                            }
+                            
+                            db.run('DELETE FROM conversation_branches WHERE dialogue_id = ?', [id], (err) => {
+                                if (err) {
+                                    db.run('ROLLBACK');
+                                    return res.status(500).json({ message: 'Ошибка удаления веток' });
+                                }
+                                
+                                db.run('DELETE FROM characters WHERE dialogue_id = ?', [id], (err) => {
+                                    if (err) {
+                                        db.run('ROLLBACK');
+                                        return res.status(500).json({ message: 'Ошибка удаления персонажей' });
+                                    }
+                                    
+                                    db.run('DELETE FROM dialogues WHERE id = ?', [id], function(err) {
+                                        if (err) {
+                                            db.run('ROLLBACK');
+                                            return res.status(500).json({ message: 'Ошибка удаления диалога' });
+                                        }
+                                        
+                                        db.run('COMMIT');
+                                        res.json({ message: 'Диалог и все связанные данные удалены' });
+                                    });
+                                });
+                            });
+                        });
+                    }).catch(err => {
+                        db.run('ROLLBACK');
+                        res.status(500).json({ message: 'Ошибка удаления выборов' });
+                    });
+                });
+            });
         });
     });
 
@@ -196,10 +273,65 @@ router.post('/conversations', (req, res) => {
 
     // Удалить реплику
     router.delete('/conversations/:id', (req, res) => {
-        db.run('DELETE FROM conversations WHERE id = ?', [req.params.id], function(err) {
-            if (err) return res.status(500).json({ message: 'Ошибка удаления реплики' });
-            if (this.changes === 0) return res.status(404).json({ message: 'Реплика не найдена' });
-            res.json({ message: 'Реплика удалена' });
+        const conversationId = req.params.id;
+        
+        db.get('SELECT * FROM conversations WHERE id = ?', [conversationId], (err, conv) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения реплики' });
+            if (!conv) return res.status(404).json({ message: 'Реплика не найдена' });
+            
+            db.all('SELECT * FROM choice_options WHERE conversation_id = ?', [conversationId], (err, choices) => {
+                if (err) return res.status(500).json({ message: 'Ошибка получения выборов' });
+                
+                if (choices.length > 0) {
+                    const targetBranches = choices
+                        .filter(ch => ch.target_branch)
+                        .map(ch => ch.target_branch);
+                    
+                    const deleteBranches = () => {
+                        let completed = 0;
+                        const total = targetBranches.length;
+                        
+                        if (total === 0) {
+                            deleteChoicesAndConversation();
+                            return;
+                        }
+                        
+                        targetBranches.forEach(branchId => {
+                            db.run('DELETE FROM conversations WHERE dialogue_id = ? AND branch_id = ?', 
+                                [conv.dialogue_id, branchId], (err) => {
+                                    if (err) console.error('Error deleting conversations in branch:', err);
+                                    
+                                    db.run('DELETE FROM conversation_branches WHERE dialogue_id = ? AND branch_id = ?', 
+                                        [conv.dialogue_id, branchId], (err) => {
+                                            if (err) console.error('Error deleting branch:', err);
+                                            completed++;
+                                            if (completed === total) {
+                                                deleteChoicesAndConversation();
+                                            }
+                                        });
+                                });
+                        });
+                    };
+                    
+                    const deleteChoicesAndConversation = () => {
+                        db.run('DELETE FROM choice_options WHERE conversation_id = ?', [conversationId], (err) => {
+                            if (err) console.error('Error deleting choices:', err);
+                            
+                            db.run('DELETE FROM conversations WHERE id = ?', [conversationId], function(err) {
+                                if (err) return res.status(500).json({ message: 'Ошибка удаления реплики' });
+                                res.json({ message: 'Реплика и связанные данные удалены' });
+                            });
+                        });
+                    };
+                    
+                    deleteBranches();
+                } else {
+                    db.run('DELETE FROM conversations WHERE id = ?', [conversationId], function(err) {
+                        if (err) return res.status(500).json({ message: 'Ошибка удаления реплики' });
+                        res.json({ message: 'Реплика удалена' });
+                    });
+                }
+            });
         });
     });
 
@@ -291,6 +423,96 @@ router.post('/conversations', (req, res) => {
                 
                 res.json({ message: 'Ветка удалена' });
             });
+    });
+
+    // Создать sequential связь между репликами
+    router.post('/conversations/link', (req, res) => {
+        const { fromConversationId, toConversationId } = req.body;
+        
+        if (!fromConversationId || !toConversationId) {
+            return res.status(400).json({ message: 'fromConversationId и toConversationId обязательны' });
+        }
+        
+        if (fromConversationId === toConversationId) {
+            return res.status(400).json({ message: 'Нельзя связать реплику саму с собой' });
+        }
+        
+        db.serialize(() => {
+            db.get('SELECT * FROM conversations WHERE id = ?', [fromConversationId], (err, fromConv) => {
+                if (err) return res.status(500).json({ message: 'Ошибка получения исходной реплики' });
+                if (!fromConv) return res.status(404).json({ message: 'Исходная реплика не найдена' });
+                
+                db.get('SELECT * FROM conversations WHERE id = ?', [toConversationId], (err, toConv) => {
+                    if (err) return res.status(500).json({ message: 'Ошибка получения целевой реплики' });
+                    if (!toConv) return res.status(404).json({ message: 'Целевая реплика не найдена' });
+                    
+                    db.get('SELECT id FROM choice_options WHERE conversation_id = ?', [fromConversationId], (err, fromChoice) => {
+                        if (err) return res.status(500).json({ message: 'Ошибка проверки выбора' });
+                        if (fromChoice) return res.status(400).json({ message: 'Исходная реплика имеет выбор' });
+                        
+                        db.get('SELECT id FROM choice_options WHERE conversation_id = ?', [toConversationId], (err, toChoice) => {
+                            if (err) return res.status(500).json({ message: 'Ошибка проверки выбора' });
+                            if (toChoice) return res.status(400).json({ message: 'Целевая реплика имеет выбор' });
+                            
+                            const dialogueId = fromConv.dialogue_id;
+                            const targetBranch = fromConv.branch_id;
+                            const fromSortOrder = fromConv.sort_order || 0;
+                            
+                            db.all(
+                                'SELECT * FROM conversations WHERE dialogue_id = ? AND branch_id = ? AND sort_order > ? ORDER BY sort_order',
+                                [dialogueId, targetBranch, fromSortOrder],
+                                (err, afterConvs) => {
+                                    if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+                                    
+                                    const detachedBranch = `detached_${Date.now()}`;
+                                    let moveDetached = Promise.resolve();
+                                    
+                                    if (afterConvs.length > 0) {
+                                        moveDetached = new Promise((resolve, reject) => {
+                                            db.run(
+                                                'INSERT INTO conversation_branches (dialogue_id, branch_id) VALUES (?, ?)',
+                                                [dialogueId, detachedBranch],
+                                                (err) => {
+                                                    if (err) return reject(err);
+                                                    
+                                                    let moved = 0;
+                                                    afterConvs.forEach((conv, idx) => {
+                                                        db.run(
+                                                            'UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
+                                                            [detachedBranch, idx, conv.id],
+                                                            (err) => {
+                                                                if (err) console.error('Error moving conversation:', err);
+                                                                moved++;
+                                                                if (moved === afterConvs.length) resolve();
+                                                            }
+                                                        );
+                                                    });
+                                                    if (afterConvs.length === 0) resolve();
+                                                }
+                                            );
+                                        });
+                                    }
+                                    
+                                    moveDetached.then(() => {
+                                        db.run(
+                                            'UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
+                                            [targetBranch, fromSortOrder + 1, toConversationId],
+                                            (err) => {
+                                                if (err) return res.status(500).json({ message: 'Ошибка создания связи' });
+                                                res.json({ message: 'Связь создана' });
+                                            }
+                                        );
+                                    }).catch(err => {
+                                        console.error('Error:', err);
+                                        res.status(500).json({ message: 'Ошибка пересоздания цепочки' });
+                                    });
+                                }
+                            );
+                        });
+                    });
+                });
+            });
+        });
     });
 
     // ==================== ВЫБОРЫ ====================

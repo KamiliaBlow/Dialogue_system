@@ -149,6 +149,11 @@ class DialogueTreeVisualizer {
                 const toId = `conv_${convs[i + 1].id}`;
                 
                 if (this.nodes.has(fromId) && this.nodes.has(toId)) {
+                    const fromNode = this.nodes.get(fromId);
+                    if (fromNode.hasChoice) {
+                        continue;
+                    }
+                    
                     this.edges.push({
                         id: `edge_${fromId}_${toId}`,
                         source: fromId,
