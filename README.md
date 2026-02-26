@@ -49,6 +49,11 @@ npm install
 # КАК ВЫГЛЯДИТ ИНТЕРФЕЙС СО СТОРОНЫ ИГРОКА
 ![image](https://github.com/user-attachments/assets/965e0fd3-0871-49ff-9700-11ed11ceb19b)
 
+# КАК ВЫГЛЯДИТ ФУНКЦИОНАЛ АДМИНИСТРАТОРА
+<img width="2468" height="1268" alt="image" src="https://github.com/user-attachments/assets/d72aac5d-627e-4f40-9fe0-f28b1ce111f2" />
+<img width="1216" height="873" alt="image" src="https://github.com/user-attachments/assets/e868ea25-8b52-4bb0-b58c-02edab7b6497" />
+<img width="1204" height="866" alt="image2" src="https://github.com/user-attachments/assets/e191d0a6-61dd-4fda-846b-fb0607ccf3e6" />
+
 
 Планы на будущее:
 
