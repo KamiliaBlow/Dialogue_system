@@ -28,6 +28,24 @@ class AdminAPI {
         });
     }
     
+    static async deleteUser(userId) {
+        return this.safeFetch(`${API_URL}/admin/delete-user/${userId}`, {
+            method: 'DELETE'
+        });
+    }
+    
+    static async getFrequencies() {
+        return this.safeFetch(`${API_URL}/admin/frequencies`);
+    }
+    
+    static async clearProgress(userId, frequency) {
+        return this.safeFetch(`${API_URL}/admin/clear-progress`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, frequency })
+        });
+    }
+    
     static async getChoiceStatistics() {
         return this.safeFetch(`${API_URL}/admin/choice-statistics`);
     }

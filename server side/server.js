@@ -554,6 +554,105 @@ adminRoutes.post('/change-password', adminMiddleware, validateBody({
     }
 });
 
+adminRoutes.delete('/delete-user/:userId', adminMiddleware, (req, res) => {
+    const { userId } = req.params;
+    
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        
+        db.run('DELETE FROM dialogue_progress WHERE user_id = ?', [userId], (err) => {
+            if (err) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ message: 'Ошибка удаления прогресса' });
+            }
+            
+            db.run('DELETE FROM user_choices WHERE user_id = ?', [userId], (err) => {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ message: 'Ошибка удаления выборов' });
+                }
+                
+                db.run('DELETE FROM dialogue_repeats WHERE user_id = ?', [userId], (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ message: 'Ошибка удаления повторов' });
+                    }
+                    
+                    db.run('DELETE FROM dialogue_access WHERE user_id = ?', [userId], (err) => {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ message: 'Ошибка удаления доступа' });
+                        }
+                        
+                        db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ message: 'Ошибка удаления пользователя' });
+                            }
+                            
+                            db.run('COMMIT', (err) => {
+                                if (err) {
+                                    db.run('ROLLBACK');
+                                    return res.status(500).json({ message: 'Ошибка коммита' });
+                                }
+                                res.json({ message: 'Пользователь удален' });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
+adminRoutes.get('/frequencies', adminMiddleware, (req, res) => {
+    db.all('SELECT frequency, title FROM dialogues ORDER BY frequency', (err, rows) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения частот' });
+        res.json({ frequencies: rows });
+    });
+});
+
+adminRoutes.post('/clear-progress', adminMiddleware, (req, res) => {
+    const { userId, frequency } = req.body;
+    
+    if (!userId || !frequency) {
+        return res.status(400).json({ message: 'Неверный формат данных' });
+    }
+    
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        
+        db.run('DELETE FROM dialogue_progress WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+            if (err) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ message: 'Ошибка удаления прогресса' });
+            }
+            
+            db.run('DELETE FROM user_choices WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ message: 'Ошибка удаления выборов' });
+                }
+                
+                db.run('DELETE FROM dialogue_repeats WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ message: 'Ошибка удаления повторов' });
+                    }
+                    
+                    db.run('COMMIT', (err) => {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ message: 'Ошибка коммита' });
+                        }
+                        res.json({ message: 'Прохождение очищено' });
+                    });
+                });
+            });
+        });
+    });
+});
+
 adminRoutes.get('/choice-statistics', adminMiddleware, (req, res) => {
     const query = `
         SELECT uc.frequency, uc.choice_id, uc.choice_text, COUNT(*) as count, GROUP_CONCAT(u.username) as users

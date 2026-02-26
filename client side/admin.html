@@ -220,6 +220,48 @@
         </div>
     </div>
     
+    <!-- Delete User Modal -->
+    <div id="delete-user-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Удалить пользователя</div>
+            <div class="modal-body">
+                <input type="hidden" id="delete-user-id">
+                <p>Вы уверены, что хотите удалить пользователя <strong id="delete-username"></strong>?</p>
+                <p style="color: #ff3333;">Внимание: будут удалены все данные пользователя, включая пройденные диалоги и выборы.</p>
+                <div id="delete-error" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-delete" class="btn">Отмена</button>
+                <button id="confirm-delete" class="btn btn-danger">Удалить</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Clear Progress Modal -->
+    <div id="clear-progress-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Очистить прохождение</div>
+            <div class="modal-body">
+                <input type="hidden" id="clear-progress-user-id">
+                <div class="form-group">
+                    <label class="form-label">Пользователь:</label>
+                    <div id="clear-progress-username"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="clear-frequency">Выберите диалог:</label>
+                    <select id="clear-frequency" class="form-input" required>
+                        <option value="">Загрузка...</option>
+                    </select>
+                </div>
+                <div id="clear-progress-error" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-clear" class="btn">Отмена</button>
+                <button id="confirm-clear" class="btn">Очистить</button>
+            </div>
+        </div>
+    </div>
+    
     <script type="module" src="scripts/admin/admin-main.js"></script>
 </body>
 </html>

@@ -101,6 +101,8 @@ class AdminApp {
     initModals() {
         const passwordModal = document.getElementById('password-modal');
         const detailsModal = document.getElementById('choice-details-modal');
+        const deleteModal = document.getElementById('delete-user-modal');
+        const clearModal = document.getElementById('clear-progress-modal');
         
         document.getElementById('cancel-password')?.addEventListener('click', () => {
             passwordModal.style.display = 'none';
@@ -111,9 +113,23 @@ class AdminApp {
             detailsModal.style.display = 'none';
         });
         
+        document.getElementById('cancel-delete')?.addEventListener('click', () => {
+            deleteModal.style.display = 'none';
+        });
+        
+        document.getElementById('confirm-delete')?.addEventListener('click', () => this.deleteUser());
+        
+        document.getElementById('cancel-clear')?.addEventListener('click', () => {
+            clearModal.style.display = 'none';
+        });
+        
+        document.getElementById('confirm-clear')?.addEventListener('click', () => this.clearProgress());
+        
         window.addEventListener('click', (e) => {
             if (e.target === passwordModal) passwordModal.style.display = 'none';
             if (e.target === detailsModal) detailsModal.style.display = 'none';
+            if (e.target === deleteModal) deleteModal.style.display = 'none';
+            if (e.target === clearModal) clearModal.style.display = 'none';
         });
     }
     
@@ -238,6 +254,16 @@ class AdminApp {
                                 data-username="${user.username}">
                             Сменить пароль
                         </button>
+                        <button class="btn clear-progress-btn" 
+                                data-id="${user.id}" 
+                                data-username="${user.username}">
+                            Очистить прохождение
+                        </button>
+                        <button class="btn btn-danger delete-user-btn" 
+                                data-id="${user.id}" 
+                                data-username="${user.username}">
+                            Удалить
+                        </button>
                     </td>
                 </tr>
             `).join('');
@@ -245,6 +271,18 @@ class AdminApp {
         tbody.querySelectorAll('.change-password-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.openPasswordModal(btn.dataset.id, btn.dataset.username);
+            });
+        });
+        
+        tbody.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.openDeleteUserModal(btn.dataset.id, btn.dataset.username);
+            });
+        });
+        
+        tbody.querySelectorAll('.clear-progress-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.openClearProgressModal(btn.dataset.id, btn.dataset.username);
             });
         });
     }
@@ -339,6 +377,72 @@ class AdminApp {
             await this.api.changePassword(userId, newPassword);
             document.getElementById('password-modal').style.display = 'none';
             this.utils.showSuccess('users-table', 'Пароль успешно изменен');
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
+    }
+    
+    openDeleteUserModal(userId, username) {
+        document.getElementById('delete-user-id').value = userId;
+        document.getElementById('delete-username').textContent = username;
+        document.getElementById('delete-error').style.display = 'none';
+        document.getElementById('delete-user-modal').style.display = 'flex';
+    }
+    
+    async deleteUser() {
+        const userId = document.getElementById('delete-user-id').value;
+        const errorEl = document.getElementById('delete-error');
+        
+        try {
+            await this.api.deleteUser(userId);
+            document.getElementById('delete-user-modal').style.display = 'none';
+            this.utils.showSuccess('users-table', 'Пользователь удален');
+            await this.loadUsersData();
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
+    }
+    
+    async openClearProgressModal(userId, username) {
+        document.getElementById('clear-progress-user-id').value = userId;
+        document.getElementById('clear-progress-username').textContent = username;
+        document.getElementById('clear-progress-error').style.display = 'none';
+        
+        const select = document.getElementById('clear-frequency');
+        select.innerHTML = '<option value="">Загрузка...</option>';
+        document.getElementById('clear-progress-modal').style.display = 'flex';
+        
+        try {
+            const data = await this.api.getFrequencies();
+            if (data?.frequencies?.length) {
+                select.innerHTML = data.frequencies.map(f => 
+                    `<option value="${f.frequency}">${f.frequency}${f.title ? ' - ' + f.title : ''}</option>`
+                ).join('');
+            } else {
+                select.innerHTML = '<option value="">Нет диалогов</option>';
+            }
+        } catch (error) {
+            select.innerHTML = '<option value="">Ошибка загрузки</option>';
+        }
+    }
+    
+    async clearProgress() {
+        const userId = document.getElementById('clear-progress-user-id').value;
+        const frequency = document.getElementById('clear-frequency').value;
+        const errorEl = document.getElementById('clear-progress-error');
+        
+        if (!frequency) {
+            errorEl.textContent = 'Выберите диалог';
+            errorEl.style.display = 'block';
+            return;
+        }
+        
+        try {
+            await this.api.clearProgress(userId, frequency);
+            document.getElementById('clear-progress-modal').style.display = 'none';
+            this.utils.showSuccess('users-table', 'Прохождение очищено');
         } catch (error) {
             errorEl.textContent = error.message;
             errorEl.style.display = 'block';
