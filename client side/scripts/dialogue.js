@@ -3006,9 +3006,6 @@ $(document).ready(function() {
     
     buttonsContainer.append(logoutButton).append(settingsButton).append(dossierButton);
     $('body').append(buttonsContainer);
-    
-	// Инициализация эффектов глюков
-    initGlitchEffects();
 	
     // Стилизуем контейнер кнопок
     $('#header-buttons').css({
@@ -3256,45 +3253,3 @@ $(document).ready(function() {
         updateProgressIndicator();
     };
 });
-
-/**
- * Инициализация эффектов глюков
- */
-function initGlitchEffects() {
-    // Предварительная загрузка звуков для глюков
-    preloadGlitchSounds();
-    
-    // Очистка всех эффектов глюков при начальной загрузке
-    clearGlitchEffects();
-    
-    console.log('Эффекты глюков инициализированы');
-}
-
-/**
- * Предварительная загрузка звуков для глюков
- */
-function preloadGlitchSounds() {
-    try {
-        const glitchSounds = [
-            'assets/sounds/voices/glitch/1.mp3',
-            'assets/sounds/voices/glitch/2.mp3',
-            'assets/sounds/voices/glitch/static.mp3'
-        ];
-        
-        glitchSounds.forEach(sound => {
-            const audio = new Audio();
-            audio.src = getAssetUrl(sound);
-            audio.preload = 'auto';
-            audio.volume = 0.01;
-            audio.muted = true;
-            
-            // Воспроизведем и сразу остановим для предзагрузки в некоторых браузерах
-            audio.play().catch(() => {}).then(() => {
-                audio.pause();
-                audio.currentTime = 0;
-            });
-        });
-    } catch (e) {
-        console.warn('Не удалось предзагрузить звуки глюков:', e);
-    }
-}
