@@ -54,9 +54,17 @@ const app = express();
 
 const allowedHeadersList = 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, expires, pragma, if-modified-since, cache-control, x-request-id';
 
-// CORS middleware с расширенной конфигурацией
 const corsOptions = {
-    origin: true,
+    origin: function(origin, callback) {
+        if (!origin) {
+            return callback(null, false);
+        }
+        if (config.CORS_ORIGINS.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
     allowedHeaders: allowedHeadersList.split(', '),
@@ -67,16 +75,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-    }
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
-    res.setHeader('Access-Control-Allow-Headers', allowedHeadersList);
-    
     if (req.method === 'OPTIONS') {
         return res.status(204).end();
     }
@@ -93,26 +91,17 @@ const db = new sqlite3.Database(config.DB_PATH, (err) => {
 });
 
 app.use(express.json());
-app.use('/DIALOGUE_rework/assets', (req, res, next) => {
+const assetsCorsMiddleware = (req, res, next) => {
     const origin = req.headers.origin;
-    if (origin) {
+    if (origin && config.CORS_ORIGINS.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
     next();
-}, express.static(path.join(__dirname, 'assets')));
-app.use('/assets', (req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-    }
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    next();
-}, express.static(path.join(__dirname, 'assets')));
+};
+
+app.use('/DIALOGUE_rework/assets', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets')));
+app.use('/assets', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
     secret: config.SESSION_SECRET,
@@ -837,15 +826,25 @@ app.use('/api/admin', adminRoutes);
 
 // Роуты редактора диалогов
 const dialogueEditorRoutes = require('./routes/dialogue-editor');
-app.use('/api/editor', requireAuth, dialogueEditorRoutes(db, upload));
+app.use('/api/editor', requireAuth, requireAdmin(db), dialogueEditorRoutes(db, upload));
 
 // API для получения диалогов клиентом
-app.get('/api/dialogue/:frequency', (req, res) => {
+app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
     const { frequency } = req.params;
+    const userId = req.session.userId;
     
     db.get('SELECT * FROM dialogues WHERE frequency = ?', [frequency], (err, dialogue) => {
         if (err) return res.status(500).json({ message: 'Ошибка' });
         if (!dialogue) return res.status(404).json({ message: 'Диалог не найден' });
+        
+        try {
+            const allowedUsers = JSON.parse(dialogue.allowed_users || '[-1]');
+            if (!allowedUsers.includes(-1) && !allowedUsers.includes(userId)) {
+                return res.status(403).json({ message: 'Нет доступа к этому диалогу' });
+            }
+        } catch (e) {
+            return res.status(403).json({ message: 'Нет доступа к этому диалогу' });
+        }
         
         const dialogueId = dialogue.id;
         
