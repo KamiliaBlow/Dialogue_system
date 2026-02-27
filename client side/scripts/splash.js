@@ -1,4 +1,6 @@
 // Кэшируем DOM-элементы для улучшения производительности
+import debug from './debug.js';
+
 const elements = {
     powerButton: document.getElementById('power-button'),
     skipButton: document.getElementById('skip-button'),
@@ -35,7 +37,7 @@ async function loadUsername() {
     
     try {
         const url = `${API_URL}/check-auth`;
-        console.log('Fetching:', url);
+        debug('Fetching:', url);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);

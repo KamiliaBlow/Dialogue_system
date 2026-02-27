@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const Logger = require('../utils/logger');
 
 const dialogueEditorRoutes = (db, upload) => {
     const router = express.Router();
@@ -126,19 +127,19 @@ const dialogueEditorRoutes = (db, upload) => {
                 db.run('BEGIN TRANSACTION');
                 
                 db.run('DELETE FROM dialogue_access WHERE frequency = ?', [frequency], (err) => {
-                    if (err) console.error('Error deleting dialogue_access:', err);
+                    if (err) Logger.error('Error deleting dialogue_access:', err);
                 });
                 
                 db.run('DELETE FROM dialogue_progress WHERE frequency = ?', [frequency], (err) => {
-                    if (err) console.error('Error deleting dialogue_progress:', err);
+                    if (err) Logger.error('Error deleting dialogue_progress:', err);
                 });
                 
                 db.run('DELETE FROM user_choices WHERE frequency = ?', [frequency], (err) => {
-                    if (err) console.error('Error deleting user_choices:', err);
+                    if (err) Logger.error('Error deleting user_choices:', err);
                 });
                 
                 db.run('DELETE FROM dialogue_repeats WHERE frequency = ?', [frequency], (err) => {
-                    if (err) console.error('Error deleting dialogue_repeats:', err);
+                    if (err) Logger.error('Error deleting dialogue_repeats:', err);
                 });
                 
                 db.all('SELECT id FROM conversations WHERE dialogue_id = ?', [id], (err, conversations) => {
@@ -299,11 +300,11 @@ router.post('/conversations', (req, res) => {
                         targetBranches.forEach(branchId => {
                             db.run('DELETE FROM conversations WHERE dialogue_id = ? AND branch_id = ?', 
                                 [conv.dialogue_id, branchId], (err) => {
-                                    if (err) console.error('Error deleting conversations in branch:', err);
+                                    if (err) Logger.error('Error deleting conversations in branch:', err);
                                     
                                     db.run('DELETE FROM conversation_branches WHERE dialogue_id = ? AND branch_id = ?', 
                                         [conv.dialogue_id, branchId], (err) => {
-                                            if (err) console.error('Error deleting branch:', err);
+                                            if (err) Logger.error('Error deleting branch:', err);
                                             completed++;
                                             if (completed === total) {
                                                 deleteChoicesAndConversation();
@@ -315,7 +316,7 @@ router.post('/conversations', (req, res) => {
                     
                     const deleteChoicesAndConversation = () => {
                         db.run('DELETE FROM choice_options WHERE conversation_id = ?', [conversationId], (err) => {
-                            if (err) console.error('Error deleting choices:', err);
+                            if (err) Logger.error('Error deleting choices:', err);
                             
                             db.run('DELETE FROM conversations WHERE id = ?', [conversationId], function(err) {
                                 if (err) return res.status(500).json({ message: 'Ошибка удаления реплики' });
@@ -481,7 +482,7 @@ router.post('/conversations', (req, res) => {
                                                             'UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
                                                             [detachedBranch, idx, conv.id],
                                                             (err) => {
-                                                                if (err) console.error('Error moving conversation:', err);
+                                                                if (err) Logger.error('Error moving conversation:', err);
                                                                 moved++;
                                                                 if (moved === afterConvs.length) resolve();
                                                             }
@@ -503,7 +504,7 @@ router.post('/conversations', (req, res) => {
                                             }
                                         );
                                     }).catch(err => {
-                                        console.error('Error:', err);
+                                        Logger.error('Error:', err);
                                         res.status(500).json({ message: 'Ошибка пересоздания цепочки' });
                                     });
                                 }

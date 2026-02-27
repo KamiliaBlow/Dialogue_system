@@ -1,3 +1,5 @@
+import debug from './debug.js';
+
 class AssetPreloader {
     constructor() {
         this.cache = {
@@ -31,7 +33,7 @@ class AssetPreloader {
                 resolve(img);
             };
             img.onerror = (err) => {
-                console.warn(`Failed to preload image: ${fullUrl}`, err);
+                debug(`Failed to preload image: ${fullUrl}`, err);
                 this.loading.images.delete(fullUrl);
                 resolve(null);
             };
@@ -72,7 +74,7 @@ class AssetPreloader {
             
             audio.onerror = (err) => {
                 cleanup();
-                console.warn(`Failed to preload audio: ${fullUrl}`, err);
+                debug(`Failed to preload audio: ${fullUrl}`, err);
                 this.loading.audio.delete(fullUrl);
                 resolve(null);
             };

@@ -159,7 +159,6 @@ html, body {
 	height: 88%;
 	margin: 20px;
 	border: 2px solid #03FB8D;
-	background-image: url('../assets/images/portraits/static.gif');
 	background-size: cover;
 	min-width: 180px;
 }

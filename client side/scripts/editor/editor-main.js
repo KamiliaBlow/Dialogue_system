@@ -1,5 +1,6 @@
 import AppConfig from '../config.js';
 import DialogueTreeVisualizer from './dialogue-tree-visualizer.js';
+import debug from '../debug.js';
 
 const { API_URL, ASSETS_URL } = AppConfig;
 
@@ -63,7 +64,7 @@ async init() {
         });
         
         this.treeVisualizer.on('nodeEdit', (nodeData) => {
-            console.log('Edit node:', nodeData);
+            debug('Edit node:', nodeData);
             this.openConversationModal(nodeData.conversationId);
         });
         
@@ -615,9 +616,9 @@ openCharacterModal(id = null) {
         }
         
         const fullUrl = getAssetUrl(soundPath);
-        console.log('Playing sound:', fullUrl);
+        debug('Playing sound:', fullUrl);
         this.state.audioPreview = new Audio(fullUrl);
-        this.state.audioPreview.play().catch(err => console.log('Audio play error:', err));
+        this.state.audioPreview.play().catch(err => debug('Audio play error:', err));
     }
     
     autoCalculateTypingSpeed() {
@@ -662,7 +663,7 @@ openCharacterModal(id = null) {
             
             typingSpeedInput.value = speedPerChar;
             
-            console.log(`Auto-calculated typing speed: ${speedPerChar}ms/char (${duration}s audio, ${charCount} chars)`);
+            debug(`Auto-calculated typing speed: ${speedPerChar}ms/char (${duration}s audio, ${charCount} chars)`);
         });
         
         audio.addEventListener('error', () => {
@@ -738,7 +739,7 @@ async saveCharacter() {
     }
     
 openConversationModal(id = null, defaultBranch = 'main') {
-        console.log('openConversationModal called with id:', id, 'defaultBranch:', defaultBranch);
+        debug('openConversationModal called with id:', id, 'defaultBranch:', defaultBranch);
         const modal = document.getElementById('conversation-modal');
         
         this.updateCharacterSelects();

@@ -1,3 +1,5 @@
+import debug, { debugGroup, debugGroupEnd } from './debug.js';
+
 let games = null;
 let API_URL = null;
 let ASSETS_URL = null;
@@ -27,8 +29,8 @@ async function loadConfig() {
             }
         };
         
-        console.log('Config loaded from API');
-        console.log('Available frequencies:', frequencies);
+        debug('Config loaded from API');
+        debug('Available frequencies:', frequencies);
         
     } catch (error) {
         console.error('Failed to load config from API:', error);
@@ -43,7 +45,7 @@ async function loadConfig() {
             const preloaderModule = await import('./asset-preloader.js');
             assetPreloader = preloaderModule.default;
             
-            console.log('Config loaded from Config.js (fallback)');
+            debug('Config loaded from Config.js (fallback)');
         } catch (fallbackError) {
             console.error('Critical: Failed to load config:', fallbackError);
             throw new Error('Не удалось загрузить конфигурацию');
@@ -71,12 +73,12 @@ async function loadDialogueFromDB(frequency) {
     }
     
     if (dialoguesCache[frequency]) {
-        console.log(`Dialogue ${frequency} loaded from cache`);
+        debug(`Dialogue ${frequency} loaded from cache`);
         return dialoguesCache[frequency];
     }
     
     try {
-        console.log(`Loading dialogue ${frequency} from API...`);
+        debug(`Loading dialogue ${frequency} from API...`);
         const response = await fetch(`${API_URL}/dialogue/${frequency}`, {
             credentials: 'include'
         });
@@ -86,7 +88,7 @@ async function loadDialogueFromDB(frequency) {
         }
         
         const data = await response.json();
-        console.log(`Dialogue ${frequency} loaded from DB`);
+        debug(`Dialogue ${frequency} loaded from DB`);
         
         const dialogue = {
             characters: data.characters || [],
@@ -105,12 +107,12 @@ async function loadDialogueFromDB(frequency) {
         });
         
         dialoguesCache[frequency] = dialogue;
-        console.log(`Processed dialogue for ${frequency}:`, dialogue);
+        debug(`Processed dialogue for ${frequency}:`, dialogue);
         
         if (assetPreloader) {
-            console.log(`Preloading assets for dialogue ${frequency}...`);
+            debug(`Preloading assets for dialogue ${frequency}...`);
             await assetPreloader.preloadDialogueAssets(dialogue);
-            console.log(`Assets preloaded for dialogue ${frequency}:`, assetPreloader.getCacheStats());
+            debug(`Assets preloaded for dialogue ${frequency}:`, assetPreloader.getCacheStats());
         }
         
         return dialogue;
@@ -161,8 +163,8 @@ async function initializePage() {
         // Сбрасываем freqCount на 0 при инициализации
         state.freqCount = 0;
         
-        console.log('Конфигурация загружена:', games);
-        console.log('Доступные частоты:', games.customGame.frequencies);
+        debug('Конфигурация загружена:', games);
+        debug('Доступные частоты:', games.customGame.frequencies);
         
         // Проверка авторизации
         const authResponse = await fetch(`${API_URL}/check-auth`, {
@@ -178,7 +180,7 @@ async function initializePage() {
         
         state.userName = authData.username;
         state.userId = authData.userId;
-        console.log(`Пользователь аутентифицирован: ${state.userName} (ID: ${state.userId})`);
+        debug(`Пользователь аутентифицирован: ${state.userName} (ID: ${state.userId})`);
         
         // Загружаем счетчики повторных прослушиваний ПОСЛЕ получения username
         await loadRepeatCounts();
@@ -226,7 +228,7 @@ async function loadAvailableFrequencies() {
         const data = await response.json();
         state.availableFrequencies = data.availableFrequencies || [];
         
-        console.log("Доступные частоты для пользователя:", state.availableFrequencies);
+        debug("Доступные частоты для пользователя:", state.availableFrequencies);
         
         checkLocalDialogueAccess();
         
@@ -272,7 +274,7 @@ function checkLocalDialogueAccess() {
         }
     });
     
-    console.log("Доступные частоты после локальной проверки:", state.availableFrequencies);
+    debug("Доступные частоты после локальной проверки:", state.availableFrequencies);
 }
 
 /**
@@ -313,7 +315,7 @@ async function loadUserChoices() {
         // Фильтруем пустые значения
         allFrequencies = allFrequencies.filter(f => f);
         
-        console.log("Загружаем выборы для частот:", allFrequencies);
+        debug("Загружаем выборы для частот:", allFrequencies);
         
         // Загружаем выборы для всех частот
         for (const frequency of allFrequencies) {
@@ -324,7 +326,7 @@ async function loadUserChoices() {
             if (choicesResponse.ok) {
                 const choicesData = await choicesResponse.json();
                 state.userChoices[frequency] = choicesData.choices || [];
-                console.log(`Загружены выборы для частоты ${frequency}:`, state.userChoices[frequency]);
+                debug(`Загружены выборы для частоты ${frequency}:`, state.userChoices[frequency]);
             }
         }
     } catch (error) {
@@ -435,11 +437,11 @@ async function initializeTransmission() {
         return;
     }
     
-    console.log(`Инициализация передачи для частоты ${currentFrequency}`);
+    debug(`Инициализация передачи для частоты ${currentFrequency}`);
     
     // Проверяем доступ к текущей частоте
     if (!hasAccessToFrequency(currentFrequency)) {
-        console.log(`У пользователя нет доступа к частоте ${currentFrequency}, отображаем сообщение о блокировке`);
+        debug(`У пользователя нет доступа к частоте ${currentFrequency}, отображаем сообщение о блокировке`);
         $('#text').text('*ДОСТУП ЗАПРЕЩЕН*');
         $('#c-char').text('СИСТЕМА:');
         $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
@@ -484,11 +486,11 @@ async function initializeTransmission() {
             const dialogueProgress = (data.progress || []).find(p => p.frequency === currentFrequency);
             
             if (dialogueProgress) {
-                console.log(`Найден прогресс для частоты ${currentFrequency}:`, dialogueProgress);
+                debug(`Найден прогресс для частоты ${currentFrequency}:`, dialogueProgress);
                 
                 let savedCount = parseInt(dialogueProgress.lastLine || dialogueProgress.progress || 0);
                 let originalSavedCount = savedCount;
-                console.log(`Восстановлена позиция диалога: ${savedCount}`);
+                debug(`Восстановлена позиция диалога: ${savedCount}`);
                 
                 // Проверяем, есть ли сохраненные выборы для этой частоты
                 const userChoicesForFreq = state.userChoices[currentFrequency] || [];
@@ -496,26 +498,26 @@ async function initializeTransmission() {
                 
                 // Проверяем, не выходит ли позиция за пределы массива
                 if (savedCount >= state.currentDialogue.conversations.length) {
-                    console.log(`Сохраненная позиция ${savedCount} выходит за пределы диалога длиной ${state.currentDialogue.conversations.length}`);
+                    debug(`Сохраненная позиция ${savedCount} выходит за пределы диалога длиной ${state.currentDialogue.conversations.length}`);
                     
                     if (dialogueProgress.completed) {
                         // Если диалог был завершен, сбрасываем позицию на начало
                         savedCount = 0;
                         state.hasStartedDialog = false;
                         state.originalCount = 0;
-                        console.log('Диалог был завершен, сбрасываем позицию на 0');
+                        debug('Диалог был завершен, сбрасываем позицию на 0');
                     } else if (hasSavedChoices) {
                         // Если есть сохраненные выборы, но прогресс превышает длину - 
                         // показываем как "передача прервана" с возможностью продолжить (повторить)
                         savedCount = 0;
                         state.hasStartedDialog = true; // Показываем что диалог был начат!
                         state.originalCount = 1; // > 0 чтобы показать "Продолжить"
-                        console.log('Есть выборы - показываем Продолжить передачу');
+                        debug('Есть выборы - показываем Продолжить передачу');
                     } else {
                         savedCount = state.currentDialogue.conversations.length - 1;
                         state.hasStartedDialog = true;
                         state.originalCount = savedCount;
-                        console.log(`Корректируем позицию на ${savedCount}`);
+                        debug(`Корректируем позицию на ${savedCount}`);
                     }
                 } else if (savedCount > 0 || dialogueProgress.progress > 0 || hasSavedChoices) {
                     // Если есть прогресс или выборы, значит диалог уже начат
@@ -532,7 +534,7 @@ async function initializeTransmission() {
 				const hasChoicesSaved = (state.userChoices[currentFrequency] || []).length > 0;
 				if (!dialogueProgress.completed && savedCount > 0 && !hasChoicesSaved) {
 					savedCount--;
-					console.log(`Декрементируем позицию для повторного показа текущей строки: ${savedCount}`);
+					debug(`Декрементируем позицию для повторного показа текущей строки: ${savedCount}`);
 				}
 				
 				state.count = savedCount;
@@ -545,7 +547,7 @@ async function initializeTransmission() {
 					// Если диалог не завершен, показываем соответствующую кнопку для продолжения
 					// Логика: если диалог был начат (hasStartedDialog=true) И оригинальная позиция > 0
 					// то показываем "Продолжить передачу"
-					console.log(`Определение кнопки: hasStartedDialog=${state.hasStartedDialog}, originalCount=${state.originalCount}, count=${state.count}`);
+					debug(`Определение кнопки: hasStartedDialog=${state.hasStartedDialog}, originalCount=${state.originalCount}, count=${state.count}`);
 					
 					if (state.hasStartedDialog && state.originalCount > 0) {
 						// Диалог был начат и имеет прогресс > 0 - показываем Продолжить
@@ -571,7 +573,7 @@ async function initializeTransmission() {
 					$('#repeat-transmission').addClass('hidden');
 				}
 			} else {
-				console.log(`Прогресс для частоты ${currentFrequency} не найден, начинаем с начала`);
+				debug(`Прогресс для частоты ${currentFrequency} не найден, начинаем с начала`);
 				state.count = 0;
 				state.originalCount = 0;
 				state.isTransmissionEnded = false;
@@ -619,13 +621,13 @@ function showCompletedDialogueState() {
     if (canRepeat) {
         // Можно повторять - показываем кнопку повтора
         $('#repeat-transmission').removeClass('hidden');
-        console.log(`Диалог на частоте ${currentFrequency} - повторений: ${repeatCount}/${maxRepeats === -1 ? '∞' : maxRepeats}, показываем кнопку повтора`);
+        debug(`Диалог на частоте ${currentFrequency} - повторений: ${repeatCount}/${maxRepeats === -1 ? '∞' : maxRepeats}, показываем кнопку повтора`);
     } else if (maxRepeats === -1) {
         // Бесконечный режим - показываем кнопку повтора
         $('#repeat-transmission').removeClass('hidden');
     } else {
         // Лимит исчерпан - не показываем никакую кнопку
-        console.log(`Диалог на частоте ${currentFrequency} - повторений: ${repeatCount}/${maxRepeats}, лимит исчерпан, кнопки скрыты`);
+        debug(`Диалог на частоте ${currentFrequency} - повторений: ${repeatCount}/${maxRepeats}, лимит исчерпан, кнопки скрыты`);
     }
     
     state.isTransmissionEnded = true;
@@ -677,7 +679,7 @@ function currentConversation(resetCount = false) {
     // Устанавливаем изображения персонажей
     initializeCharacterPortraits();
     
-    console.log(`Начинаем диалог для частоты ${currentFrequency} с позиции ${state.count}`);
+    debug(`Начинаем диалог для частоты ${currentFrequency} с позиции ${state.count}`);
     
     // Очищаем текст перед началом
     $('#text').text('');
@@ -698,10 +700,10 @@ function currentConversation(resetCount = false) {
  * Показать следующую строку диалога
  */
 function showNextLine() {
-    console.log(`showNextLine вызвана с count=${state.count}, isTransmissionEnded=${state.isTransmissionEnded}`);
+    debug(`showNextLine вызвана с count=${state.count}, isTransmissionEnded=${state.isTransmissionEnded}`);
     
     if (state.isTransmissionEnded) {
-        console.log('Передача уже завершена, ничего не делаем');
+        debug('Передача уже завершена, ничего не делаем');
         return;
     }
     
@@ -718,14 +720,14 @@ function showNextLine() {
     // ВАЖНОЕ ИЗМЕНЕНИЕ: Не завершаем диалог автоматически при достижении последней строки
     // Вместо этого просто проверяем, что мы не вышли за пределы массива
     if (state.count >= state.currentDialogue.conversations.length) {
-        console.log(`Count (${state.count}) превышает длину диалога (${state.currentDialogue.conversations.length}), корректируем`);
+        debug(`Count (${state.count}) превышает длину диалога (${state.currentDialogue.conversations.length}), корректируем`);
         state.count = state.currentDialogue.conversations.length - 1;
         return;
     }
     
     // Получаем текущую строку диалога
     let conversation = state.currentDialogue.conversations[state.count];
-    console.log(`Текущая строка диалога (${state.count}):`, conversation);
+    debug(`Текущая строка диалога (${state.count}):`, conversation);
     
     // Обработка ветвления диалога
     if (conversation && typeof conversation === 'object' && conversation.choice && !conversation.hasChoice) {
@@ -762,7 +764,7 @@ function showNextLine() {
  * @param {Object} conversation - Текущая строка диалога
  */
 function handleBranchingDialog(conversation) {
-    console.log("Обработка ветвления диалога", conversation);
+    debug("Обработка ветвления диалога", conversation);
     
     const frequency = getCurrentFrequency();
     const userChoicesForFreq = state.userChoices[frequency] || [];
@@ -775,19 +777,19 @@ function handleBranchingDialog(conversation) {
     for (const choice of userChoicesForFreq) {
         if (choice.choice_id === choiceId) {
             selectedOption = choice.option_id;
-            console.log(`Найден выбор: ${choice.choice_id} -> ${selectedOption}`);
+            debug(`Найден выбор: ${choice.choice_id} -> ${selectedOption}`);
             break;
         }
     }
     
-    console.log(`Обработка ветвления для выбора: ${choiceId}, выбранная опция: ${selectedOption}`);
+    debug(`Обработка ветвления для выбора: ${choiceId}, выбранная опция: ${selectedOption}`);
     
     // responses может быть в conversation.responses (старый формат) или conversation.choice.responses (новый)
     const responses = conversation.responses || conversation.choice?.responses;
     
     if (selectedOption && responses && responses[selectedOption]) {
         const nextLines = responses[selectedOption];
-        console.log(`Выбрана ветка для опции ${selectedOption}, содержит ${nextLines.length} строк`);
+        debug(`Выбрана ветка для опции ${selectedOption}, содержит ${nextLines.length} строк`);
         
         if (nextLines && nextLines.length > 0) {
             // Заменяем текущую строку на первую строку выбранного ответа
@@ -797,8 +799,8 @@ function handleBranchingDialog(conversation) {
             const remainingLines = nextLines.slice(1);
             state.currentDialogue.conversations.splice(state.count + 1, 0, ...remainingLines);
             
-            console.log(`Добавлены строки ветвления: ${remainingLines.length}`);
-            console.log(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
+            debug(`Добавлены строки ветвления: ${remainingLines.length}`);
+            debug(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
             
             // Очищаем текст перед началом анимации
             $('#text').text('');
@@ -811,7 +813,7 @@ function handleBranchingDialog(conversation) {
             state.isTransmissionEnded = false;
             state.isOnLastLine = false;
             
-            console.log("Запускаем showNextLine() для показа первой строки ветки");
+            debug("Запускаем showNextLine() для показа первой строки ветки");
             
             // Запускаем показ первой строки ветвления
             // Это запустит полную анимацию с печатью текста
@@ -834,7 +836,7 @@ function handleBranchingDialog(conversation) {
         const firstOptionKey = responses ? Object.keys(responses)[0] : null;
         
         if (firstOptionKey && responses && responses[firstOptionKey]) {
-            console.log(`Используем первую доступную ветку: ${firstOptionKey}`);
+            debug(`Используем первую доступную ветку: ${firstOptionKey}`);
             const nextLines = responses[firstOptionKey];
             
             if (nextLines && nextLines.length > 0) {
@@ -856,7 +858,7 @@ function handleBranchingDialog(conversation) {
                 state.isTransmissionEnded = false;
                 state.isOnLastLine = false;
                 
-                console.log("Запускаем showNextLine() для показа первой строки ветки");
+                debug("Запускаем showNextLine() для показа первой строки ветки");
                 
                 // Запускаем показ первой строки ветвления через showNextLine
                 showNextLine();
@@ -905,7 +907,7 @@ function handleChoiceDialog(conversation) {
     
     if (existingChoice) {
         // Если выбор уже был сделан, нужно добавить ветку диалога
-        console.log(`Найден существующий выбор: ${existingChoice.choice_id}, добавляем ветку диалога`);
+        debug(`Найден существующий выбор: ${existingChoice.choice_id}, добавляем ветку диалога`);
         state.currentChoiceId = existingChoice.choice_id;
         
         // Находим targetBranch и добавляем её строки в conversations
@@ -916,12 +918,12 @@ function handleChoiceDialog(conversation) {
             const branchLines = branchData.responses || branchData;
             
             if (branchLines && Array.isArray(branchLines) && branchLines.length > 0) {
-                console.log(`Добавляем ветку ${selectedOption.targetBranch} с ${branchLines.length} строками`);
+                debug(`Добавляем ветку ${selectedOption.targetBranch} с ${branchLines.length} строками`);
                 
                 // Добавляем строки ветки после текущей позиции
                 state.currentDialogue.conversations.splice(state.count + 1, 0, ...branchLines);
                 
-                console.log(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
+                debug(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
             }
         }
         
@@ -981,7 +983,7 @@ function handleOldFormatChoiceDialog(conversation) {
     
     if (existingChoice) {
         // Если выбор уже был сделан, нужно добавить ветку диалога
-        console.log(`Найден существующий выбор (старый формат): ${existingChoice.choice_id}, добавляем ветку диалога`);
+        debug(`Найден существующий выбор (старый формат): ${existingChoice.choice_id}, добавляем ветку диалога`);
         state.currentChoiceId = existingChoice.choice_id;
         
         // Находим targetBranch и добавляем её строки в conversations
@@ -993,12 +995,12 @@ function handleOldFormatChoiceDialog(conversation) {
             const branchLines = branchData.responses || branchData;
             
             if (branchLines && Array.isArray(branchLines) && branchLines.length > 0) {
-                console.log(`Добавляем ветку ${selectedOption.targetBranch} с ${branchLines.length} строками (старый формат)`);
+                debug(`Добавляем ветку ${selectedOption.targetBranch} с ${branchLines.length} строками (старый формат)`);
                 
                 // Добавляем строки ветки после текущей позиции
                 state.currentDialogue.conversations.splice(state.count + 1, 0, ...branchLines);
                 
-                console.log(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
+                debug(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
             }
         }
         
@@ -1078,7 +1080,7 @@ function handleSimpleDialog(conversation) {
         saveDialogueProgress(currentFrequency, false);
         
         if (state.count >= state.currentDialogue.conversations.length) {
-            console.log('Достигнут конец диалога, но ждем клика пользователя для завершения');
+            debug('Достигнут конец диалога, но ждем клика пользователя для завершения');
         } else {
             // Если не вышел, показываем следующую строку
             showNextLine();
@@ -1361,7 +1363,7 @@ function initializeCharacterPortraits() {
  * Завершение передачи
  */
 function endTransmission() {
-    console.log('Завершение передачи');
+    debug('Завершение передачи');
     
     if (state.currentVoiceline) {
         state.currentVoiceline.pause();
@@ -1409,21 +1411,21 @@ function restoreDialoguePosition() {
         }
     }
     
-    console.log(`Восстанавливаем диалог с позиции ${state.count} для частоты ${currentFrequency}`);
+    debug(`Восстанавливаем диалог с позиции ${state.count} для частоты ${currentFrequency}`);
     
     if (state.currentDialogue) {
         // Проверяем, есть ли диалог на этой позиции
         if (state.count >= state.currentDialogue.conversations.length) {
-            console.log(`Count (${state.count}) превышает или равен длине диалога (${state.currentDialogue.conversations.length}), корректируем`);
+            debug(`Count (${state.count}) превышает или равен длине диалога (${state.currentDialogue.conversations.length}), корректируем`);
             
             // Если count равен длине, это может означать, что диалог завершен
             if (state.count === state.currentDialogue.conversations.length) {
                 state.count = state.currentDialogue.conversations.length - 1;
-                console.log(`Показываем последнюю строку диалога (count=${state.count})`);
+                debug(`Показываем последнюю строку диалога (count=${state.count})`);
             } else {
                 // Если count больше длины, сбрасываем до начала
                 state.count = 0;
-                console.log(`Сбрасываем диалог на начало (count=${state.count})`);
+                debug(`Сбрасываем диалог на начало (count=${state.count})`);
             }
         }
         
@@ -1475,7 +1477,7 @@ function restoreDialoguePosition() {
  * @param {Object} selectedOption - Выбранная опция
  */
 function handleChoiceSelection(choiceId, selectedOption) {
-    console.log(`Обработка выбора: choiceId=${choiceId}, selectedOption=`, selectedOption);
+    debug(`Обработка выбора: choiceId=${choiceId}, selectedOption=`, selectedOption);
     
     // Проверяем наличие choiceId и selectedOption
     if (!choiceId || !selectedOption) {
@@ -1517,7 +1519,7 @@ function handleChoiceSelection(choiceId, selectedOption) {
 		state.userChoices[currentFrequency].push(choiceObject);
 	}
 
-	console.log(`Обновлены локальные выборы:`, state.userChoices[currentFrequency]);
+	debug(`Обновлены локальные выборы:`, state.userChoices[currentFrequency]);
 
 	try {
 		// Пытаемся сохранить выбор на сервере, но продолжаем независимо от результата
@@ -1543,26 +1545,26 @@ function handleChoiceSelection(choiceId, selectedOption) {
 
 	// Находим targetBranch в диалоге и добавляем её строки в conversations
 	const targetBranch = selectedOption.targetBranch;
-	console.log('Ищем ветку:', targetBranch);
-	console.log('Доступные ветки в диалоге:', Object.keys(state.currentDialogue || {}));
+	debug('Ищем ветку:', targetBranch);
+	debug('Доступные ветки в диалоге:', Object.keys(state.currentDialogue || {}));
 	
 	const branchData = state.currentDialogue ? state.currentDialogue[targetBranch] : null;
-	console.log('Данные ветки:', branchData);
+	debug('Данные ветки:', branchData);
 	
 	let branchLines = null;
 	if (branchData) {
 		// Ветка может быть в формате { choiceId, responses: [...] } или просто массив [...]
 		branchLines = branchData.responses || branchData;
 	}
-	console.log('Строки ветки:', branchLines);
+	debug('Строки ветки:', branchLines);
 	
 	if (targetBranch && branchLines && Array.isArray(branchLines)) {
-		console.log(`Добавляем ветку ${targetBranch} с ${branchLines.length} строками`);
+		debug(`Добавляем ветку ${targetBranch} с ${branchLines.length} строками`);
 		
 		// Добавляем строки ветки после текущей позиции
 		if (branchLines.length > 0) {
 			state.currentDialogue.conversations.splice(state.count + 1, 0, ...branchLines);
-			console.log(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
+			debug(`Обновленная длина диалога: ${state.currentDialogue.conversations.length}`);
 		}
 	} else {
 		console.warn('Ветка не найдена или пустая!');
@@ -1596,7 +1598,7 @@ function handleChoiceSelection(choiceId, selectedOption) {
  */
 async function saveUserChoice(frequency, choiceId, optionId, optionText) {
     try {
-        console.log(`Сохранение выбора: frequency=${frequency}, choiceId=${choiceId}, option=${optionId} (${optionText})`);
+        debug(`Сохранение выбора: frequency=${frequency}, choiceId=${choiceId}, option=${optionId} (${optionText})`);
         
         // Проверка входных данных
         if (!frequency || !choiceId || !optionId) {
@@ -1612,7 +1614,7 @@ async function saveUserChoice(frequency, choiceId, optionId, optionText) {
             choiceText: optionText || 'Текст не указан'
         };
         
-        console.log('Отправка данных на сервер:', JSON.stringify(requestData));
+        debug('Отправка данных на сервер:', JSON.stringify(requestData));
         
         // Отправляем запрос на сервер
         const response = await fetch(`${API_URL}/user-choice`, {
@@ -1652,7 +1654,7 @@ async function saveUserChoice(frequency, choiceId, optionId, optionText) {
             data = { success: true, warning: 'Некорректный JSON-ответ' };
         }
         
-        console.log('Выбор сохранен успешно:', data);
+        debug('Выбор сохранен успешно:', data);
         return {
             success: true,
             data: data
@@ -1680,13 +1682,13 @@ let lastSavedFrequency = '';
 async function saveDialogueProgress(frequency, completed = false) {
     // Если прогресс не изменился, не делаем запрос
     if (lastSavedPosition === state.count && lastSavedFrequency === frequency && !completed) {
-        console.log(`Прогресс диалога не изменился (count=${state.count}, frequency=${frequency}), пропускаем сохранение`);
+        debug(`Прогресс диалога не изменился (count=${state.count}, frequency=${frequency}), пропускаем сохранение`);
         return;
     }
     
     // Если уже идет сохранение, отменяем новый запрос
     if (isSavingProgress) {
-        console.log('Уже идет сохранение прогресса, пропускаем');
+        debug('Уже идет сохранение прогресса, пропускаем');
         return;
     }
 
@@ -1706,7 +1708,7 @@ async function saveDialogueProgress(frequency, completed = false) {
                 const dialogueProgress = (data.progress || []).find(p => p.frequency === frequency);
                 
                 if (dialogueProgress && dialogueProgress.completed) {
-                    console.log(`Диалог для частоты ${frequency} уже отмечен как завершенный, не обновляем прогресс`);
+                    debug(`Диалог для частоты ${frequency} уже отмечен как завершенный, не обновляем прогресс`);
                     isSavingProgress = false; // Сбрасываем флаг
                     return;
                 }
@@ -1724,7 +1726,7 @@ async function saveDialogueProgress(frequency, completed = false) {
         
         // Проверяем, не выходит ли позиция за границы диалога
         if (currentDialogue && currentPosition >= currentDialogue.conversations.length) {
-            console.log(`Позиция ${currentPosition} выходит за границы диалога длиной ${currentDialogue.conversations.length}, корректируем`);
+            debug(`Позиция ${currentPosition} выходит за границы диалога длиной ${currentDialogue.conversations.length}, корректируем`);
             currentPosition = currentDialogue.conversations.length - 1;
             
             // ВАЖНОЕ ИЗМЕНЕНИЕ: НЕ устанавливаем completed в true автоматически,
@@ -1732,7 +1734,7 @@ async function saveDialogueProgress(frequency, completed = false) {
             // completed должен быть установлен только когда пользователь явно завершил диалог
         }
         
-        console.log(`Сохраняем прогресс диалога: частота=${frequency}, позиция=${currentPosition}, завершен=${completed}`);
+        debug(`Сохраняем прогресс диалога: частота=${frequency}, позиция=${currentPosition}, завершен=${completed}`);
         
         const response = await fetch(`${API_URL}/dialogue-progress`, {
             method: 'POST',
@@ -1753,7 +1755,7 @@ async function saveDialogueProgress(frequency, completed = false) {
         }
         
         const data = await response.json();
-        console.log(`Прогресс диалога сохранен успешно:`, data);
+        debug(`Прогресс диалога сохранен успешно:`, data);
         
         // Запоминаем последний сохраненный прогресс
         lastSavedPosition = currentPosition;
@@ -1968,13 +1970,13 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     const voiceAudio = voiceData.audio;
     const voiceMode = voiceData.mode || 'none';
     
-    console.log(`typeText: voiceMode=${voiceMode}, autoPlayMusic=${state.autoPlayMusic}`);
+    debug(`typeText: voiceMode=${voiceMode}, autoPlayMusic=${state.autoPlayMusic}`);
     
     const cleanText = checkAndActivateGlitchEffects(text) || '';
     const { text: textWithoutPauses, pauses } = extractPauses(cleanText);
     const segments = parseFormatting(textWithoutPauses || '');
     
-    console.log(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}", режим звука: ${voiceMode}, скорость: ${customTypingSpeed || 'авто'}`);
+    debug(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}", режим звука: ${voiceMode}, скорость: ${customTypingSpeed || 'авто'}`);
     
     $('#c-char').text(characterName + ':');
     $('#text-con').addClass('typing-in-progress');
@@ -2135,37 +2137,37 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
  * Логирование текущего состояния диалога
  */
 function logDialogueState() {
-    console.group('Текущее состояние диалога');
+    debugGroup('Текущее состояние диалога');
     const currentFrequency = getCurrentFrequency();
-    console.log(`Частота: ${currentFrequency}`);
-    console.log(`Позиция (count): ${state.count}`);
-    console.log(`Диалог завершен: ${state.isTransmissionEnded}`);
-    console.log(`Счетчик повторных прослушиваний: ${state.repeatCount[currentFrequency] || 0}`);
+    debug(`Частота: ${currentFrequency}`);
+    debug(`Позиция (count): ${state.count}`);
+    debug(`Диалог завершен: ${state.isTransmissionEnded}`);
+    debug(`Счетчик повторных прослушиваний: ${state.repeatCount[currentFrequency] || 0}`);
     
     if (state.currentDialogue) {
-        console.log(`Всего строк: ${state.currentDialogue.conversations.length}`);
+        debug(`Всего строк: ${state.currentDialogue.conversations.length}`);
         
         if (state.count < state.currentDialogue.conversations.length) {
-            console.log(`Текущая строка:`, state.currentDialogue.conversations[state.count]);
+            debug(`Текущая строка:`, state.currentDialogue.conversations[state.count]);
             
             // Добавим информацию о предыдущей и следующей строке для удобства отладки
             if (state.count > 0) {
-                console.log(`Предыдущая строка:`, state.currentDialogue.conversations[state.count - 1]);
+                debug(`Предыдущая строка:`, state.currentDialogue.conversations[state.count - 1]);
             }
             
             if (state.count < state.currentDialogue.conversations.length - 1) {
-                console.log(`Следующая строка:`, state.currentDialogue.conversations[state.count + 1]);
+                debug(`Следующая строка:`, state.currentDialogue.conversations[state.count + 1]);
             }
         } else {
-            console.log(`Текущая строка: вне диапазона`);
+            debug(`Текущая строка: вне диапазона`);
         }
     } else {
-        console.log(`Текущий диалог: не загружен`);
+        debug(`Текущий диалог: не загружен`);
     }
     
     const currentFreq = getCurrentFrequency();
-    console.log(`Сохраненные выборы:`, state.userChoices[currentFreq] || []);
-    console.groupEnd();
+    debug(`Сохраненные выборы:`, state.userChoices[currentFreq] || []);
+    debugGroupEnd();
 }
 
 // Проверяем доступность API для счетчиков повторений
@@ -2185,7 +2187,7 @@ async function checkRepeatCountsApiAvailability() {
         }
         return false;
     } catch (error) {
-        console.log('API для счетчиков повторений недоступно:', error);
+        debug('API для счетчиков повторений недоступно:', error);
         return false;
     }
 }
@@ -2194,7 +2196,7 @@ async function checkRepeatCountsApiAvailability() {
  * Изменение частоты
  */
 function changeFreq() {
-    console.log("Изменение частоты");
+    debug("Изменение частоты");
     
     $('#text-con').removeClass('typing-in-progress');
     
@@ -2259,11 +2261,11 @@ function changeFreq() {
     
     // Проверяем, изменилась ли частота
     if (oldFreqCount === state.freqCount) {
-        console.log("Частота не изменилась, пропускаем обновление");
+        debug("Частота не изменилась, пропускаем обновление");
         return;
     }
     
-    console.log(`Частота изменена: ${games[state.currentGame]['frequencies'][oldFreqCount]} -> ${games[state.currentGame]['frequencies'][state.freqCount]}`);
+    debug(`Частота изменена: ${games[state.currentGame]['frequencies'][oldFreqCount]} -> ${games[state.currentGame]['frequencies'][state.freqCount]}`);
     
     // Обновляем частоту
     updateFrequencyDisplay();
@@ -2350,29 +2352,29 @@ $('#start-transmission').on('click', async function(event) {
     
     // Если лимит повторений исчерпан (и это не бесконечный режим)
     if (maxRepeats > 0 && repeatCount >= maxRepeats) {
-        console.log(`Лимит повторений исчерпан: ${repeatCount}/${maxRepeats}`);
+        debug(`Лимит повторений исчерпан: ${repeatCount}/${maxRepeats}`);
         $('#text').text('*ПОВТОРЕНИЯ ЗАВЕРШЕНЫ*');
         $('#c-char').text('');
         $('#start-transmission').addClass('hidden');
         return;
     }
     
-    console.log(`Loading dialogue for frequency: ${currentFrequency}`);
+    debug(`Loading dialogue for frequency: ${currentFrequency}`);
     
     // Пробуем загрузить диалог: сначала из кэша, потом из games, потом из БД
     if (!state.currentDialogue && dialoguesCache[currentFrequency]) {
         state.currentDialogue = dialoguesCache[currentFrequency];
-        console.log(`From cache: found`);
+        debug(`From cache: found`);
     }
     
     if (!state.currentDialogue && games[state.currentGame] && games[state.currentGame]['dialogues'][currentFrequency]) {
         state.currentDialogue = games[state.currentGame]['dialogues'][currentFrequency];
-        console.log(`From local games: found`);
+        debug(`From local games: found`);
     }
     
     if (!state.currentDialogue) {
         state.currentDialogue = await loadDialogueFromDB(currentFrequency);
-        console.log(`From DB: ${state.currentDialogue ? 'found' : 'not found'}`);
+        debug(`From DB: ${state.currentDialogue ? 'found' : 'not found'}`);
         if (state.currentDialogue) {
             dialoguesCache[currentFrequency] = state.currentDialogue;
             if (!games[state.currentGame]['dialogues'][currentFrequency]) {
@@ -2385,7 +2387,7 @@ $('#start-transmission').on('click', async function(event) {
         // Получаем текст кнопки, чтобы определить, продолжаем мы диалог или начинаем заново
         const buttonText = $(this).find('.start-link').text();
         
-        console.log(`Нажата кнопка "${buttonText}", текущая позиция: ${state.count}`);
+        debug(`Нажата кнопка "${buttonText}", текущая позиция: ${state.count}`);
         
         // Проверяем, не является ли текущая позиция последней строкой диалога
         // Только если в диалоге больше 1 строки
@@ -2393,7 +2395,7 @@ $('#start-transmission').on('click', async function(event) {
         const isLastLine = hasMultipleLines && state.count >= state.currentDialogue.conversations.length - 1;
         
         if (isLastLine && (buttonText === 'Продолжить передачу' || buttonText === 'Показать последнюю строку')) {
-            console.log(`Текущая позиция (${state.count}) - последняя строка диалога. Завершаем диалог.`);
+            debug(`Текущая позиция (${state.count}) - последняя строка диалога. Завершаем диалог.`);
             
             // Если это последняя строка, восстанавливаем диалог и показываем последнюю строку
             restoreDialoguePosition();
@@ -2401,17 +2403,17 @@ $('#start-transmission').on('click', async function(event) {
             // После показа последней строки, отметим диалог как завершенный в следующем клике
         } else if (buttonText === 'Начать передачу') {
             // Начинаем диалог сначала
-            console.log('Начинаем диалог заново');
+            debug('Начинаем диалог заново');
             currentConversation(true);
         } else if (buttonText === 'Продолжить передачу' || buttonText === 'Показать последнюю строку') {
             // Восстанавливаем диалог с сохраненной позиции
-            console.log(`Восстанавливаем диалог с текущей позиции (${state.count})`);
+            debug(`Восстанавливаем диалог с текущей позиции (${state.count})`);
             
             // ВАЖНОЕ ИЗМЕНЕНИЕ: Убедимся, что при восстановлении будет показана текущая строка
             // а не следующая. Это особенно важно если count === 0.
             restoreDialoguePosition();
         } else {
-            console.log('Начинаем диалог заново');
+            debug('Начинаем диалог заново');
             currentConversation(true);
         }
     } else {
@@ -2431,7 +2433,7 @@ $('#repeat-transmission').on('click', async function() {
         // Получаем текущую частоту
         const currentFrequency = getCurrentFrequency();
         
-        console.log(`Повторное прослушивание диалога на частоте ${currentFrequency}`);
+        debug(`Повторное прослушивание диалога на частоте ${currentFrequency}`);
         
         // Очищаем выборы для этой частоты в state
         delete state.userChoices[currentFrequency];
@@ -2445,7 +2447,7 @@ $('#repeat-transmission').on('click', async function() {
                 method: 'DELETE',
                 credentials: 'include'
             });
-            console.log('Выборы сброшены на сервере');
+            debug('Выборы сброшены на сервере');
         } catch (e) {
             console.warn('Не удалось сбросить выборы на сервере:', e);
         }
@@ -2456,7 +2458,7 @@ $('#repeat-transmission').on('click', async function() {
                 method: 'DELETE',
                 credentials: 'include'
             });
-            console.log('Прогресс сброшен на сервере');
+            debug('Прогресс сброшен на сервере');
         } catch (e) {
             console.warn('Не удалось сбросить прогресс на сервере:', e);
         }
@@ -2506,7 +2508,7 @@ $('#text-con').on('click', function(event) {
         
         // Если есть контейнер выбора, не обрабатываем клик на текст
         if (hasChoiceContainer) {
-            console.log('Варианты ответа уже отображены, игнорируем клик на текст');
+            debug('Варианты ответа уже отображены, игнорируем клик на текст');
             return;
         }
         
@@ -2514,17 +2516,17 @@ $('#text-con').on('click', function(event) {
         if (state.currentDialogue && !state.isTransmissionEnded && !$(this).hasClass('typing-in-progress')) {
             // Если мы на последней строке диалога, игнорируем клик на текст
             if (state.isOnLastLine) {
-                console.log('Мы на последней строке диалога, клик на текст игнорируется');
+                debug('Мы на последней строке диалога, клик на текст игнорируется');
                 return;
             }
             
-            console.log('Клик для продолжения диалога, текущая позиция:', state.count);
+            debug('Клик для продолжения диалога, текущая позиция:', state.count);
             
             // ВАЖНОЕ ИЗМЕНЕНИЕ: Проверяем, не находимся ли мы после последней строки диалога
             // Если да, то это значит, что пользователь кликнул после отображения последней строки
             // и хочет закончить диалог
             if (state.count >= state.currentDialogue.conversations.length) {
-                console.log('Пользователь кликнул после последней строки, завершаем диалог');
+                debug('Пользователь кликнул после последней строки, завершаем диалог');
                 endTransmission();
                 return;
             }
@@ -2552,7 +2554,7 @@ async function loadRepeatCounts() {
                 if (parsedCounts && typeof parsedCounts === 'object') {
                     // Обновляем счетчики в состоянии приложения
                     state.repeatCount = parsedCounts;
-                    console.log('Загружены счетчики повторных прослушиваний из localStorage:', state.repeatCount);
+                    debug('Загружены счетчики повторных прослушиваний из localStorage:', state.repeatCount);
                 }
             } catch (parseError) {
                 console.error('Ошибка при разборе сохраненных счетчиков:', parseError);
@@ -2560,7 +2562,7 @@ async function loadRepeatCounts() {
                 state.repeatCount = {};
             }
         } else {
-            console.log('Счетчики повторных прослушиваний не найдены в localStorage, инициализируем пустой объект');
+            debug('Счетчики повторных прослушиваний не найдены в localStorage, инициализируем пустой объект');
             state.repeatCount = {};
         }
         
@@ -2586,7 +2588,7 @@ async function loadRepeatCounts() {
                             }
                         }
                         
-                        console.log('Счетчики синхронизированы с сервером:', state.repeatCount);
+                        debug('Счетчики синхронизированы с сервером:', state.repeatCount);
                         
                         // Сохраняем объединенные данные локально
                         localStorage.setItem(`dialogueRepeatCounts_${state.userName}`, JSON.stringify(state.repeatCount));
@@ -2597,7 +2599,7 @@ async function loadRepeatCounts() {
                 // Продолжаем работу с локальными данными
             }
         } else {
-            console.log('API для счетчиков повторений недоступно, используем только локальное хранилище');
+            debug('API для счетчиков повторений недоступно, используем только локальное хранилище');
         }
     } catch (error) {
         console.error('Ошибка при загрузке счетчиков повторных прослушиваний:', error);
@@ -2609,7 +2611,7 @@ function saveRepeatCounts() {
     try {
         // Сохраняем счетчики в localStorage с учетом имени пользователя
         localStorage.setItem(`dialogueRepeatCounts_${state.userName}`, JSON.stringify(state.repeatCount));
-        console.log('Счетчики повторных прослушиваний сохранены в localStorage:', state.repeatCount);
+        debug('Счетчики повторных прослушиваний сохранены в localStorage:', state.repeatCount);
         
         // Проверяем доступность API перед отправкой
         checkRepeatCountsApiAvailability().then(isAvailable => {
@@ -2624,7 +2626,7 @@ function saveRepeatCounts() {
                     credentials: 'include'
                 }).then(response => {
                     if (response.ok) {
-                        console.log('Счетчики успешно сохранены на сервере');
+                        debug('Счетчики успешно сохранены на сервере');
                     } else {
                         console.warn('Не удалось сохранить счетчики на сервере, код ответа:', response.status);
                     }
@@ -2632,7 +2634,7 @@ function saveRepeatCounts() {
                     console.warn('Не удалось сохранить счетчики на сервере:', error);
                 });
             } else {
-                console.log('API для счетчиков недоступно, данные сохранены только локально');
+                debug('API для счетчиков недоступно, данные сохранены только локально');
             }
         }).catch(() => {
             console.warn('Не удалось проверить доступность API, данные сохранены только локально');
@@ -2665,7 +2667,7 @@ function activateGlitchEffect(intensity = 5, redTheme = true, effects = [], dura
     glitchEffects.intensity = Math.min(10, Math.max(0, intensity));
     glitchEffects.isActive = true;
     
-    console.log(`Активация глюк-эффекта с интенсивностью ${glitchEffects.intensity}`);
+    debug(`Активация глюк-эффекта с интенсивностью ${glitchEffects.intensity}`);
     
     // Если нужна красная тема, применяем ее
     if (redTheme) {
@@ -2704,7 +2706,7 @@ function activateGlitchEffect(intensity = 5, redTheme = true, effects = [], dura
  * Очистка всех эффектов глюка
  */
 function clearGlitchEffects() {
-    console.log('Очистка эффектов глюка');
+    debug('Очистка эффектов глюка');
     
     // Останавливаем таймер, если он активен
     if (glitchEffects.timer) {
@@ -3168,12 +3170,12 @@ $(document).ready(function() {
     
     // Добавляем обработчик события для настроек
     $('#settings-btn').on('click', function() {
-        console.log('Settings button clicked');
+        debug('Settings button clicked');
         showSettingsModal();
     });
     
     function showSettingsModal() {
-        console.log('Opening settings modal, autoPlayMusic:', state.autoPlayMusic);
+        debug('Opening settings modal, autoPlayMusic:', state.autoPlayMusic);
         const modal = $('<div id="settings-modal" class="modal-overlay"></div>');
         const modalContent = $('<div class="modal-content"></div>');
         
@@ -3206,7 +3208,7 @@ $(document).ready(function() {
         });
         
         toggleInput.on('change', function() {
-            console.log('Toggle changed, new value:', $(this).prop('checked'));
+            debug('Toggle changed, new value:', $(this).prop('checked'));
             state.autoPlayMusic = $(this).prop('checked');
             saveUserSettings();
             

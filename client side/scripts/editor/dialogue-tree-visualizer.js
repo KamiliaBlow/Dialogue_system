@@ -1,3 +1,5 @@
+import debug from '../debug.js';
+
 class DialogueTreeVisualizer {
     constructor(containerId, options = {}) {
         this.containerId = containerId;
@@ -411,7 +413,7 @@ class DialogueTreeVisualizer {
     }
     
     handleNodeAction(action, nodeData, e) {
-        console.log('handleNodeAction:', action, nodeData);
+        debug('handleNodeAction:', action, nodeData);
         switch (action) {
             case 'edit':
                 if (this.callbacks.onNodeEdit) {

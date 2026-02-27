@@ -1,5 +1,7 @@
 const config = require('../config');
 
+const isDebug = config.DEBUG;
+
 class Logger {
     static formatMessage(level, message, data = null) {
         const timestamp = new Date().toISOString();
@@ -8,7 +10,15 @@ class Logger {
     }
     
     static info(message, data = null) {
-        console.log(this.formatMessage('INFO', message, data));
+        if (isDebug) {
+            console.log(this.formatMessage('INFO', message, data));
+        }
+    }
+    
+    static debug(message, data = null) {
+        if (isDebug) {
+            console.log(this.formatMessage('DEBUG', message, data));
+        }
     }
     
     static warn(message, data = null) {
