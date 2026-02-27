@@ -880,16 +880,20 @@ async saveConversation() {
                 : `${API_URL}/editor/conversations`;
             const method = id ? 'PUT' : 'POST';
             
-            // Вычисляем правильный sortOrder - берем максимальный + 1
             let sortOrder;
             if (!id) {
                 const branchConvs = this.state.conversations.filter(c => c.branch_id === branchId);
                 const maxSortOrder = branchConvs.reduce((max, c) => Math.max(max, c.sort_order || 0), -1);
                 sortOrder = maxSortOrder + 1;
+            } else {
+                const existingConv = this.state.conversations.find(c => String(c.id) === String(id));
+                if (existingConv) {
+                    sortOrder = existingConv.sort_order;
+                }
             }
             
             const body = id 
-                ? { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed }
+                ? { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder }
                 : { dialogueId: this.state.currentDialogueId, branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder };
             
             const response = await fetch(url, {
