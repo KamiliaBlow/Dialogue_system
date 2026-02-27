@@ -1859,6 +1859,99 @@ function extractPauses(text) {
 }
 
 /**
+ * Парсит теги форматирования и возвращает массив сегментов с стилями
+ * @param {string} text - Текст с тегами
+ * @returns {Array} - Массив сегментов {char, style}
+ */
+function parseFormatting(text) {
+    if (!text) return [];
+    
+    const segments = [];
+    let style = { shake: false, color: null, size: null };
+    let i = 0;
+    
+    while (i < text.length) {
+        let found = false;
+        
+        // Сначала проверяем теги с значениями (S, Color)
+        const sMatch = text.slice(i).match(/^\[S:(\d+\.?\d*)\]/);
+        if (sMatch) {
+            const v = parseFloat(sMatch[1]);
+            if (v >= 0.8 && v <= 1.3) style.size = v;
+            i += sMatch[0].length;
+            found = true;
+        }
+        
+        if (!found) {
+            const colorMatch = text.slice(i).match(/^\[Color:(.+?)\]/);
+            if (colorMatch) {
+                style.color = colorMatch[1];
+                i += colorMatch[0].length;
+                found = true;
+            }
+        }
+        
+        // Потом простые строковые теги
+        if (!found && text.slice(i, i + 7) === '[Shake]') {
+            style.shake = true;
+            i += 7;
+            found = true;
+        }
+        
+        if (!found && text.slice(i, i + 8) === '[ShakeE]') {
+            style.shake = false;
+            i += 8;
+            found = true;
+        }
+        
+        if (!found && text.slice(i, i + 8) === '[ColorE]') {
+            style.color = null;
+            i += 8;
+            found = true;
+        }
+        
+        if (!found && text.slice(i, i + 4) === '[SE]') {
+            style.size = null;
+            i += 4;
+            found = true;
+        }
+        
+        if (!found) {
+            segments.push({ char: text[i], style: {...style} });
+            i++;
+        }
+    }
+    
+    return segments;
+}
+
+/**
+ * Строит HTML из сегментов
+ */
+function buildHtml(segments) {
+    let html = '';
+    let currentStyle = null;
+    
+    for (const seg of segments) {
+        const styleKey = JSON.stringify(seg.style);
+        if (styleKey !== currentStyle) {
+            if (currentStyle !== null) html += '</span>';
+            if (Object.keys(seg.style).length > 0) {
+                let s = '';
+                if (seg.style.shake) s += 'animation: shake 0.1s infinite; display: inline-block;';
+                if (seg.style.color) s += 'color:' + seg.style.color + ';';
+                if (seg.style.size) s += 'font-size:' + seg.style.size + 'em;';
+                html += '<span style="' + s + '">';
+            }
+            currentStyle = styleKey;
+        }
+        html += seg.char === '<' ? '&lt;' : seg.char === '>' ? '&gt;' : seg.char === '&' ? '&amp;' : seg.char;
+    }
+    if (currentStyle !== null) html += '</span>';
+    return html;
+}
+
+/**
  * Модифицированная функция typeText для поддержки эффектов глюков
  * @param {string} text - Текст для вывода
  * @param {jQuery} element - Элемент для вывода текста
@@ -1877,16 +1970,17 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     
     console.log(`typeText: voiceMode=${voiceMode}, autoPlayMusic=${state.autoPlayMusic}`);
     
-    const cleanText = checkAndActivateGlitchEffects(text);
+    const cleanText = checkAndActivateGlitchEffects(text) || '';
     const { text: textWithoutPauses, pauses } = extractPauses(cleanText);
+    const segments = parseFormatting(textWithoutPauses || '');
     
     console.log(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}", режим звука: ${voiceMode}, скорость: ${customTypingSpeed || 'авто'}`);
     
     $('#c-char').text(characterName + ':');
     $('#text-con').addClass('typing-in-progress');
-    element.text('');
+    element.html('');
     
-    if (!textWithoutPauses) {
+    if (!textWithoutPauses || segments.length === 0) {
         $('#text-con').removeClass('typing-in-progress');
         if (onComplete) onComplete();
         return;
@@ -1894,6 +1988,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     
     let i = 0;
     let isTyping = true;
+    let currentHtml = '';
     
     if (state.typingTimeout) {
         clearTimeout(state.typingTimeout);
@@ -1918,7 +2013,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     function typing() {
         const isGlitchActive = glitchEffects.isActive && getCurrentFrequency() === 'PER';
         
-        if (i < textWithoutPauses.length && $('#text-con').hasClass('typing-in-progress')) {
+        if (i < segments.length && $('#text-con').hasClass('typing-in-progress')) {
             const pauseBefore = pauses[i];
             if (pauseBefore > 0) {
                 state.typingTimeout = setTimeout(() => {
@@ -1931,13 +2026,14 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         } else {
             isTyping = false;
             $('#text-con').removeClass('typing-in-progress');
-            element.text(textWithoutPauses);
+            element.html(buildHtml(segments));
             if (onComplete) onComplete();
         }
     }
     
     function processCharacter() {
-        element.text(textWithoutPauses.slice(0, i + 1));
+        currentHtml = buildHtml(segments.slice(0, i + 1));
+        element.html(currentHtml);
         
         let delay;
         if (customTypingSpeed > 0) {
@@ -1947,6 +2043,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         }
         
         const isGlitchActive = glitchEffects.isActive && getCurrentFrequency() === 'PER';
+        const currentChar = segments[i] ? segments[i].char : '';
         
         if (isGlitchActive) {
             if (Math.random() < (glitchEffects.intensity / 50)) {
@@ -1954,13 +2051,12 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
             }
             
             if (Math.random() < (glitchEffects.intensity / 40)) {
-                const originalText = element.text();
-                const scrambledText = scrambleText(originalText);
-                element.text(scrambledText);
+                const scrambledText = scrambleText(currentHtml);
+                element.html(scrambledText);
                 
                 setTimeout(() => {
-                    if (i < textWithoutPauses.length) {
-                        element.text(textWithoutPauses.slice(0, i + 1));
+                    if (i < segments.length) {
+                        element.html(buildHtml(segments.slice(0, i + 1)));
                     }
                 }, 50 + Math.random() * 150);
             }
@@ -1968,16 +2064,16 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         
         const punctuationMarks = ['.', ',', '!', '?', ':', ';'];
         
-        if (voiceMode === 'typing' && voiceAudio && textWithoutPauses[i] !== ' ' && textWithoutPauses[i] !== '\n') {
+        if (voiceMode === 'typing' && voiceAudio && currentChar !== ' ' && currentChar !== '\n') {
             try {
                 const voiceClone = voiceAudio.cloneNode();
                 voiceClone.currentTime = 0;
                 
                 let volume = 0.03;
                 
-                if (punctuationMarks.includes(textWithoutPauses[i])) {
+                if (punctuationMarks.includes(currentChar)) {
                     volume = 0.015;
-                } else if (textWithoutPauses[i] === textWithoutPauses[i].toUpperCase() && textWithoutPauses[i].match(/[A-ZА-Я]/)) {
+                } else if (currentChar === currentChar.toUpperCase() && currentChar.match(/[A-ZА-Я]/)) {
                     volume = 0.045;
                 }
                 
@@ -1995,14 +2091,15 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
             }
         }
         
-        if (i > 0 && punctuationMarks.includes(textWithoutPauses[i-1])) {
-            if (textWithoutPauses[i-1] === '.') {
+        const prevChar = segments[i - 1] ? segments[i - 1].char : '';
+        if (i > 0 && punctuationMarks.includes(prevChar)) {
+            if (prevChar === '.') {
                 delay += 350;
-            } else if (textWithoutPauses[i-1] === '!' || textWithoutPauses[i-1] === '?') {
+            } else if (prevChar === '!' || prevChar === '?') {
                 delay += 300;
-            } else if (textWithoutPauses[i-1] === ':' || textWithoutPauses[i-1] === ';') {
+            } else if (prevChar === ':' || prevChar === ';') {
                 delay += 250;
-            } else if (textWithoutPauses[i-1] === ',') {
+            } else if (prevChar === ',') {
                 delay += 150;
             }
         }
@@ -2017,7 +2114,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     function skipTyping() {
         if (isTyping) {
             clearTimeout(state.typingTimeout);
-            element.text(textWithoutPauses);
+            element.html(buildHtml(segments));
             isTyping = false;
             $('#text-con').removeClass('typing-in-progress');
             if (state.currentVoiceline) {

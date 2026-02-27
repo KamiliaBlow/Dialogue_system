@@ -3,6 +3,14 @@
     src: url('TeletactileRus.ttf') format('opentype');
 }
 
+@keyframes shake {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(-2px, 0); }
+    50% { transform: translate(2px, 0); }
+    75% { transform: translate(-2px, 0); }
+    100% { transform: translate(0, 0); }
+}
+
 html, body {
 	height: 100%;
 	background-color: black;
