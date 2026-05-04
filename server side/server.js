@@ -44,6 +44,35 @@ const upload = multer({
     }
 });
 
+const avatarStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, 'assets/images/avatars');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, 'avatar_' + uniqueSuffix + ext);
+    }
+});
+
+const uploadAvatar = multer({ 
+    storage: avatarStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error('Только изображения разрешены'));
+    }
+});
+
 config.validate();
 
 const sslKeyPath = path.join(__dirname, config.SSL_KEY_PATH);
@@ -227,7 +256,21 @@ function initDatabase() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER UNIQUE NOT NULL,
             auto_play_music INTEGER DEFAULT 1,
+            theme TEXT DEFAULT 'yellow',
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS pilot_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            slot_number INTEGER NOT NULL DEFAULT 1,
+            callsign TEXT NOT NULL,
+            full_name TEXT,
+            mech_name TEXT NOT NULL,
+            avatar_path TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(user_id, slot_number)
         )`
     ];
     
@@ -260,6 +303,35 @@ tables.forEach(sql => db.run(sql));
     db.run(`ALTER TABLE user_choices ADD COLUMN option_id TEXT`, (err) => {
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (option_id):', err.message);
+        }
+    });
+    db.run(`ALTER TABLE pilot_profiles ADD COLUMN is_active INTEGER DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (is_active):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE characters ADD COLUMN portrait_scale REAL DEFAULT 1.0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (portrait_scale):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE characters ADD COLUMN portrait_x REAL DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (portrait_x):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE characters ADD COLUMN portrait_y REAL DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (portrait_y):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE characters ADD COLUMN portrait_mirror INTEGER DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (portrait_mirror):', err.message);
         }
     });
 }
@@ -375,6 +447,132 @@ authRoutes.get('/check-auth', (req, res) => {
 });
 
 app.use('/api', authRoutes);
+
+const pilotRoutes = express.Router();
+
+pilotRoutes.get('/pilot-profiles', requireAuth, (req, res) => {
+    db.all('SELECT id, slot_number, callsign, full_name, mech_name, avatar_path, created_at, updated_at FROM pilot_profiles WHERE user_id = ? ORDER BY slot_number', 
+        [req.session.userId], 
+        (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения профилей' });
+            
+            const profiles = [];
+            for (let i = 1; i <= 3; i++) {
+                const existing = rows.find(r => r.slot_number === i);
+                if (existing) {
+                    profiles.push(existing);
+                } else {
+                    profiles.push({ slot_number: i, callsign: '', full_name: '', mech_name: '', avatar_path: null });
+                }
+            }
+            res.json({ profiles });
+        });
+});
+
+pilotRoutes.get('/pilot-profiles/active', requireAuth, (req, res) => {
+    db.get('SELECT * FROM pilot_profiles WHERE user_id = ? AND is_active = 1', 
+        [req.session.userId], 
+        (err, row) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения активного профиля' });
+            res.json({ profile: row || null });
+        });
+});
+
+pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
+    const { slot_number, callsign, full_name, mech_name, avatar_path } = req.body;
+    const userId = req.session.userId;
+    
+    if (!slot_number || slot_number < 1 || slot_number > 3) {
+        return res.status(400).json({ message: 'Номер слота должен быть от 1 до 3' });
+    }
+    
+    if (!callsign || callsign.trim() === '') {
+        return res.status(400).json({ message: 'Позывной обязателен' });
+    }
+    
+    if (!mech_name || mech_name.trim() === '') {
+        return res.status(400).json({ message: 'Название меха обязательно' });
+    }
+    
+    db.run(`INSERT INTO pilot_profiles (user_id, slot_number, callsign, full_name, mech_name, avatar_path, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, slot_number) DO UPDATE SET
+                callsign = excluded.callsign,
+                full_name = excluded.full_name,
+                mech_name = excluded.mech_name,
+                avatar_path = excluded.avatar_path,
+                updated_at = CURRENT_TIMESTAMP`,
+        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), avatar_path || null],
+        function(err) {
+            if (err) return res.status(500).json({ message: 'Ошибка сохранения профиля' });
+            
+            db.get('SELECT * FROM pilot_profiles WHERE user_id = ? AND slot_number = ?', [userId, slot_number], (err, profile) => {
+                if (err) return res.status(500).json({ message: 'Ошибка получения профиля' });
+                res.json({ message: 'Профиль сохранен', profile });
+            });
+        });
+});
+
+pilotRoutes.delete('/pilot-profiles/:slot_number', requireAuth, (req, res) => {
+    const { slot_number } = req.params;
+    const userId = req.session.userId;
+    
+    if (!slot_number || slot_number < 1 || slot_number > 3) {
+        return res.status(400).json({ message: 'Номер слота должен быть от 1 до 3' });
+    }
+    
+    db.run('DELETE FROM pilot_profiles WHERE user_id = ? AND slot_number = ?', [userId, slot_number], function(err) {
+        if (err) return res.status(500).json({ message: 'Ошибка удаления профиля' });
+        res.json({ message: 'Профиль удален' });
+    });
+});
+
+pilotRoutes.post('/pilot-profiles/set-active/:slot_number', requireAuth, (req, res) => {
+    const { slot_number } = req.params;
+    const userId = req.session.userId;
+    
+    if (!slot_number || slot_number < 1 || slot_number > 3) {
+        return res.status(400).json({ message: 'Номер слота должен быть от 1 до 3' });
+    }
+    
+    db.get('SELECT * FROM pilot_profiles WHERE user_id = ? AND slot_number = ?', [userId, slot_number], (err, profile) => {
+        if (err) return res.status(500).json({ message: 'Ошибка проверки профиля' });
+        if (!profile) return res.status(404).json({ message: 'Профиль не найден' });
+        
+        db.serialize(() => {
+            db.run('UPDATE pilot_profiles SET is_active = 0 WHERE user_id = ?', [userId]);
+            db.run('UPDATE pilot_profiles SET is_active = 1 WHERE user_id = ? AND slot_number = ?', [userId, slot_number], (err) => {
+                if (err) return res.status(500).json({ message: 'Ошибка установки активного профиля' });
+                res.json({ message: 'Профиль установлен как активный', profile });
+            });
+        });
+    });
+});
+
+pilotRoutes.post('/pilot-profiles/upload-avatar/:slot_number', requireAuth, uploadAvatar.single('avatar'), (req, res) => {
+    const { slot_number } = req.params;
+    const userId = req.session.userId;
+    
+    if (!req.file) {
+        return res.status(400).json({ message: 'Файл не загружен' });
+    }
+    
+    const avatarPath = `/assets/images/avatars/${req.file.filename}`;
+    const host = req.get('host'); // Keep port (e.g., YOUDOMAIN:3000)
+    const fullAvatarUrl = `https://${host}${avatarPath}`;
+    const fullPath = path.join(__dirname, 'assets', 'images/avatars', req.file.filename);
+    console.log('[AVATAR UPLOAD] Saving to:', fullPath);
+    console.log('[AVATAR UPLOAD] Full URL:', fullAvatarUrl);
+    
+    db.run('UPDATE pilot_profiles SET avatar_path = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND slot_number = ?',
+        [avatarPath, userId, slot_number],
+        function(err) {
+            if (err) return res.status(500).json({ message: 'Ошибка сохранения аватара' });
+            res.json({ message: 'Аватар загружен', avatar_path: avatarPath, full_url: fullAvatarUrl });
+        });
+});
+
+app.use('/api', pilotRoutes);
 
 const progressRoutes = express.Router();
 
@@ -628,34 +826,65 @@ adminRoutes.post('/clear-progress', adminMiddleware, (req, res) => {
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         
-        db.run('DELETE FROM dialogue_progress WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
-            if (err) {
-                db.run('ROLLBACK');
-                return res.status(500).json({ message: 'Ошибка удаления прогресса' });
-            }
-            
-            db.run('DELETE FROM user_choices WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+        if (frequency === 'all') {
+            db.run('DELETE FROM dialogue_progress WHERE user_id = ?', [userId], (err) => {
                 if (err) {
                     db.run('ROLLBACK');
-                    return res.status(500).json({ message: 'Ошибка удаления выборов' });
+                    return res.status(500).json({ message: 'Ошибка удаления прогресса' });
                 }
                 
-                db.run('DELETE FROM dialogue_repeats WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+                db.run('DELETE FROM user_choices WHERE user_id = ?', [userId], (err) => {
                     if (err) {
                         db.run('ROLLBACK');
-                        return res.status(500).json({ message: 'Ошибка удаления повторов' });
+                        return res.status(500).json({ message: 'Ошибка удаления выборов' });
                     }
                     
-                    db.run('COMMIT', (err) => {
+                    db.run('DELETE FROM dialogue_repeats WHERE user_id = ?', [userId], (err) => {
                         if (err) {
                             db.run('ROLLBACK');
-                            return res.status(500).json({ message: 'Ошибка коммита' });
+                            return res.status(500).json({ message: 'Ошибка удаления повторов' });
                         }
-                        res.json({ message: 'Прохождение очищено' });
+                        
+                        db.run('COMMIT', (err) => {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ message: 'Ошибка коммита' });
+                            }
+                            res.json({ message: 'Все прохождения очищены' });
+                        });
                     });
                 });
             });
-        });
+        } else {
+            db.run('DELETE FROM dialogue_progress WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ message: 'Ошибка удаления прогресса' });
+                }
+                
+                db.run('DELETE FROM user_choices WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ message: 'Ошибка удаления выборов' });
+                    }
+                    
+                    db.run('DELETE FROM dialogue_repeats WHERE user_id = ? AND frequency = ?', [userId, frequency], (err) => {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ message: 'Ошибка удаления повторов' });
+                        }
+                        
+                        db.run('COMMIT', (err) => {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ message: 'Ошибка коммита' });
+                            }
+                            res.json({ message: 'Прохождение очищено' });
+                        });
+                    });
+                });
+            });
+        }
     });
 });
 
@@ -878,7 +1107,11 @@ function formatDialogueForClient(dialogue, characters, conversations, choices) {
             image: c.image,
             voice: c.voice,
             voiceMode: c.voice_mode || 'none',
-            window: c.window
+            window: c.window,
+            portraitScale: c.portrait_scale || 1.0,
+            portraitX: c.portrait_x || 0,
+            portraitY: c.portrait_y || 0,
+            portraitMirror: c.portrait_mirror === 1
         })),
         allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),
         isActive: dialogue.is_active !== 0,
@@ -963,17 +1196,17 @@ app.get('/api/user-settings', (req, res) => {
         return res.status(401).json({ message: 'Не авторизован' });
     }
     
-    db.get('SELECT auto_play_music FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
+    db.get('SELECT auto_play_music, theme FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
         
         if (!settings) {
-            db.run('INSERT INTO user_settings (user_id, auto_play_music) VALUES (?, 1)', [req.session.userId], (err) => {
+            db.run('INSERT INTO user_settings (user_id, auto_play_music, theme) VALUES (?, 1, ?)', [req.session.userId, 'yellow'], (err) => {
                 if (err) Logger.error('Error creating user settings:', err.message);
             });
-            return res.json({ auto_play_music: 1 });
+            return res.json({ auto_play_music: 1, theme: 'yellow' });
         }
         
-        res.json({ auto_play_music: settings.auto_play_music });
+        res.json({ auto_play_music: settings.auto_play_music, theme: settings.theme || 'yellow' });
     });
 });
 
@@ -982,20 +1215,25 @@ app.post('/api/user-settings', (req, res) => {
         return res.status(401).json({ message: 'Не авторизован' });
     }
     
-    const { auto_play_music } = req.body;
+    const { auto_play_music, theme } = req.body;
     
-    if (auto_play_music === undefined) {
-        return res.status(400).json({ message: 'Отсутствует параметр auto_play_music' });
+    if (auto_play_music === undefined && theme === undefined) {
+        return res.status(400).json({ message: 'Отсутствуют параметры' });
     }
     
-    const value = auto_play_music ? 1 : 0;
-    
-    db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music) VALUES (?, ?)', 
-        [req.session.userId, value],
-        function(err) {
-            if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
-            res.json({ success: true, auto_play_music: value });
-        });
+    db.get('SELECT * FROM user_settings WHERE user_id = ?', [req.session.userId], (err, existing) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
+        
+        const newAutoPlay = auto_play_music !== undefined ? (auto_play_music ? 1 : 0) : (existing?.auto_play_music || 1);
+        const newTheme = theme || existing?.theme || 'yellow';
+        
+        db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music, theme) VALUES (?, ?, ?)', 
+            [req.session.userId, newAutoPlay, newTheme],
+            function(err) {
+                if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
+                res.json({ success: true, auto_play_music: newAutoPlay, theme: newTheme });
+            });
+    });
 });
 
 app.use((err, req, res, next) => {

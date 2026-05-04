@@ -185,7 +185,22 @@
                             <select id="character-portrait" class="form-input">
                                 <option value="">Выберите файл...</option>
                             </select>
-                            <div class="portrait-preview" id="portrait-preview"></div>
+                            <div class="portrait-editor" id="portrait-editor">
+                                <div class="portrait-preview-large" id="portrait-preview"></div>
+                                <div class="portrait-controls">
+                                    <div class="portrait-control-row">
+                                        <label>Масштаб:</label>
+                                        <input type="range" id="portrait-scale" min="50" max="300" value="100" step="1">
+                                        <span id="portrait-scale-value">100%</span>
+                                    </div>
+                                    <div class="portrait-control-row">
+                                        <button type="button" id="portrait-mirror-btn" class="btn btn-small">↔ Зеркально</button>
+                                        <button type="button" id="portrait-center-btn" class="btn btn-small">⊕ Центрировать</button>
+                                        <button type="button" id="portrait-reset-btn" class="btn btn-small">↺ Сброс</button>
+                                    </div>
+                                    <div class="portrait-hint">Перетащите изображение для позиционирования</div>
+                                </div>
+                            </div>
                         </div>
                         <div class="upload-section">
                             <input type="file" id="upload-portrait" accept="image/*" class="hidden">

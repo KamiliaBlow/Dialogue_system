@@ -66,6 +66,21 @@ function getAssetUrl(path) {
     return path;
 }
 
+async function loadTheme() {
+    try {
+        const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
+        const data = await response.json();
+        
+        if (data.theme === 'yellow') {
+            document.body.classList.add('theme-yellow');
+        } else {
+            document.body.classList.remove('theme-yellow');
+        }
+    } catch (e) {
+        console.warn('Failed to load theme:', e);
+    }
+}
+
 // Загрузка конкретного диалога из БД
 async function loadDialogueFromDB(frequency) {
     if (!frequency) {
@@ -159,6 +174,9 @@ async function initializePage() {
         if (!games || !games.customGame) {
             throw new Error('Конфигурация не загружена');
         }
+        
+        // Загружаем тему
+        await loadTheme();
         
         // Сбрасываем freqCount на 0 при инициализации
         state.freqCount = 0;
@@ -1319,12 +1337,38 @@ function getCharactersForWindow(windowNum) {
  * @param {number} speakerIndex - Индекс персонажа
  * @param {string} image - Путь к изображению
  */
+function applyPortraitTransforms(element, speakerIndex) {
+    const char = state.currentDialogue && state.currentDialogue.characters 
+        ? state.currentDialogue.characters[speakerIndex] 
+        : null;
+    
+    if (char) {
+        const scale = char.portraitScale || 1.0;
+        const posX = char.portraitX || 0;
+        const posY = char.portraitY || 0;
+        const mirror = char.portraitMirror || false;
+        
+        element.css({
+            'background-size': `${scale * 100}%`,
+            'background-position': `${posX}px ${posY}px`,
+            'transform': mirror ? 'scaleX(-1)' : 'none'
+        });
+    } else {
+        element.css({
+            'background-size': '',
+            'background-position': '',
+            'transform': ''
+        });
+    }
+}
+
 function updateCharacterDisplay(speakerIndex, image) {
     const speakerWindow = getCharacterWindow(speakerIndex);
     
     if (speakerWindow === 1) {
         // Говорящий в окне 1 (слева) - активно
         $('#char-1').css('background-image', `url(${image})`);
+        applyPortraitTransforms($('#char-1'), speakerIndex);
         $('#char-1 .overlay').css('opacity', '0.7');
         
         // Сохраняем портрет для окна 1
@@ -1335,6 +1379,7 @@ function updateCharacterDisplay(speakerIndex, image) {
     } else {
         // Говорящий в окне 2 (справа) - активно
         $('#char-2').css('background-image', `url(${image})`);
+        applyPortraitTransforms($('#char-2'), speakerIndex);
         $('#char-2 .overlay').css('opacity', '0.7');
         
         // Сохраняем портрет для окна 2
@@ -1355,7 +1400,12 @@ function initializeCharacterPortraits() {
     state.lastPortrait.window1 = null;
     state.lastPortrait.window2 = null;
     
-    $('#char-1, #char-2').css('background-image', `url(${staticImage})`);
+    $('#char-1, #char-2').css({
+        'background-image': `url(${staticImage})`,
+        'background-size': '',
+        'background-position': '',
+        'transform': ''
+    });
     $('.overlay').css('opacity', '0.3');
 }
 
@@ -2127,7 +2177,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         }
     }
     
-    $('#text-con').one('click', skipTyping);
+    $('#text-con').one('click.skipTyping', skipTyping);
     
     typing();
 }
@@ -2193,12 +2243,21 @@ async function checkRepeatCountsApiAvailability() {
 }
 
 /**
- * Изменение частоты
+ * Проверка, активен ли диалог в данный момент
  */
-function changeFreq() {
-    debug("Изменение частоты");
-    
+function isDialogueActive() {
+    const isTyping = $('#text-con').hasClass('typing-in-progress');
+    const hasChoices = document.querySelector('.choice-container') !== null;
+    const isDialogInProgress = state.hasStartedDialog && !state.isTransmissionEnded && state.currentDialogue;
+    return isTyping || hasChoices || isDialogInProgress;
+}
+
+/**
+ * Корректная остановка активного диалога
+ */
+function stopActiveDialogue() {  
     $('#text-con').removeClass('typing-in-progress');
+	$('#text-con').off('click.skipTyping');
     
     if (state.currentVoiceline) {
         state.currentVoiceline.pause();
@@ -2210,12 +2269,46 @@ function changeFreq() {
         this.currentTime = 0;
     });
     
-    // Останавливаем любые таймауты
     if (state.typingTimeout) {
         clearTimeout(state.typingTimeout);
+		state.typingTimeout = null;
     }
     
-    // Удаляем контейнер выбора, если он есть
+	$('#text-con').removeClass('choices-active processing-choice');
+    
+    state.hasStartedDialog = false;
+    state.isTransmissionEnded = false;
+    state.isOnLastLine = false;
+    state.currentChoiceId = null;
+    state.currentDialogue = null;
+    state.initialDialogue = null;
+    state.count = 0;
+    state.originalCount = 0;
+    
+    $('#text').text('');
+    $('#c-char').text('');
+    $('#start-transmission').addClass('hidden');
+    $('#repeat-transmission').addClass('hidden');
+    $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
+    $('.overlay').css('opacity', '0.3');
+    
+    debug('Активный диалог остановлен');
+}
+
+/**
+ * Изменение частоты
+ */
+function changeFreq() {
+    debug("Изменение частоты");
+    
+    if (isDialogueActive()) {
+        if (!confirm('Текущая передача будет прервана. Переключить частоту?')) {
+            debug('Переключение частоты отменено пользователем');
+            return;
+        }
+        stopActiveDialogue();
+    }
+	
     const choiceContainer = document.querySelector('.choice-container');
     if (choiceContainer) {
         choiceContainer.remove();
@@ -2314,18 +2407,22 @@ function barSignal() {
     var dBar = true;
 
     function animateBars() {
+        var isYellowTheme = document.body.classList.contains('theme-yellow');
+        var activeColor = isYellowTheme ? '#ff9500' : '#03FB8D';
+        var inactiveColor = isYellowTheme ? '#4a2800' : '#397975';
+        
         if (dBar) {
             signalCount--;
-            $('#bars-con').children().eq(signalCount).css('background-color', '#03FB8D');
+            $('#bars-con').children().eq(signalCount).css('background-color', activeColor);
             if (signalCount === 0) {
                 dBar = false;
             }
         } else {
             signalCount++;
-            $('#bars-con').children().eq(signalCount).css('background-color', '#397975');
+            $('#bars-con').children().eq(signalCount).css('background-color', inactiveColor);
             if (signalCount === barWidth.length) {
                 dBar = true;
-                signalCount = barWidth.length; // Сбросить счетчик
+                signalCount = barWidth.length;
             }
         }
         setTimeout(animateBars, 100);
@@ -3130,14 +3227,14 @@ $(document).ready(function() {
         'text-align': 'center'
     });
     
-    // Стилизуем отключенную кнопку
+    // Стилизуем кнопку Досье (теперь активна)
     $('#dossier-btn').css({
-        'opacity': '0.5',
-        'cursor': 'not-allowed'
+        'opacity': '1',
+        'cursor': 'pointer'
     });
     
-    // Добавляем эффект наведения
-    $('#header-buttons div:not(#dossier-btn)').hover(
+    // Добавляем эффект наведения для всех кнопок
+    $('#header-buttons div').hover(
         function() {
             $(this).css({
                 'background-color': '#03FB8D',
@@ -3172,6 +3269,11 @@ $(document).ready(function() {
     $('#settings-btn').on('click', function() {
         debug('Settings button clicked');
         showSettingsModal();
+    });
+    
+    // Добавляем обработчик события для досье
+    $('#dossier-btn').on('click', function() {
+        window.location.href = 'pilot_profile.html';
     });
     
     function showSettingsModal() {

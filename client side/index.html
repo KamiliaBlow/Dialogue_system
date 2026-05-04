@@ -20,6 +20,9 @@
 </head>
 <body>
 --- <!-- Take this piece out and the whole thing comes crumbling down! -->
+<div class="bg-grid"></div>
+<div class="vignette"></div>
+<div class="scanlines"></div>
 <div id="mCodec">
 	<div id="main-con">
 		<div id="contact_1" class="grid-box codec-col">
@@ -94,6 +97,7 @@
 			<i class="fa fa-caret-right caret" aria-hidden="true"></i>
 		</div>
 	</div>
+</div>
 
 <!-- Кнопка для вызова плеера -->
 <div id="music-float-btn">P</div>
@@ -595,9 +599,10 @@
     document.addEventListener('DOMContentLoaded', () => {
         const assemblyCodeOverlay = document.getElementById('assembly-code-overlay');
         const MAX_CONTAINERS = 3;
-        const MIN_DISTANCE = 100;
+        const CONTAINER_WIDTH = 420;
+        const CONTAINER_HEIGHT = 600;
+        const MIN_GAP = 80;
         
-        // Расширенный словарь для генерации уникального кода
         const codeGenerators = {
             registers: ['EAX', 'EBX', 'ECX', 'EDX', 'ESI', 'EDI', 'ESP', 'EBP'],
             memoryOperations: ['MOV', 'LEA', 'PUSH', 'POP'],
@@ -606,17 +611,14 @@
             comparisonOperations: ['CMP', 'TEST'],
             jumpOperations: ['JMP', 'JE', 'JNE', 'JG', 'JL', 'JZ'],
             
-            // Генератор случайного гекс-значения
             randomHex() {
                 return `0x${Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase()}`;
             },
             
-            // Генерация случайного регистра
             randomRegister() {
                 return this.registers[Math.floor(Math.random() * this.registers.length)];
             },
             
-            // Генерация полной инструкции
             generateInstruction() {
                 const instructionTypes = [
                     () => `${this.memoryOperations[Math.floor(Math.random() * this.memoryOperations.length)]} ${this.randomRegister()}, ${this.randomHex()}`,
@@ -655,39 +657,65 @@
             type();
         }
 
-        function isOverlapping(newContainer, existingContainers) {
+        function rectsOverlap(x1, y1, w1, h1, x2, y2, w2, h2, gap) {
+            return !(x1 + w1 + gap < x2 || x2 + w2 + gap < x1 ||
+                     y1 + h1 + gap < y2 || y2 + h2 + gap < y1);
+        }
+
+        function isOverlappingWithAny(x, y, existingContainers) {
             for (let container of existingContainers) {
-                const rect1 = newContainer.getBoundingClientRect();
-                const rect2 = container.getBoundingClientRect();
-
-                const distance = Math.sqrt(
-                    Math.pow(rect1.left - rect2.left, 2) + 
-                    Math.pow(rect1.top - rect2.top, 2)
-                );
-
-                if (distance < MIN_DISTANCE) {
+                const rect = container.getBoundingClientRect();
+                if (rectsOverlap(x, y, CONTAINER_WIDTH, CONTAINER_HEIGHT,
+                                 rect.left, rect.top, rect.width, rect.height, MIN_GAP)) {
                     return true;
                 }
             }
             return false;
         }
 
+        function findNonOverlappingPosition(existingContainers) {
+            const maxX = Math.max(0, window.innerWidth - CONTAINER_WIDTH);
+            const maxY = Math.max(0, window.innerHeight - CONTAINER_HEIGHT);
+            
+            let bestX = Math.random() * maxX;
+            let bestY = Math.random() * maxY;
+            
+            for (let attempts = 0; attempts < 30; attempts++) {
+                const x = Math.random() * maxX;
+                const y = Math.random() * maxY;
+                
+                if (!isOverlappingWithAny(x, y, existingContainers)) {
+                    return { x, y };
+                }
+                
+                const currentOverlaps = existingContainers.filter(c => {
+                    const r = c.getBoundingClientRect();
+                    return rectsOverlap(bestX, bestY, CONTAINER_WIDTH, CONTAINER_HEIGHT,
+                                        r.left, r.top, r.width, r.height, MIN_GAP);
+                }).length;
+                
+                const newOverlaps = existingContainers.filter(c => {
+                    const r = c.getBoundingClientRect();
+                    return rectsOverlap(x, y, CONTAINER_WIDTH, CONTAINER_HEIGHT,
+                                        r.left, r.top, r.width, r.height, MIN_GAP);
+                }).length;
+                
+                if (newOverlaps < currentOverlaps) {
+                    bestX = x;
+                    bestY = y;
+                }
+            }
+            
+            return { x: bestX, y: bestY };
+        }
+
         function createAssemblyCodeContainer(existingContainers) {
             const container = document.createElement('div');
             container.classList.add('assembly-code-container');
             
-            let attempts = 0;
-            while (attempts < 10) {
-                const maxX = window.innerWidth - 420;
-                const maxY = window.innerHeight - 600;
-                container.style.left = `${Math.random() * maxX}px`;
-                container.style.top = `${Math.random() * maxY}px`;
-
-                if (!isOverlapping(container, existingContainers)) {
-                    break;
-                }
-                attempts++;
-            }
+            const pos = findNonOverlappingPosition(existingContainers);
+            container.style.left = `${pos.x}px`;
+            container.style.top = `${pos.y}px`;
 
             return container;
         }
@@ -706,48 +734,48 @@
         }
 
         function createAndPopulateContainer() {
-			// Удаляем старые контейнеры с проверкой
-			while (assemblyCodeOverlay.children.length >= MAX_CONTAINERS) {
-				const firstChild = assemblyCodeOverlay.firstChild;
-				if (firstChild) {
-					assemblyCodeOverlay.removeChild(firstChild);
-				}
-			}
+            while (assemblyCodeOverlay.children.length >= MAX_CONTAINERS) {
+                const firstChild = assemblyCodeOverlay.firstChild;
+                if (firstChild) {
+                    assemblyCodeOverlay.removeChild(firstChild);
+                }
+            }
 
-			const existingContainers = Array.from(assemblyCodeOverlay.children);
-			const container = createAssemblyCodeContainer(existingContainers);
-			
-			for (let i = 0; i < 6; i++) {
-				addAssemblyCodeLine(container);
-			}
+            const existingContainers = Array.from(assemblyCodeOverlay.children);
+            const container = createAssemblyCodeContainer(existingContainers);
+            
+            for (let i = 0; i < 6; i++) {
+                addAssemblyCodeLine(container);
+            }
 
-			assemblyCodeOverlay.appendChild(container);
+            assemblyCodeOverlay.appendChild(container);
 
-			const interval = setInterval(() => {
-				addAssemblyCodeLine(container);
-				
-				if (Math.random() < 0.05) {
-					clearInterval(interval);
-					// Проверяем, что контейнер все еще является дочерним элементом
-					if (container.parentNode === assemblyCodeOverlay) {
-						assemblyCodeOverlay.removeChild(container);
-					}
-				}
-			}, Math.random() * 1000 + 1000);
-		}
+            const interval = setInterval(() => {
+                addAssemblyCodeLine(container);
+                
+                if (Math.random() < 0.05) {
+                    clearInterval(interval);
+                    if (container.parentNode === assemblyCodeOverlay) {
+                        assemblyCodeOverlay.removeChild(container);
+                    }
+                }
+            }, Math.random() * 1000 + 1000);
+        }
 
-        // Создаем первые контейнеры
         for (let i = 0; i < MAX_CONTAINERS; i++) {
             createAndPopulateContainer();
         }
 
-        // Периодически создаем новые контейнеры
-        setInterval(createAndPopulateContainer, Math.random() * 10000 + 5000);
+        function scheduleNext() {
+            const delay = Math.random() * 10000 + 5000;
+            setTimeout(() => {
+                createAndPopulateContainer();
+                scheduleNext();
+            }, delay);
+        }
+        scheduleNext();
     });
 </script>
-
-</div>
-</div>
 
 <div id="dummy-div">
 </div>

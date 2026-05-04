@@ -205,14 +205,14 @@ const dialogueEditorRoutes = (db, upload) => {
     
 // Создать персонажа
     router.post('/characters', (req, res) => {
-        const { dialogueId, name, image, voice, voiceMode, voiceDuration, window } = req.body;
+        const { dialogueId, name, image, voice, voiceMode, voiceDuration, window, portraitScale, portraitX, portraitY, portraitMirror } = req.body;
         
         if (!dialogueId || !name) {
             return res.status(400).json({ message: 'dialogueId и name обязательны' });
         }
         
-        db.run(`INSERT INTO characters (dialogue_id, name, image, voice, voice_mode, voice_duration, window) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [dialogueId, name, image, voice || '', voiceMode || 'none', voiceDuration || 0, window || 1],
+        db.run(`INSERT INTO characters (dialogue_id, name, image, voice, voice_mode, voice_duration, window, portrait_scale, portrait_x, portrait_y, portrait_mirror) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [dialogueId, name, image, voice || '', voiceMode || 'none', voiceDuration || 0, window || 1, portraitScale || 1.0, portraitX || 0, portraitY || 0, portraitMirror ? 1 : 0],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания персонажа' });
                 res.status(201).json({ message: 'Персонаж создан', characterId: this.lastID });
@@ -221,10 +221,10 @@ const dialogueEditorRoutes = (db, upload) => {
 
     router.put('/characters/:id', (req, res) => {
         const { id } = req.params;
-        const { name, image, voice, voiceMode, voiceDuration, window } = req.body;
+        const { name, image, voice, voiceMode, voiceDuration, window, portraitScale, portraitX, portraitY, portraitMirror } = req.body;
         
-        db.run(`UPDATE characters SET name = ?, image = ?, voice = ?, voice_mode = ?, voice_duration = ?, window = ? WHERE id = ?`,
-            [name, image, voice || '', voiceMode || 'none', voiceDuration, window, id],
+        db.run(`UPDATE characters SET name = ?, image = ?, voice = ?, voice_mode = ?, voice_duration = ?, window = ?, portrait_scale = ?, portrait_x = ?, portrait_y = ?, portrait_mirror = ? WHERE id = ?`,
+            [name, image, voice || '', voiceMode || 'none', voiceDuration, window, portraitScale || 1.0, portraitX || 0, portraitY || 0, portraitMirror ? 1 : 0, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления персонажа' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Персонаж не найден' });

@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AC6 Briefing System</title>
+  <style>
+    @font-face {
+      font-family: 'Orbitron';
+      src: local('Orbitron'), url('./styles/Orbitron-Light.ttf') format('truetype');
+      font-weight: 300;
+      font-style: normal;
+    }
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+    :root {
+      --bg: #050508;
+      --screen-bg: rgba(18, 18, 28, 0.85);
+      --screen-border: rgba(255, 107, 53, 0.35);
+      --screen-glow: rgba(255, 107, 53, 0.15);
+      --text: #d8d8f0;
+      --text-dim: #787895;
+      --accent: #ff6b35;
+      --danger: #ff375f;
+      --success: #00f5a0;
+      --grid-line: rgba(100, 100, 130, 0.12);
+    }
+
+    /* Green Theme */
+    .theme-green {
+      --screen-border: rgba(3, 251, 141, 0.35);
+      --screen-glow: rgba(3, 251, 141, 0.15);
+      --accent: #03FB8D;
+      --success: #00f5a0;
+    }
+
+    .theme-green .bg-grid { display: none; }
+
+    .code-overlay {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; display: none;
+    }
+    .theme-green .code-overlay { display: block; }
+
+    .code-line {
+      font-family: 'Share Tech Mono', monospace; font-size: 14px; color: rgba(3, 251, 141, 0.15);
+      white-space: nowrap; position: absolute; animation: codeScroll 20s linear infinite;
+    }
+    @keyframes codeScroll {
+      0% { transform: translateY(-100%); opacity: 0; }
+      10% { opacity: 1; } 90% { opacity: 1; }
+      100% { transform: translateY(100vh); opacity: 0; }
+    }
+
+    .theme-green .vignette { background: radial-gradient(ellipse at center, transparent 20%, rgba(5,5,8,0.7) 100%); }
+    .theme-green .scanlines { background: repeating-linear-gradient(0deg, transparent 2px, rgba(3, 251, 141, 0.03) 2px, rgba(3, 251, 141, 0.03) 4px); }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* === ФОН === */
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 150px 150px;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(5,5,8,0.95) 100%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent, transparent 2px,
+        rgba(0,0,0,0.2) 2px, rgba(0,0,0,0.2) 4px
+      );
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0.5;
+    }
+
+    /* === ХЕДЕР === */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 75px; /* 🔧 Было 50px → 75px (×1.5) */
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 3rem; /* 🔧 Было 2rem → 3rem (×1.5) */
+      z-index: 100;
+      background: linear-gradient(180deg, rgba(5,5,8,0.9) 0%, transparent 100%);
+    }
+
+    .header-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.65rem; /* 🔧 Было 1.1rem → 1.65rem (×1.5) */
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 6px; /* 🔧 Было 4px → 6px (×1.5) */
+      opacity: 0.8;
+    }
+
+    .header-status {
+      display: flex;
+      gap: 3rem; /* 🔧 Было 2rem → 3rem (×1.5) */
+      font-size: 1.125rem; /* 🔧 Было 0.75rem → 1.125rem (×1.5) */
+      color: var(--text-dim);
+    }
+
+    .header-status span { color: var(--accent); }
+
+    /* === 🔧 ОСНОВНАЯ ОБЛАСТЬ ЭКРАНОВ — УВЕЛИЧЕНО В 1.5 РАЗА === */
+    .screens-container {
+      display: grid;
+      grid-template-columns: 420px 1fr 420px; /* 🔧 Было 280px → 420px (×1.5) */
+      grid-template-rows: auto;
+      gap: 2.25rem; /* 🔧 Было 1.5rem → 2.25rem (×1.5) */
+      padding: 0 3rem; /* 🔧 Было 2rem → 3rem (×1.5) */
+      z-index: 10;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      max-width: 1750px; /* 🔧 Было 1100px → 1650px (×1.5) */
+      align-items: center;
+      justify-items: center;
+    }
+
+    /* === СТИЛЬ ЭКРАНА === */
+    .screen {
+      background: var(--screen-bg);
+      border: 1px solid var(--screen-border);
+      box-shadow: 
+        0 0 30px var(--screen-glow),
+        inset 0 0 60px rgba(0,0,0,0.5);
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(2px);
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(255,107,53,0.03) 0%,
+        transparent 10%,
+        transparent 90%,
+        rgba(255,107,53,0.03) 100%
+      );
+      pointer-events: none;
+    }
+
+    .screen::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent, transparent 2px,
+        rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px
+      );
+      pointer-events: none;
+      opacity: 0.4;
+    }
+
+    .screen-content {
+      position: relative;
+      z-index: 1;
+      padding: 1.5rem; /* 🔧 Было 1rem → 1.5rem (×1.5) */
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    /* === 🔧 ЛЕВЫЕ ЭКРАНЫ — УВЕЛИЧЕНА ВЫСОТА === */
+    .left-screens {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem; /* 🔧 Было 1rem → 1.5rem (×1.5) */
+      width: 100%;
+    }
+
+    .screen-left-top {
+      height: 225px; /* 🔧 Было 150px → 225px (×1.5) */
+      flex-shrink: 0;
+    }
+
+    .screen-left-bottom {
+      height: 420px; /* 🔧 Было 280px → 420px (×1.5) */
+      flex-shrink: 0;
+    }
+
+    /* === 🔧 ЦЕНТРАЛЬНЫЙ ЭКРАН — УВЕЛИЧЕН РАЗМЕР === */
+    .screen-center {
+      height: 720px; /* 🔧 Было 480px → 720px (×1.5) */
+      width: 100%;
+      max-width: 975px; /* 🔧 Было 650px → 975px (×1.5) */
+      border-width: 2px;
+      box-shadow: 
+        0 0 60px var(--screen-glow),
+        inset 0 0 100px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .screen-center .screen-content {
+      padding: 2.25rem; /* 🔧 Было 1.5rem → 2.25rem (×1.5) */
+      display: flex;
+      flex-direction: column;
+    }
+
+    .main-display {
+	  flex: 1;
+	  display: flex;
+	  align-items: center;
+	  justify-content: center;
+	  position: relative;
+	  background: rgba(0,0,0,0.3);
+	  border: 1px solid var(--screen-border);
+	  margin: 0.75rem 0;
+	  
+	  /* 🔧 ИСПРАВЛЕНИЕ: Явное соотношение сторон */
+	  aspect-ratio: 16/9;
+	  width: 100%;                      /* 🔧 Добавлено: ширина на всю доступную область */
+	  min-height: unset;                /* 🔧 Убрано: min-height: 270px мешал пропорциям */
+	  max-height: 100%;                 /* 🔧 Добавлено: не выходить за пределы родителя */
+	}
+
+    .main-display video,
+	.main-display img {
+	  width: 100%;
+	  height: 100%;
+	  object-fit: contain;    /* 🔧 Было: cover → Стало: contain (видео целиком) */
+	  display: block;
+	  background: #000;       /* 🔧 Добавлено: чёрные поля вместо обрезки */
+	}
+
+    .main-display-placeholder {
+      text-align: center;
+      color: var(--text-dim);
+      padding: 1.5rem; /* 🔧 Было 1rem → 1.5rem (×1.5) */
+    }
+
+    .main-display-icon {
+      font-size: 6rem; /* 🔧 Было 4rem → 6rem (×1.5) */
+      color: var(--accent);
+      opacity: 0.6;
+      margin-bottom: 1.2rem; /* 🔧 Было 0.8rem → 1.2rem (×1.5) */
+    }
+
+    /* === 🔧 ПРАВЫЕ ЭКРАНЫ — УВЕЛИЧЕНА ВЫСОТА === */
+    .right-screens {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem; /* 🔧 Было 1rem → 1.5rem (×1.5) */
+      width: 100%;
+    }
+
+    .screen-right-top,
+    .screen-right-middle,
+    .screen-right-bottom {
+      height: 210px; /* 🔧 Было 140px → 210px (×1.5) */
+      flex-shrink: 0;
+      position: relative;
+      padding: 0;
+    }
+
+    .screen-image-container {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .screen-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.75;
+      filter: contrast(1.1) brightness(0.85) saturate(0.9);
+      transition: opacity 0.3s;
+    }
+
+    .screen-image-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(18,18,28,0.7) 0%,
+        rgba(18,18,28,0.3) 40%,
+        transparent 100%
+      );
+      pointer-events: none;
+    }
+
+    .screen-image-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 2;
+      padding: 0.9rem 1.5rem; /* 🔧 Было 0.6rem 1rem → 0.9rem 1.5rem (×1.5) */
+      font-size: 1.05rem; /* 🔧 Было 0.7rem → 1.05rem (×1.5) */
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 3px; /* 🔧 Было 2px → 3px (×1.5) */
+      background: linear-gradient(180deg, rgba(18,18,28,0.9), transparent);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem; /* 🔧 Было 0.5rem → 0.75rem (×1.5) */
+    }
+
+    .screen-image-header::before {
+      content: "◈";
+      font-size: 0.9rem; /* 🔧 Было 0.6rem → 0.9rem (×1.5) */
+    }
+
+    .image-placeholder-content {
+      position: absolute;
+      bottom: 1.5rem; /* 🔧 Было 1rem → 1.5rem (×1.5) */
+      left: 1.5rem; /* 🔧 Было 1rem → 1.5rem (×1.5) */
+      right: 1.5rem; /* 🔧 Было 1rem → 1.5rem (×1.5) */
+      z-index: 2;
+      color: var(--text);
+      font-size: 1.2rem; /* 🔧 Было 0.8rem → 1.2rem (×1.5) */
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+    }
+
+    .image-placeholder-content .sub {
+      font-size: 0.975rem; /* 🔧 Было 0.65rem → 0.975rem (×1.5) */
+      color: var(--text-dim);
+      margin-top: 0.45rem; /* 🔧 Было 0.3rem → 0.45rem (×1.5) */
+      opacity: 0.8;
+    }
+
+    .image-icon {
+      font-size: 3rem; /* 🔧 Было 2rem → 3rem (×1.5) */
+      color: var(--accent);
+      opacity: 0.8;
+      margin-bottom: 0.45rem; /* 🔧 Было 0.3rem → 0.45rem (×1.5) */
+      display: block;
+    }
+
+    /* === ИЗОБРАЖЕНИЯ В ЭКРАНАХ (левые/центральные) === */
+    .image-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, rgba(26,26,37,0.8), rgba(15,15,22,0.95));
+      color: var(--text-dim);
+      font-size: 1.125rem; /* 🔧 Было 0.75rem → 1.125rem (×1.5) */
+      text-align: center;
+    }
+
+    /* === ЭЛЕМЕНТЫ ВНУТРИ ЭКРАНОВ === */
+    .screen-header {
+      font-size: 1.05rem; /* 🔧 Было 0.7rem → 1.05rem (×1.5) */
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 3px; /* 🔧 Было 2px → 3px (×1.5) */
+      padding-bottom: 0.75rem; /* 🔧 Было 0.5rem → 0.75rem (×1.5) */
+      border-bottom: 1px solid var(--screen-border);
+      margin-bottom: 0.75rem; /* 🔧 Было 0.5rem → 0.75rem (×1.5) */
+      opacity: 0.8;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem; /* 🔧 Было 0.5rem → 0.75rem (×1.5) */
+      flex-shrink: 0;
+    }
+
+    .screen-header::before {
+      content: "◈";
+      font-size: 0.9rem; /* 🔧 Было 0.6rem → 0.9rem (×1.5) */
+    }
+
+    /* === УЧАСТНИКИ === */
+    .participant-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem; /* 🔧 Было 0.5rem → 0.75rem (×1.5) */
+      font-size: 1.2rem; /* 🔧 Было 0.8rem → 1.2rem (×1.5) */
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 0.45rem; /* 🔧 Было 0.3rem → 0.45rem (×1.5) */
+    }
+
+    .participant-list::-webkit-scrollbar {
+      width: 6px; /* 🔧 Было 4px → 6px (×1.5) */
+    }
+    .participant-list::-webkit-scrollbar-track {
+      background: rgba(255,107,53,0.1);
+    }
+    .participant-list::-webkit-scrollbar-thumb {
+      background: var(--accent);
+      border-radius: 3px; /* 🔧 Было 2px → 3px (×1.5) */
+    }
+
+    .participant-item {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem; /* 🔧 Было 0.6rem → 0.9rem (×1.5) */
+      padding: 0.6rem 0.9rem; /* 🔧 Было 0.4rem 0.6rem → 0.6rem 0.9rem (×1.5) */
+      border-left: 3px solid transparent; /* 🔧 Было 2px → 3px (×1.5) */
+      opacity: 0.5;
+      transition: opacity 0.2s, border-left-color 0.2s;
+      pointer-events: none;
+    }
+
+    .participant-item.active {
+      opacity: 1;
+      border-left-color: var(--accent);
+      background: rgba(255,107,53,0.08);
+    }
+
+    .participant-item.speaking {
+      animation: speakPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes speakPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0.3); }
+      50% { box-shadow: 0 0 0 15px rgba(255,107,53,0); } /* 🔧 Было 10px → 15px (×1.5) */
+    }
+
+    .participant-avatar {
+      width: 48px; /* 🔧 Было 32px → 48px (×1.5) */
+      height: 48px; /* 🔧 Было 32px → 48px (×1.5) */
+      aspect-ratio: 1/1;
+      border: 1.5px solid var(--accent); /* 🔧 Было 1px → 1.5px (×1.5) */
+      border-radius: 3px; /* 🔧 Было 2px → 3px (×1.5) */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem; /* 🔧 Было 0.7rem → 1.05rem (×1.5) */
+      flex-shrink: 0;
+      background: rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+
+    .participant-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .participant-avatar .initials {
+      color: var(--accent);
+      opacity: 0.9;
+      font-weight: bold;
+    }
+
+    .participant-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .participant-name {
+      color: var(--text);
+      font-weight: bold;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .participant-role {
+      color: var(--text-dim);
+      font-size: 1.05rem; /* 🔧 Было 0.7rem → 1.05rem (×1.5) */
+    }
+
+    .data-display {
+      font-size: 0.9rem; /* 🔧 Было 0.75rem → 1.125rem (×1.5) */
+      color: var(--text-dim);
+      line-height: 2.7; /* 🔧 Было 1.8 → 2.7 (×1.5) */
+      flex: 1;
+    }
+
+    .data-display .val {
+      color: var(--accent);
+      font-weight: bold;
+    }
+
+    .target-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem; /* 🔧 Было 0.3rem → 0.45rem (×1.5) */
+      font-size: 1.05rem; /* 🔧 Было 0.7rem → 1.05rem (×1.5) */
+    }
+
+    .target-item {
+      padding: 0.45rem 0.75rem; /* 🔧 Было 0.3rem 0.5rem → 0.45rem 0.75rem (×1.5) */
+      background: rgba(255,107,53,0.05);
+      border-left: 3px solid var(--accent); /* 🔧 Было 2px → 3px (×1.5) */
+    }
+
+    /* === СУБТИТРЫ ВНИЗУ === */
+    .subtitles {
+      position: fixed;
+      bottom: 180px; /* 🔧 Было 120px → 180px (×1.5) */
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 100;
+      max-width: 60%;
+    }
+
+    .speaker-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.125rem; /* 🔧 Было 0.75rem → 1.125rem (×1.5) */
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 4.5px; /* 🔧 Было 3px → 4.5px (×1.5) */
+      margin-bottom: 0.45rem; /* 🔧 Было 0.3rem → 0.45rem (×1.5) */
+      opacity: 0.9;
+    }
+
+    .subtitle-text {
+      font-size: 1.425rem; /* 🔧 Было 0.95rem → 1.425rem (×1.5) */
+      color: var(--text);
+      text-shadow: 0 0 15px rgba(0,0,0,0.8); /* 🔧 Было 10px → 15px (×1.5) */
+      line-height: 2.25; /* 🔧 Было 1.5 → 2.25 (×1.5) */
+      opacity: 0;
+      animation: subtitleFade 0.5s forwards;
+    }
+
+    @keyframes subtitleFade {
+      to { opacity: 1; }
+    }
+
+    /* === НИЖНЯЯ ПАНЕЛЬ УПРАВЛЕНИЯ === */
+    .control-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 120px; /* 🔧 Было 80px → 120px (×1.5) */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2.25rem; /* 🔧 Было 1.5rem → 2.25rem (×1.5) */
+      z-index: 100;
+      background: linear-gradient(0deg, rgba(5,5,8,0.95) 0%, transparent 100%);
+    }
+
+    .btn {
+      padding: 0.9rem 2.7rem; /* 🔧 Было 0.6rem 1.8rem → 0.9rem 2.7rem (×1.5) */
+      background: transparent;
+      border: 1.5px solid var(--accent); /* 🔧 Было 1px → 1.5px (×1.5) */
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 1.275rem; /* 🔧 Было 0.85rem → 1.275rem (×1.5) */
+      text-transform: uppercase;
+      letter-spacing: 3px; /* 🔧 Было 2px → 3px (×1.5) */
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: -1;
+    }
+
+    .btn:hover {
+      color: var(--bg);
+      box-shadow: 0 0 37.5px var(--screen-glow); /* 🔧 Было 25px → 37.5px (×1.5) */
+    }
+
+    .btn:hover::before { opacity: 1; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .btn-primary::before { background: var(--success); }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 37.5px rgba(0,245,160,0.3); /* 🔧 Было 25px → 37.5px (×1.5) */
+    }
+
+    /* === СИСТЕМНЫЕ МОДУЛИ (плавающие) === */
+    #sysModulesContainer {
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .sys-module {
+      position: fixed;
+      background: var(--screen-bg);
+      border: 1px solid var(--screen-border);
+      padding: 0.75rem 1.05rem; /* 🔧 Было 0.5rem 0.7rem → 0.75rem 1.05rem (×1.5) */
+      min-width: 240px; /* 🔧 Было 160px → 240px (×1.5) */
+      max-width: 330px; /* 🔧 Было 220px → 330px (×1.5) */
+      z-index: 3;
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.9);
+      box-shadow: 0 0 45px var(--screen-glow); /* 🔧 Было 30px → 45px (×1.5) */
+    }
+
+    .sys-module.active { animation: moduleOpen 0.4s ease-out forwards; }
+    .sys-module.closing { animation: moduleClose 0.35s ease-in forwards; }
+
+    @keyframes moduleOpen {
+      0% { opacity: 0; transform: scale(0.9) translateY(10px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    @keyframes moduleClose {
+      0% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0.92); }
+    }
+
+    .sys-module-line {
+      font-size: 0.975rem; /* 🔧 Было 0.65rem → 0.975rem (×1.5) */
+      color: var(--text-dim);
+      padding: 0.225rem 0; /* 🔧 Было 0.15rem → 0.225rem (×1.5) */
+      opacity: 0;
+      white-space: nowrap;
+    }
+
+    .sys-module-line.show {
+      animation: lineAppear 0.25s ease-out forwards;
+    }
+
+    @keyframes lineAppear {
+      to { opacity: 1; }
+    }
+
+    .sys-module-line .val { color: var(--accent); font-weight: bold; }
+
+    /* === ИСКАЖЁННЫЙ ТЕКСТ ПО КРАЯМ === */
+    .edge-text {
+      position: fixed;
+      top: 75px; /* 🔧 Было 50px → 75px (×1.5) */
+      bottom: 120px; /* 🔧 Было 80px → 120px (×1.5) */
+      width: 210px; /* 🔧 Было 140px → 210px (×1.5) */
+      pointer-events: none;
+      z-index: 4;
+      font-size: 0.9rem; /* 🔧 Было 0.6rem → 0.9rem (×1.5) */
+      color: var(--text-dim);
+      line-height: 2.4; /* 🔧 Было 1.6 → 2.4 (×1.5) */
+      text-transform: uppercase;
+      overflow: hidden;
+    }
+
+    .edge-text.left {
+      left: 7.5px; /* 🔧 Было 5px → 7.5px (×1.5) */
+      text-align: right;
+      transform: perspective(300px) rotateY(5deg) rotateZ(-2deg); /* 🔧 Было 200px → 300px (×1.5) */
+      transform-origin: right center;
+      filter: blur(0.45px); /* 🔧 Было 0.3px → 0.45px (×1.5) */
+    }
+
+    .edge-text.right {
+      right: 7.5px; /* 🔧 Было 5px → 7.5px (×1.5) */
+      text-align: left;
+      transform: perspective(300px) rotateY(-5deg) rotateZ(2deg); /* 🔧 Было 200px → 300px (×1.5) */
+      transform-origin: left center;
+      filter: blur(0.45px); /* 🔧 Было 0.3px → 0.45px (×1.5) */
+    }
+
+    .edge-line {
+      position: absolute;
+      white-space: nowrap;
+      opacity: 0;
+      animation: edgeScrollVertical 9s linear infinite; /* 🔧 Было 6s → 9s (×1.5) */
+      width: 100%;
+    }
+
+    .edge-text.left .edge-line { right: 0; }
+    .edge-text.right .edge-line { left: 0; }
+
+    @keyframes edgeScrollVertical {
+      0% { opacity: 0; transform: translateY(-45px) scale(0.9); } /* 🔧 Было -30px → -45px (×1.5) */
+      10% { opacity: 0.8; }
+      90% { opacity: 0.8; }
+      100% { opacity: 0; transform: translateY(45px) scale(0.9); } /* 🔧 Было 30px → 45px (×1.5) */
+    }
+
+    .edge-line .val { color: var(--accent); font-weight: bold; }
+
+    /* === АДАПТИВ === */
+    @media (max-width: 1400px) {
+      .screens-container {
+        grid-template-columns: 390px 1fr 390px;
+        gap: 1.8rem;
+      }
+      .screen-center { max-width: 825px; height: 630px; }
+      .screen-left-top { height: 195px; }
+      .screen-left-bottom { height: 375px; }
+      .screen-right-top, .screen-right-middle, .screen-right-bottom {
+        height: 180px;
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .screens-container {
+        grid-template-columns: 1fr;
+        padding: 0 1.5rem;
+        gap: 1.5rem;
+        position: relative;
+        top: auto;
+        left: auto;
+        transform: none;
+        margin-top: 105px; /* 🔧 Было 70px → 105px (×1.5) */
+        margin-bottom: 150px; /* 🔧 Было 100px → 150px (×1.5) */
+      }
+      .left-screens, .right-screens {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+      .left-screens .screen, .right-screens .screen {
+        flex: 1;
+        min-width: 300px; /* 🔧 Было 200px → 300px (×1.5) */
+      }
+      .screen-center { max-width: 100%; height: 525px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ФОН -->
+  <div class="bg-grid"></div>
+  <div class="code-overlay" id="codeOverlay"></div>
+  <div class="vignette"></div>
+  <div class="scanlines"></div>
+
+  <!-- Контейнер для системных модулей -->
+  <div id="sysModulesContainer"></div>
+
+  <!-- ХЕДЕР -->
+  <header class="header">
+    <div class="header-title">◈ БРИФИНГОВЫЙ ТЕРМИНАЛ</div>
+    <div class="header-status">
+      <a href="pilot_profile.html" style="color:var(--text-dim);text-decoration:none;margin-right:2rem;font-size:0.9rem;">◈ PROFILE</a>
+      <div>LINK: <span>STABLE</span></div>
+      <div>ENCRYPTION: <span>LEVEL Ω</span></div>
+      <div>TIME: <span id="clock">--:--:--</span></div>
+    </div>
+  </header>
+
+  <!-- ОСНОВНАЯ ОБЛАСТЬ ЭКРАНОВ -->
+  <div class="screens-container">
+    <!-- ЛЕВЫЕ ЭКРАНЫ -->
+    <div class="left-screens">
+      <div class="screen screen-left-top">
+        <div class="screen-content">
+          <div class="screen-header">ИСПОЛНИТЕЛЬ</div>
+          <div style="display:flex;align-items:center;gap:1.5rem;height:100%;">
+            <div class="participant-avatar" id="pilotAvatar" style="width:128px;height:128px;">
+              <span class="initials" style="color:var(--accent);opacity:0.9;font-size:2.5rem;">◈</span>
+            </div>
+            <div>
+              <div id="pilotCallsign" style="font-size:1.5rem;color:var(--text);font-weight:bold;">RAVEN</div>
+              <div id="pilotMech" style="font-size:1.05rem;color:var(--text-dim);margin-top:0.3rem;">AC: STEEL HUNTER</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen screen-left-bottom">
+        <div class="screen-content">
+          <div class="screen-header">Участники задания</div>
+          <div class="participant-list" id="participantsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ЦЕНТРАЛЬНЫЙ ЭКРАН -->
+    <div class="screen screen-center">
+      <div class="screen-content">
+        <div class="screen-header">PRIMARY DISPLAY</div>
+        <div class="main-display" id="mainDisplay">
+          <div class="main-display-placeholder">
+            <div class="main-display-icon">▶</div>
+            <div>MISSION PREVIEW STREAM</div>
+            <div style="font-size:1.2rem;margin-top:0.75rem;color:var(--accent);">[ AWAITING TRANSMISSION ]</div>
+          </div>
+        </div>
+        <div class="screen-header" style="margin-top:0.75rem;border-top:1px solid var(--screen-border);border-bottom:none;padding-top:0.75rem;">MISSION DATA</div>
+        <div class="data-display" id="missionData"></div>
+      </div>
+    </div>
+
+    <!-- ПРАВЫЕ ЭКРАНЫ -->
+    <div class="right-screens">
+      <div class="screen screen-right-top">
+        <div class="screen-image-container">
+          <img class="screen-image" src="https://picsum.photos/seed/intel/600/450" alt="Intel Feed">
+          <div class="screen-image-overlay"></div>
+          <div class="screen-image-header">INTEL FEED</div>
+        </div>
+      </div>
+
+      <div class="screen screen-right-middle">
+        <div class="screen-image-container">
+          <img class="screen-image" src="https://picsum.photos/seed/targets/600/450" alt="Targets">
+          <div class="screen-image-overlay"></div>
+          <div class="screen-image-header">TARGETS</div>
+        </div>
+      </div>
+
+      <div class="screen screen-right-bottom">
+        <div class="screen-image-container">
+          <img class="screen-image" src="https://picsum.photos/seed/systems/600/450" alt="System Status">
+          <div class="screen-image-overlay"></div>
+          <div class="screen-image-header">SYSTEM STATUS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- СУБТИТРЫ -->
+  <div class="subtitles">
+    <div class="speaker-name" id="speakerName"></div>
+    <div class="subtitle-text" id="subtitleText"></div>
+  </div>
+
+  <!-- НИЖНЯЯ ПАНЕЛЬ -->
+  <div class="control-bar">
+    <button class="btn" onclick="playBriefing()">▶ ПРОСЛУШАТЬ</button>
+    <button class="btn" onclick="replayBriefing()">⟲ ПОВТОР</button>
+    <button class="btn btn-primary" onclick="confirmMission()">[ ВЫСАДКА ]</button>
+  </div>
+
+  <!-- ИСКАЖЁННЫЙ ТЕКСТ ПО КРАЯМ -->
+  <div class="edge-text left" id="edgeLeft"></div>
+  <div class="edge-text right" id="edgeRight"></div>
+
+  <script>
+    // === КОНФИГУРАЦИЯ ===
+    let API_URL = 'https://' + window.location.hostname + ':3000/api';
+
+    function getAvatarUrl(path) {
+      if (!path) return null;
+      if (path.startsWith('http')) return path;
+      return 'https://' + window.location.hostname + ':3000' + path;
+    }
+
+    // === ДАННЫЕ ===
+    const participants = [
+      { id: 'walter', name: 'WALTER', role: 'Handler', avatar: 'https://picsum.photos/seed/walter/96/96' },
+      { id: 'allmind', name: 'ALLMIND', role: 'AI', avatar: 'https://picsum.photos/seed/allmind/96/96' },
+      { id: 'comms', name: 'COMMS-7', role: 'Intel', avatar: 'https://picsum.photos/seed/comms/96/96' },
+      { id: 'echo', name: 'ECHO-2', role: 'Tactical', avatar: 'https://picsum.photos/seed/echo/96/96' }
+    ];
+
+    const briefingLines = [
+      { s: 'WALTER', t: 'Raven, new contract just came in. High priority.' },
+      { s: 'ALLMIND', t: 'Target: Coral containment facility, Sector 7-G.' },
+      { s: 'COMMS-7', t: 'Satellite confirms heavy Balam presence. PCA forces also detected.' },
+      { s: 'WALTER', t: 'Your objective: extract the sample before the facility goes critical.' },
+      { s: 'ECHO-2', t: 'Thermal scan shows multiple AC signatures. Expect resistance.' },
+      { s: 'ALLMIND', t: 'Recommendation: Loadout optimized for mobility and burst damage.' },
+      { s: 'WALTER', t: 'Time window: 18 minutes. Don\'t make me regret betting on you, Raven.' }
+    ];
+
+    const missionData = [
+      'OPERATION: <span class="val">CORAL EXTRACTION</span>',
+      'ZONE: <span class="val">SECTOR 7-G</span>',
+      'THREAT: <span class="val" style="color:var(--danger);">CRITICAL</span>',
+      'TIME WINDOW: <span class="val">18 MIN</span>'
+    ];
+
+    const edgeData = [
+      'SYS_CHK_OK', 'MEM_0x7F3A', 'THR_92%', 'NAV_LOCK',
+      'CORAL_DENSE', 'EN_LOAD_67%', 'SIG_DET_3', 'RAD_WARN'
+    ];
+
+    let activeModules = [];
+    const MAX_MODULES = 4;
+
+    // === ИНИЦИАЛИЗАЦИЯ ===
+    document.addEventListener('DOMContentLoaded', () => {
+      initClock();
+      initPilotProfile();
+      initParticipants();
+      initMissionData();
+      initEdgeText();
+      startModuleSystem();
+      loadTheme();
+    });
+
+    async function loadTheme() {
+      try {
+        const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
+        const data = await response.json();
+        if (data.theme === 'green') {
+          document.body.classList.add('theme-green');
+          initCodeOverlay();
+        }
+      } catch (e) {
+        console.warn('Failed to load theme:', e);
+      }
+    }
+
+    function initCodeOverlay() {
+      const overlay = document.getElementById('codeOverlay');
+      if (!overlay || overlay.children.length > 0) return;
+      const codePatterns = ['MOV EAX, [EBP+08h]', 'LEA ESI, [EDI+100h]', 'PUSH ECX', 'POP EDX', 'ADD EAX, EBX', 'SUB ECX, 10h', 'INC ESI', 'DEC EDI', 'AND EAX, 0Fh', 'OR EBX, EAX', 'XOR ECX, EDX', 'NOT EAX', 'SHL EAX, 02h', 'SHR EBX, 04h', 'CMP EAX, EBX', 'TEST ECX, EDI', 'JMP 00401000h', 'JE 00401020h', 'JNE 00401040h', 'JG 00401060h', 'PUSHAD', 'POPAD', 'CALL 00401000h', 'RET', 'NOP', 'INT 80h', 'SYSENTER', 'SYSCALL', 'CPUID', 'RDTSC'];
+      for (let i = 0; i < 30; i++) {
+        const line = document.createElement('div');
+        line.className = 'code-line';
+        line.textContent = codePatterns[Math.floor(Math.random() * codePatterns.length)];
+        line.style.left = Math.random() * 100 + '%';
+        line.style.top = (Math.random() * 100 - 20) + '%';
+        line.style.animationDelay = Math.random() * 5 + 's';
+        line.style.animationDuration = (15 + Math.random() * 10) + 's';
+        overlay.appendChild(line);
+      }
+    }
+
+    async function initPilotProfile() {
+      try {
+        const response = await fetch(API_URL + '/pilot-profiles/active', { credentials: 'include' });
+        const data = await response.json();
+        
+        if (data.profile) {
+          const profile = data.profile;
+          
+          document.getElementById('pilotCallsign').textContent = profile.callsign;
+          document.getElementById('pilotMech').textContent = 'AC: ' + profile.mech_name;
+          
+          const avatarEl = document.getElementById('pilotAvatar');
+          if (profile.avatar_path) {
+            avatarEl.innerHTML = `<img src="${getAvatarUrl(profile.avatar_path)}" alt="${profile.callsign}" onerror="this.style.display='none';this.parentElement.innerHTML='<span class=\\'initials\\' style=\\'color:var(--accent);opacity:0.9;font-size:2.5rem;\\'>◈</span>'">`;
+          }
+        }
+      } catch (e) {
+        console.log('Using default pilot profile');
+      }
+    }
+
+    function initClock() {
+      setInterval(() => {
+        document.getElementById('clock').textContent = new Date().toISOString().substr(11,8);
+      }, 1000);
+    }
+
+    function initParticipants() {
+      const list = document.getElementById('participantsList');
+      participants.forEach(p => {
+        const el = document.createElement('div');
+        el.className = 'participant-item';
+        el.id = `p-${p.id}`;
+        const avatarContent = p.avatar 
+          ? `<img src="${p.avatar}" alt="${p.name}" onerror="this.style.display='none'">`
+          : ``;
+        
+        el.innerHTML = `
+          <div class="participant-avatar">${avatarContent}</div>
+          <div class="participant-info">
+            <div class="participant-name">${p.name}</div>
+            <div class="participant-role">${p.role}</div>
+          </div>
+        `;
+        list.appendChild(el);
+      });
+    }
+
+    function highlightParticipant(id) {
+      document.querySelectorAll('.participant-item').forEach(el => {
+        el.classList.remove('active', 'speaking');
+      });
+      const el = document.getElementById(`p-${id}`);
+      if (el) {
+        el.classList.add('active', 'speaking');
+        setTimeout(() => el.classList.remove('speaking'), 2000);
+      }
+    }
+
+    function initMissionData() {
+      const container = document.getElementById('missionData');
+      missionData.forEach(line => {
+        const el = document.createElement('div');
+        el.innerHTML = line;
+        container.appendChild(el);
+      });
+    }
+
+    function initBriefing() {
+      const totalDuration = briefingLines.length * 2500;
+      
+      briefingLines.forEach((line, idx) => {
+        setTimeout(() => {
+          document.getElementById('speakerName').textContent = line.s;
+          document.getElementById('subtitleText').textContent = line.t;
+          document.querySelector('.subtitles').style.display = 'block';
+          const p = participants.find(x => x.name === line.s);
+          if (p) highlightParticipant(p.id);
+        }, idx * 2500);
+      });
+
+      setTimeout(() => {
+        document.querySelector('.subtitles').style.display = 'none';
+      }, totalDuration + 500);
+    }
+
+    function startModuleSystem() {
+      setTimeout(() => spawnModule(), 2000);
+      setInterval(() => {
+        if (activeModules.length < MAX_MODULES) spawnModule();
+      }, 4000 + Math.random() * 2000);
+    }
+
+    function spawnModule() {
+      const container = document.getElementById('sysModulesContainer');
+      const module = document.createElement('div');
+      module.className = 'sys-module active';
+      
+      const x = 10 + Math.random() * 80;
+      const y = 20 + Math.random() * 50;
+      module.style.left = `${x}%`;
+      module.style.top = `${y}%`;
+
+      const lines = [];
+      for (let i = 0; i < 4; i++) {
+        const line = document.createElement('div');
+        line.className = 'sys-module-line';
+        line.innerHTML = `DATA_${i}: <span class="val">${Math.floor(Math.random()*100)}%</span>`;
+        module.appendChild(line);
+        lines.push(line);
+      }
+
+      container.appendChild(module);
+      activeModules.push(module);
+
+      lines.forEach((line, idx) => {
+        setTimeout(() => line.classList.add('show'), 200 + (idx * 100));
+      });
+
+      setTimeout(() => {
+        module.classList.remove('active');
+        module.classList.add('closing');
+        activeModules = activeModules.filter(m => m !== module);
+        setTimeout(() => { if (module.parentNode) module.parentNode.removeChild(module); }, 400);
+      }, 5000 + Math.random() * 3000);
+    }
+
+    function initEdgeText() {
+      const left = document.getElementById('edgeLeft');
+      const right = document.getElementById('edgeRight');
+
+      function fill(container, offset) {
+        for (let i = 0; i < 18; i++) {
+          const el = document.createElement('div');
+          el.className = 'edge-line';
+          el.innerHTML = edgeData[(i + offset) % edgeData.length]
+            .replace(/([A-Z0-9_]+[_:]?\s*)?([0-9.]+%?)/gi, (_, pre, val) => `${pre||''}<span class="val">${val}</span>`);
+          el.style.animationDelay = `${(i * 0.45) + Math.random() * 0.75}s`; /* 🔧 Увеличены задержки */
+          el.style.top = `${(i * 7.5) + Math.random() * 3}%`; /* 🔧 Увеличены отступы */
+          container.appendChild(el);
+        }
+      }
+
+      fill(left, 0);
+      fill(right, 9);
+    }
+
+    function playBriefing() {
+      initBriefing();
+    }
+
+    function replayBriefing() {
+      initBriefing();
+    }
+
+    function toggleFeed() {
+      const display = document.getElementById('mainDisplay');
+      const placeholder = display.querySelector('.main-display-placeholder');
+      const isAwaiting = placeholder?.innerHTML.includes('AWAITING');
+      
+      if (isAwaiting) {
+        display.innerHTML = `
+          <video autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;">
+            <source src="Titanfall 2 RONIN EXECUTION ANIMATIONS [get.gt].mp4" type="video/mp4">
+          </video>
+        `;
+      } else {
+        display.innerHTML = `
+          <div class="main-display-placeholder">
+            <div class="main-display-icon">▶</div>
+            <div>MISSION PREVIEW STREAM</div>
+            <div style="font-size:1.2rem;margin-top:0.75rem;color:var(--accent);">[ AWAITING TRANSMISSION ]</div>
+          </div>
+        `;
+      }
+    }
+
+    function confirmMission() {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = '[ INIT... ]';
+      setTimeout(() => {
+        alert('🚀 DEPLOYMENT SEQUENCE STARTED\n\nGood luck, Raven.');
+        btn.textContent = '[ DEPLOY ]';
+        btn.disabled = false;
+      }, 1500);
+    }
+    
+    function setMainVideo(src) {
+      const display = document.getElementById('mainDisplay');
+      display.innerHTML = `
+        <video autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;">
+          <source src="${src}" type="video/mp4">
+        </video>
+      `;
+    }
+  </script>
+</body>
+</html>

@@ -294,13 +294,76 @@
     gap: 10px;
 }
 
-.portrait-preview {
-    width: 100px;
-    height: 100px;
+.portrait-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.portrait-preview-large {
+    width: 200px;
+    height: 260px;
+    background-color: #000;
+    border: 2px solid var(--primary-border);
     background-size: cover;
     background-position: center;
-    background-color: var(--bg-dark);
-    border: 1px solid var(--primary-border);
+    background-repeat: no-repeat;
+    cursor: grab;
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+}
+
+.portrait-preview-large:active {
+    cursor: grabbing;
+}
+
+.portrait-preview-large.mirrored {
+    transform: scaleX(-1);
+}
+
+.portrait-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 260px;
+}
+
+.portrait-control-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.portrait-control-row label {
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 65px;
+}
+
+.portrait-control-row input[type="range"] {
+    flex: 1;
+    min-width: 60px;
+    accent-color: var(--primary);
+}
+
+.portrait-control-row span {
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 35px;
+}
+
+.portrait-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.portrait-control-row .btn {
+    font-size: 11px;
+    padding: 4px 8px;
 }
 
 .upload-section {

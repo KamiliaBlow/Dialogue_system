@@ -422,7 +422,39 @@ document.getElementById('save-dialogue-btn').addEventListener('click', () => thi
         
         document.getElementById('character-portrait').addEventListener('change', (e) => {
             const preview = document.getElementById('portrait-preview');
-            preview.style.backgroundImage = e.target.value ? `url('${getAssetUrl(e.target.value)}')` : 'none';
+            const bg = e.target.value ? `url('${getAssetUrl(e.target.value)}')` : 'none';
+            this.setPortraitPreview(bg);
+        });
+        
+        document.getElementById('portrait-scale').addEventListener('input', (e) => {
+            const scale = parseInt(e.target.value) / 100;
+            document.getElementById('portrait-scale-value').textContent = `${e.target.value}%`;
+            const preview = document.getElementById('portrait-preview');
+            preview.style.backgroundSize = `${e.target.value}%`;
+            if (this._portraitState) this._portraitState.scale = scale;
+        });
+        
+        document.getElementById('portrait-mirror-btn').addEventListener('click', () => {
+            const preview = document.getElementById('portrait-preview');
+            if (this._portraitState) {
+                this._portraitState.mirror = !this._portraitState.mirror;
+                preview.classList.toggle('mirrored', this._portraitState.mirror);
+            }
+        });
+        
+        document.getElementById('portrait-center-btn').addEventListener('click', () => {
+            const preview = document.getElementById('portrait-preview');
+            if (this._portraitState) {
+                this._portraitState.posX = 0;
+                this._portraitState.posY = 0;
+                preview.style.backgroundPosition = '0px 0px';
+            }
+        });
+        
+        document.getElementById('portrait-reset-btn').addEventListener('click', () => {
+            this.setPortraitPreview(
+                document.getElementById('portrait-preview').style.backgroundImage
+            );
         });
         
         document.getElementById('upload-portrait-btn').addEventListener('click', () => {
@@ -576,8 +608,13 @@ openCharacterModal(id = null) {
                 document.getElementById('character-portrait').value = char.image || '';
                 document.getElementById('character-voice').value = char.voice || '';
                 document.getElementById('character-voice-mode').value = char.voice_mode || 'none';
-                document.getElementById('portrait-preview').style.backgroundImage = 
-                    char.image ? `url('${getAssetUrl(char.image)}')` : 'none';
+                this.setPortraitPreview(
+                    char.image ? `url('${getAssetUrl(char.image)}')` : 'none',
+                    char.portrait_scale || 1.0,
+                    char.portrait_x || 0,
+                    char.portrait_y || 0,
+                    char.portrait_mirror || false
+                );
                 this.updateVoiceModeUI(char.voice_mode || 'none');
             }
         } else {
@@ -587,11 +624,76 @@ openCharacterModal(id = null) {
             document.getElementById('character-portrait').value = '';
             document.getElementById('character-voice').value = '';
             document.getElementById('character-voice-mode').value = 'none';
-            document.getElementById('portrait-preview').style.backgroundImage = 'none';
+            this.setPortraitPreview('none');
             this.updateVoiceModeUI('none');
         }
         
+        this.initPortraitDrag();
         modal.style.display = 'flex';
+    }
+    
+    setPortraitPreview(bgImage, scale = 1.0, posX = 0, posY = 0, mirror = false) {
+        const preview = document.getElementById('portrait-preview');
+        const scaleSlider = document.getElementById('portrait-scale');
+        const scaleValue = document.getElementById('portrait-scale-value');
+        
+        preview.style.backgroundImage = bgImage;
+        preview.style.backgroundSize = `${scale * 100}%`;
+        preview.style.backgroundPosition = `${posX}px ${posY}px`;
+        preview.classList.toggle('mirrored', mirror);
+        
+        scaleSlider.value = Math.round(scale * 100);
+        scaleValue.textContent = `${Math.round(scale * 100)}%`;
+        
+        this._portraitState = { scale, posX, posY, mirror };
+    }
+    
+    initPortraitDrag() {
+        const preview = document.getElementById('portrait-preview');
+        
+        if (this._portraitDragCleanup) {
+            this._portraitDragCleanup();
+        }
+        
+        if (!this._portraitState) {
+            this._portraitState = { scale: 1.0, posX: 0, posY: 0, mirror: false };
+        }
+        
+        let isDragging = false;
+        let startX, startY, startPosX, startPosY;
+        
+        const onMouseDown = (e) => {
+            if (!preview.style.backgroundImage || preview.style.backgroundImage === 'none') return;
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startPosX = this._portraitState.posX;
+            startPosY = this._portraitState.posY;
+            e.preventDefault();
+        };
+        
+        const onMouseMove = (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            this._portraitState.posX = startPosX + dx;
+            this._portraitState.posY = startPosY + dy;
+            preview.style.backgroundPosition = `${this._portraitState.posX}px ${this._portraitState.posY}px`;
+        };
+        
+        const onMouseUp = () => {
+            isDragging = false;
+        };
+        
+        preview.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+        
+        this._portraitDragCleanup = () => {
+            preview.removeEventListener('mousedown', onMouseDown);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
     }
     
     updateVoiceModeUI(mode) {
@@ -687,6 +789,7 @@ async saveCharacter() {
         }
         
         const voicePath = voiceMode === 'typing' ? voice : '';
+        const ps = this._portraitState || { scale: 1.0, posX: 0, posY: 0, mirror: false };
         
         try {
             const url = id 
@@ -694,9 +797,16 @@ async saveCharacter() {
                 : `${API_URL}/editor/characters`;
             const method = id ? 'PUT' : 'POST';
             
+            const portraitData = {
+                portraitScale: ps.scale,
+                portraitX: ps.posX,
+                portraitY: ps.posY,
+                portraitMirror: ps.mirror
+            };
+            
             const body = id 
-                ? { name, image, voice: voicePath, voiceMode, window: parseInt(window) }
-                : { dialogueId: this.state.currentDialogueId, name, image, voice: voicePath, voiceMode, window: parseInt(window) };
+                ? { name, image, voice: voicePath, voiceMode, window: parseInt(window), ...portraitData }
+                : { dialogueId: this.state.currentDialogueId, name, image, voice: voicePath, voiceMode, window: parseInt(window), ...portraitData };
             
             const response = await fetch(url, {
                 method,
@@ -1127,7 +1237,7 @@ async uploadFile(event, type) {
                 select.innerHTML = '<option value="">Выберите файл...</option>' +
                     this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
                 select.value = data.path;
-                document.getElementById('portrait-preview').style.backgroundImage = `url('${getAssetUrl(data.path)}')`;
+                this.setPortraitPreview(`url('${getAssetUrl(data.path)}')`);
             } else if (type === 'sound') {
                 const select = document.getElementById('character-voice');
                 select.innerHTML = '<option value="">Выберите файл...</option>' +

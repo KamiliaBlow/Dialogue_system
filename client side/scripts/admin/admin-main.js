@@ -427,7 +427,8 @@ class AdminApp {
         try {
             const data = await this.api.getFrequencies();
             if (data?.frequencies?.length) {
-                select.innerHTML = data.frequencies.map(f => 
+                select.innerHTML = '<option value="all">Очистить все</option>' +
+                    data.frequencies.map(f => 
                     `<option value="${f.frequency}">${f.frequency}${f.title ? ' - ' + f.title : ''}</option>`
                 ).join('');
             } else {

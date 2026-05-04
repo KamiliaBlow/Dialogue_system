@@ -1,5 +1,5 @@
 const AppConfig = {
-    DEBUG: false,
+	Debug: false,
     API_URL: 'https://REPLACEME:3000/api',
     ASSETS_URL: 'https://REPLACEME:3000/assets',
     ITEMS_PER_PAGE: 10,
