@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Терминал GMS-4521</title>
+    <link href="https://fonts.googleapis.com/css?family=Orbitron:400,500,700" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #03FB8D;
+            --primary-dim: rgba(3, 251, 141, 0.1);
+            --primary-mid: rgba(3, 251, 141, 0.3);
+            --primary-glow: rgba(3, 251, 141, 0.5);
+            --bg-dark: #000;
+            --bg-mid: #001a0d;
+            --bg-light: #003319;
+            --tertiary: #fae127;
+            --text-main: #cccccc;
+            --error: #ff3333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body, html {
+            height: 100%;
+            background-color: var(--bg-dark);
+            color: var(--primary);
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: default;
+        }
+
+        @font-face {
+            font-family: 'TeletactileRus';
+            src: url('styles/TeletactileRus.ttf') format('opentype');
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .radial-light {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background-image: radial-gradient(var(--primary-mid) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            pointer-events: none;
+        }
+
+        .radial-light.visible { opacity: 0.08; }
+
+        #phase-login {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-container {
+            width: 320px;
+            padding: 30px;
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 15px rgba(3, 251, 141, 0.05);
+            background-color: rgba(0, 0, 0, 0.85);
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+            position: relative;
+        }
+
+        .login-container.entering { opacity: 1; transform: scale(1); }
+
+        .login-container.exit-fade { animation: faderExit 0.5s ease forwards; }
+
+        @keyframes faderExit {
+            0% { opacity: 1; transform: scale(1); }
+            30% { opacity: 0.2; transform: scale(0.98); }
+            50% { opacity: 0.8; transform: scale(0.99); }
+            100% { opacity: 0; transform: scale(0.95); }
+        }
+
+        .login-container::before,
+        .login-container::after { content: ''; position: absolute; background: var(--primary); }
+        .login-container::before { top: -1px; left: -1px; width: 20px; height: 2px; }
+        .login-container::after { top: -1px; left: -1px; width: 2px; height: 20px; }
+
+        .corner-br::before,
+        .corner-br::after { content: ''; position: absolute; background: var(--primary); }
+        .corner-br::before { bottom: -1px; right: -1px; width: 20px; height: 2px; }
+        .corner-br::after { bottom: -1px; right: -1px; width: 2px; height: 20px; }
+
+        .login-title {
+            text-align: center;
+            margin-bottom: 25px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            letter-spacing: 0.1em;
+            overflow: hidden;
+            white-space: nowrap;
+            border-right: 3px solid var(--primary);
+            animation: titleBlink 0.75s step-end infinite;
+            text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+        }
+
+        @keyframes titleBlink {
+            from, to { border-color: var(--primary); }
+            50% { border-color: transparent; }
+        }
+
+        .form-group { margin-bottom: 18px; }
+
+        .form-label {
+            display: block; margin-bottom: 5px;
+            font-size: 12px; font-family: 'Orbitron', sans-serif;
+            letter-spacing: 0.05em; color: var(--primary); opacity: 0.8;
+        }
+
+        .form-input {
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 8px 10px;
+            font-family: 'TeletactileRus', monospace;
+            font-size: 14px;
+            box-sizing: border-box;
+            outline: none;
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+
+        .form-input:focus {
+            box-shadow: 0 0 8px var(--primary-mid);
+            border-color: var(--primary);
+        }
+
+        .form-error {
+            color: var(--error); font-size: 11px; margin-top: 4px;
+            display: none; font-family: 'Courier New', monospace;
+        }
+
+        .form-button {
+            width: 100%;
+            background-color: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 10px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 13px;
+            letter-spacing: 0.1em;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .form-button:hover {
+            background-color: var(--primary);
+            color: var(--bg-dark);
+            box-shadow: 0 0 15px var(--primary-mid);
+        }
+
+        .form-button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .switch-form {
+            text-align: center; font-size: 12px; margin-top: 15px;
+            opacity: 0.7; font-family: 'Courier New', monospace;
+        }
+
+        .switch-form a {
+            color: var(--primary); text-decoration: underline;
+            cursor: pointer; margin-left: 5px;
+        }
+
+        .switch-form a:hover { opacity: 1; text-shadow: 0 0 5px var(--primary); }
+
+        #phase-power {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #power-button {
+            font-size: 42px;
+            color: var(--primary);
+            border: 3px solid var(--primary);
+            padding: 20px 40px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 5px var(--primary);
+        }
+
+        #power-button:hover {
+            background-color: var(--primary-dim);
+            box-shadow: 0 0 20px var(--primary-glow);
+            text-shadow: 0 0 10px var(--primary);
+        }
+
+        #phase-logo {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #campaign-logo {
+            max-width: 50%;
+            max-height: 50%;
+            opacity: 0;
+        }
+
+        #campaign-logo.show {
+            animation: logoAppear 2s ease-out forwards;
+        }
+
+        @keyframes logoAppear {
+            0% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+            100% { opacity: 1; transform: scale(1) rotate(360deg); }
+        }
+
+        #campaign-logo.fade {
+            animation: logoFade 1.5s ease forwards;
+        }
+
+        @keyframes logoFade {
+            0% { opacity: 1; transform: scale(1) rotate(360deg); }
+            100% { opacity: 0; transform: scale(1.5) rotate(720deg); }
+        }
+
+        #phase-terminal {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            display: none;
+        }
+
+        .terminal-layout {
+            display: flex;
+            height: 100%;
+        }
+
+        #code-column {
+            width: 40%;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-right: 2px solid var(--primary);
+            overflow: hidden;
+            opacity: 0.5;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--primary);
+            position: relative;
+        }
+
+        #code-scroll {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 300%;
+            will-change: transform;
+        }
+
+        .terminal-line {
+            opacity: 0;
+            transition: opacity 0.05s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-shadow: 0 0 3px var(--primary), 0 0 6px var(--primary);
+        }
+
+        .terminal-line.visible { opacity: 1; }
+
+        #terminal-main {
+            width: 60%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            min-height: 400px;
+        }
+
+        #welcome-message {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            min-height: 1.5em;
+            white-space: nowrap;
+            letter-spacing: 2px;
+            text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+            display: none;
+        }
+
+        #welcome-message span {
+            text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+        }
+
+        .typing-line {
+            width: 30ch;
+            min-height: 1.2em;
+            animation: typing 3s steps(30), cursor-blink 0.7s step-end infinite alternate;
+            white-space: nowrap;
+            overflow: hidden;
+            border-right: 3px solid var(--primary);
+            font-family: monospace;
+            font-size: 2em;
+            box-sizing: content-box;
+            text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+        }
+
+        @keyframes typing { from { width: 0; } to { width: 30ch; } }
+
+        @keyframes cursor-blink {
+            0%, 100% { border-color: var(--primary); opacity: 1; }
+            50% { border-color: transparent; opacity: 0.7; }
+        }
+
+        #status {
+            min-height: 1.5em;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2em;
+            letter-spacing: 2px;
+            text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+        }
+
+        #loading-bar-container {
+            width: 100%;
+            height: 20px;
+            background-color: var(--primary-dim);
+            border: 2px solid var(--primary);
+            margin-top: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #loading-bar {
+            width: 0; height: 100%;
+            background-color: var(--primary);
+            transition: width linear;
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        #loading-bar::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 50px; height: 100%;
+            background: linear-gradient(to right,
+                rgba(3, 251, 141, 0) 0%,
+                rgba(3, 251, 141, 0.3) 50%,
+                rgba(3, 251, 141, 0) 100%);
+            animation: loading-shine 1s infinite linear;
+            will-change: transform;
+        }
+
+        @keyframes loading-shine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(300%); }
+        }
+
+        #phase-menu {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .menu-container {
+            max-width: 600px;
+            width: 100%;
+            padding: 30px;
+            border: 1px solid var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow), inset 0 0 15px rgba(3, 251, 141, 0.05);
+            background-color: rgba(0, 0, 0, 0.85);
+            position: relative;
+        }
+
+        .menu-container::before,
+        .menu-container::after { content: ''; position: absolute; background: var(--primary); }
+        .menu-container::before { top: -1px; left: -1px; width: 20px; height: 2px; }
+        .menu-container::after { top: -1px; left: -1px; width: 2px; height: 20px; }
+
+        .menu-item {
+            display: block;
+            padding: 15px 20px;
+            width: 100%;
+            line-height: 1;
+            font-size: 16px;
+            text-align: center;
+            text-transform: uppercase;
+            font-family: 'Orbitron', sans-serif;
+            color: var(--text-main);
+            white-space: nowrap;
+            cursor: pointer;
+            text-decoration: none;
+            overflow: hidden;
+            opacity: 0;
+            will-change: transform, opacity;
+            border: 1px solid var(--primary-mid);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .menu-item:hover {
+            color: var(--primary);
+            text-shadow: 0 0 8px var(--primary), 0 0 15px var(--primary);
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(3, 251, 141, 0.2), inset 0 0 8px rgba(3, 251, 141, 0.05);
+        }
+
+        .menu-title {
+            text-align: center;
+            margin-bottom: 40px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            letter-spacing: 0.2em;
+            color: #eeeeee;
+            text-shadow: 0 0 5px var(--primary), 0 0 10px var(--primary);
+            position: relative;
+        }
+
+        .menu-title-actual {
+            visibility: hidden;
+        }
+
+        .menu-title-overlay {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            color: #eeeeee;
+        }
+
+        .menu-row {
+            display: flex;
+            flex-direction: row;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .menu-item {
+            display: block;
+            padding: 15px 40px;
+            width: auto;
+            line-height: 1;
+            font-size: 14px;
+            text-align: center;
+            text-transform: uppercase;
+            font-family: 'Orbitron', sans-serif;
+            color: var(--primary);
+            white-space: nowrap;
+            cursor: pointer;
+            text-decoration: none;
+            overflow: hidden;
+            opacity: 0;
+            will-change: transform, opacity;
+            border: 1px solid var(--primary);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out, background-color 0.3s ease, box-shadow 0.3s ease, text-shadow 0.3s ease;
+            letter-spacing: 2px;
+        }
+
+        .menu-item:hover {
+            background-color: var(--primary-dim);
+            box-shadow: 0 0 15px var(--primary-glow);
+            text-shadow: 0 0 8px var(--primary);
+        }
+
+        .menu-item.disabled {
+            color: rgba(3, 251, 141, 0.25);
+            border-color: rgba(3, 251, 141, 0.15);
+            cursor: default;
+            pointer-events: none;
+        }
+
+        #skip-button {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 8px 18px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            opacity: 0.5;
+            z-index: 20;
+            display: none;
+        }
+
+        #skip-button:hover {
+            opacity: 1;
+            background-color: var(--primary-dim);
+            box-shadow: 0 0 10px var(--primary-mid);
+        }
+
+        .transition-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: var(--bg-dark);
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 300ms ease-out;
+            pointer-events: none;
+        }
+
+        .transition-overlay.active { opacity: 1; pointer-events: all; }
+    </style>
+</head>
+<body>
+    <audio id="power-sound" preload="auto">
+        <source src="assets/sounds/intro.mp3" type="audio/mpeg">
+    </audio>
+
+    <svg id="bg-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="radial-light" id="radial-light"></div>
+
+    <div id="phase-login">
+        <div class="login-container corner-br" id="login-box">
+            <div id="loginForm">
+                <h1 class="login-title">ТЕРМИНАЛ GMS-4521</h1>
+                <div class="form-group">
+                    <label class="form-label">ПОЗЫВНОЙ:</label>
+                    <input type="text" id="loginUsername" class="form-input" autocomplete="off">
+                    <div id="loginUsernameError" class="form-error">Введите позывной.</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">КОД ДОСТУПА:</label>
+                    <input type="password" id="loginPassword" class="form-input">
+                    <div id="loginPasswordError" class="form-error">Введите код доступа.</div>
+                </div>
+                <div id="loginError" class="form-error">Неверный позывной или код доступа.</div>
+                <button type="button" id="loginButton" class="form-button">ВОЙТИ</button>
+                <div class="switch-form">
+                    Нет доступа?<a id="showRegister">Зарегистрироваться</a>
+                </div>
+            </div>
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">СОЗДАТЬ ПОЗЫВНОЙ:</label>
+                    <input type="text" id="registerUsername" class="form-input" autocomplete="off">
+                    <div id="registerUsernameError" class="form-error">Введите позывной (мин. 3 символа).</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">СОЗДАТЬ КОД ДОСТУПА:</label>
+                    <input type="password" id="registerPassword" class="form-input">
+                    <div id="registerPasswordError" class="form-error">Введите код доступа (мин. 6 символов).</div>
+                </div>
+                <div id="registerError" class="form-error">Ошибка при регистрации.</div>
+                <button type="button" id="registerButton" class="form-button">ЗАРЕГИСТРИРОВАТЬСЯ</button>
+                <div class="switch-form">
+                    Уже есть доступ?<a id="showLogin">Войти</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="phase-power">
+        <div id="power-button">ВКЛЮЧИТЬ</div>
+    </div>
+
+    <div id="phase-logo">
+        <img id="campaign-logo" src="assets/images/logot.png" alt="Campaign Logo">
+    </div>
+
+    <div id="phase-terminal">
+        <div class="terminal-layout">
+            <div id="code-column">
+                <div id="code-scroll"></div>
+            </div>
+            <div id="terminal-main">
+                <div>
+                    <div id="welcome-message">ДОБРО ПОЖАЛОВАТЬ, <span id="username"></span></div>
+                    <div class="typing-line">ЗАГРУЗКА СИСТЕМЫ КОММУНИКАЦИЙ</div>
+                    <div id="status"></div>
+                    <div id="loading-bar-container">
+                        <div id="loading-bar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="phase-menu">
+        <div class="menu-container corner-br">
+            <div class="menu-title" id="menu-title">
+                <span class="menu-title-actual">ТЕРМИНАЛ GMS-4521</span>
+                <span class="menu-title-overlay" id="menu-title-overlay"></span>
+            </div>
+            <div class="menu-row">
+                <a class="menu-item" data-target="pilot_profile.html">Досье</a>
+                <a class="menu-item" data-target="index.html">Коммуникатор</a>
+                <a class="menu-item disabled">Брифинг</a>
+            </div>
+        </div>
+    </div>
+
+    <div id="skip-button">Пропустить запуск</div>
+    <div class="transition-overlay" id="transition-overlay"></div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        var API_URL = null;
+        var authenticatedUsername = null;
+
+        var sounds = {};
+        var soundUrls = {
+            click: 'assets/sounds/click.mp3',
+            hover: 'assets/sounds/hover.mp3',
+            expand: 'assets/sounds/expand.mp3',
+            deploy: 'assets/sounds/deploy.mp3',
+            start: 'assets/sounds/start.mp3',
+            logo: 'assets/sounds/logo.mp3',
+            fade: 'assets/sounds/fade.mp3',
+            typing: 'assets/sounds/typing.mp3'
+        };
+
+        function initSounds() {
+            Object.keys(soundUrls).forEach(function(name) {
+                sounds[name] = {
+                    play: function() {
+                        try {
+                            var a = new Audio(soundUrls[name]);
+                            a.volume = (name === 'start') ? 0.15 : 0.5;
+                            a.play().catch(function() {});
+                        } catch(e) {}
+                    }
+                };
+            });
+        }
+
+        function sndPlay(name) {
+            if (sounds[name]) sounds[name].play();
+        }
+
+        var el = {
+            bgCanvas: document.getElementById('bg-canvas'),
+            radialLight: document.getElementById('radial-light'),
+            phaseLogin: document.getElementById('phase-login'),
+            phasePower: document.getElementById('phase-power'),
+            phaseLogo: document.getElementById('phase-logo'),
+            phaseTerminal: document.getElementById('phase-terminal'),
+            phaseMenu: document.getElementById('phase-menu'),
+            loginBox: document.getElementById('login-box'),
+            loginForm: document.getElementById('loginForm'),
+            registerForm: document.getElementById('registerForm'),
+            loginButton: document.getElementById('loginButton'),
+            registerButton: document.getElementById('registerButton'),
+            showRegister: document.getElementById('showRegister'),
+            showLogin: document.getElementById('showLogin'),
+            loginUsername: document.getElementById('loginUsername'),
+            loginPassword: document.getElementById('loginPassword'),
+            registerUsername: document.getElementById('registerUsername'),
+            registerPassword: document.getElementById('registerPassword'),
+            loginUsernameError: document.getElementById('loginUsernameError'),
+            loginPasswordError: document.getElementById('loginPasswordError'),
+            loginError: document.getElementById('loginError'),
+            registerUsernameError: document.getElementById('registerUsernameError'),
+            registerPasswordError: document.getElementById('registerPasswordError'),
+            registerError: document.getElementById('registerError'),
+            powerButton: document.getElementById('power-button'),
+            campaignLogo: document.getElementById('campaign-logo'),
+            codeScroll: document.getElementById('code-scroll'),
+            welcomeMessage: document.getElementById('welcome-message'),
+            usernameEl: document.getElementById('username'),
+            statusEl: document.getElementById('status'),
+            loadingBar: document.getElementById('loading-bar'),
+            skipButton: document.getElementById('skip-button'),
+            powerSound: document.getElementById('power-sound'),
+            transitionOverlay: document.getElementById('transition-overlay'),
+            menuTitle: document.getElementById('menu-title')
+        };
+
+        var standbyTimer = null;
+        var w = 0;
+        var h = 0;
+        var backgroundAnimated = false;
+
+        function rand(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function capitalizeName(name) {
+            if (!name) return '';
+            return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        }
+
+        async function loadConfig() {
+            try {
+                var ts = Date.now();
+                var mod = await import('./scripts/config.js?t=' + ts);
+                API_URL = mod.default.API_URL;
+            } catch (e) {
+                console.error('Config load failed:', e);
+                API_URL = window.location.origin + '/api';
+            }
+        }
+
+        function generateCircuitLines(viewW, viewH) {
+            var wScale = viewW / 1000;
+            var hScale = viewH / 600;
+            var isLarge = viewW > 420;
+
+            var originals = [
+                [[31, 80], [45, 98], [478, 98]],
+                [[-10, 136], [567, 136], [597, 96], [867, 96]],
+                [[923, 21], [507, 21], [496, 33], [98, 33], [65, -10]],
+                [[38, 267], [157, 267]],
+                [[1010, 225], [566, 225], [503, 307], [295, 307]],
+                [[88, 340], [362, 340], [372, 354], [854, 354]],
+                [[1010, 368], [908, 368]],
+                [[219, 491], [236, 512], [484, 512]],
+                [[981, 447], [725, 448], [688, 495]],
+                [[855, 536], [618, 535], [579, 485], [-10, 485]],
+                [[71, 448], [104, 405], [292, 405]],
+                [[34, 610], [63, 560], [147, 560], [173, 520]],
+                [[1010, 176], [658, 176]]
+            ];
+
+            if (isLarge) {
+                originals = originals.concat([
+                    [[520, 131], [572, 64]],
+                    [[27, 174], [275, 174], [314, 135]],
+                    [[1010, 207], [561, 207], [528, 251], [312, 251]],
+                    [[971, 243], [615, 243]],
+                    [[146, 400], [490, 400], [624, 226]],
+                    [[851, 498], [600, 498], [585, 479], [-10, 479]]
+                ]);
+            }
+
+            return originals.map(function(line) {
+                return line.map(function(p) { return [p[0] * wScale, p[1] * hScale]; });
+            });
+        }
+
+        function buildBackground() {
+            var svg = el.bgCanvas;
+            w = window.innerWidth;
+            h = window.innerHeight;
+            svg.setAttribute('width', w);
+            svg.setAttribute('height', h);
+            svg.innerHTML = '';
+
+            var ns = 'http://www.w3.org/2000/svg';
+
+            var gridGroup = document.createElementNS(ns, 'g');
+            gridGroup.setAttribute('opacity', '0.35');
+            var lineSpace = 10;
+            var count = Math.ceil(h / lineSpace);
+            for (var i = 0; i < count; i++) {
+                var ln = document.createElementNS(ns, 'line');
+                ln.setAttribute('x1', '0');
+                ln.setAttribute('x2', String(w));
+                ln.setAttribute('y1', String(i * lineSpace));
+                ln.setAttribute('y2', String(i * lineSpace));
+                ln.setAttribute('stroke', '#02161a');
+                ln.setAttribute('stroke-width', '1');
+                gridGroup.appendChild(ln);
+            }
+
+            var dotGroup = document.createElementNS(ns, 'g');
+            dotGroup.setAttribute('opacity', '0');
+            var dotSpacing = 100;
+            var numVertical = Math.floor(w / dotSpacing);
+            for (var vi = 0; vi < numVertical; vi++) {
+                var xPos = rand(vi * dotSpacing, vi * dotSpacing + dotSpacing);
+                var dln = document.createElementNS(ns, 'line');
+                dln.setAttribute('x1', String(xPos));
+                dln.setAttribute('x2', String(xPos));
+                dln.setAttribute('y1', '0');
+                dln.setAttribute('y2', String(h));
+                dln.setAttribute('stroke', '#003319');
+                dln.setAttribute('stroke-width', '1');
+                dln.setAttribute('stroke-dasharray', '3 35');
+                dotGroup.appendChild(dln);
+            }
+            var numHorizontal = Math.floor(h / 200);
+            for (var hi = 0; hi < numHorizontal; hi++) {
+                var yPos = rand(hi * 200, hi * 200 + 200);
+                var hln = document.createElementNS(ns, 'line');
+                hln.setAttribute('x1', '0');
+                hln.setAttribute('x2', String(w));
+                hln.setAttribute('y1', String(yPos));
+                hln.setAttribute('y2', String(yPos));
+                hln.setAttribute('stroke', '#003319');
+                hln.setAttribute('stroke-width', '1');
+                hln.setAttribute('stroke-dasharray', '3 35');
+                dotGroup.appendChild(hln);
+            }
+
+            svg.appendChild(gridGroup);
+            svg.appendChild(dotGroup);
+
+            var circuitGroup = document.createElementNS(ns, 'g');
+            circuitGroup.id = 'circuits';
+            var circuitPaths = generateCircuitLines(w, h);
+            circuitPaths.forEach(function(pts) {
+                var g = document.createElementNS(ns, 'g');
+                var d = pts.map(function(p, pi) { return (pi === 0 ? 'M' : 'L') + p[0] + ',' + p[1]; }).join(' ');
+
+                var mainLine = document.createElementNS(ns, 'path');
+                mainLine.setAttribute('d', d);
+                mainLine.setAttribute('fill', 'none');
+                mainLine.setAttribute('stroke', '#003319');
+                mainLine.setAttribute('stroke-width', '1');
+                mainLine.classList.add('circuit-line');
+                g.appendChild(mainLine);
+
+                var lightLine = document.createElementNS(ns, 'path');
+                lightLine.setAttribute('d', d);
+                lightLine.setAttribute('fill', 'none');
+                lightLine.setAttribute('stroke', '#03FB8D');
+                lightLine.setAttribute('stroke-width', '1');
+                lightLine.setAttribute('opacity', '0');
+                lightLine.classList.add('circuit-light');
+                g.appendChild(lightLine);
+
+                var startDot = document.createElementNS(ns, 'circle');
+                startDot.setAttribute('cx', String(pts[0][0]));
+                startDot.setAttribute('cy', String(pts[0][1]));
+                startDot.setAttribute('r', '3');
+                startDot.setAttribute('fill', '#004d26');
+                startDot.setAttribute('opacity', '0');
+                startDot.classList.add('dot-start');
+                g.appendChild(startDot);
+
+                var endDot = document.createElementNS(ns, 'circle');
+                endDot.setAttribute('cx', String(pts[pts.length - 1][0]));
+                endDot.setAttribute('cy', String(pts[pts.length - 1][1]));
+                endDot.setAttribute('r', '3');
+                endDot.setAttribute('fill', '#004d26');
+                endDot.setAttribute('opacity', '0');
+                endDot.classList.add('dot-end');
+                g.appendChild(endDot);
+
+                circuitGroup.appendChild(g);
+            });
+            svg.appendChild(circuitGroup);
+        }
+
+        function animateBackgroundIn() {
+            backgroundAnimated = true;
+            sndPlay('start');
+
+            var svg = el.bgCanvas;
+            var gridGroup = svg.children[0];
+            var dotGroup = svg.children[1];
+            var duration = Math.min(w, 1000);
+
+            rafAnimate(gridGroup, { opacity: 0.35 }, duration);
+            rafAnimate(dotGroup, { opacity: 0.5 }, duration);
+
+            var dotLines = dotGroup.querySelectorAll('line');
+            for (var i = 0; i < dotLines.length; i++) {
+                rafAnimate(dotLines[i], { strokeDasharray: '3 7' }, duration);
+            }
+
+            el.radialLight.classList.add('visible');
+
+            var circuitGroup = document.getElementById('circuits');
+            if (!circuitGroup) return;
+            var circuits = circuitGroup.querySelectorAll('g');
+            var longestDuration = 0;
+
+            for (var ci = 0; ci < circuits.length; ci++) {
+                var circuit = circuits[ci];
+                var dotStart = circuit.querySelector('.dot-start');
+                var dotEnd = circuit.querySelector('.dot-end');
+                var mainLine = circuit.querySelector('.circuit-line');
+                var lineLength = mainLine.getTotalLength();
+                var circuitDuration = Math.min(lineLength, 2000);
+                if (circuitDuration > longestDuration) longestDuration = circuitDuration;
+                var dotDuration = duration / 10;
+
+                rafAnimate(dotStart, { opacity: 1 }, dotDuration);
+                mainLine.style.strokeDasharray = String(lineLength);
+                mainLine.style.strokeDashoffset = String(lineLength);
+                rafAnimate(mainLine, { strokeDashoffset: 0 }, circuitDuration, dotDuration);
+                rafAnimate(dotEnd, { opacity: 1 }, dotDuration, circuitDuration);
+            }
+
+            clearTimeout(standbyTimer);
+            standbyTimer = setTimeout(function() {
+                startStandbyAnimation();
+            }, longestDuration + 200);
+        }
+
+        function rafAnimate(elem, props, duration, delay) {
+            var startTS = null;
+            var delayMs = delay || 0;
+            var startValues = {};
+            var propKeys = Object.keys(props);
+
+            for (var pi = 0; pi < propKeys.length; pi++) {
+                var key = propKeys[pi];
+                if (key === 'strokeDashoffset') {
+                    startValues[key] = parseFloat(elem.style.strokeDashoffset) || parseFloat(elem.getAttribute('stroke-dashoffset')) || 0;
+                } else if (key === 'strokeDasharray') {
+                    startValues[key] = elem.getAttribute('stroke-dasharray') || elem.style.strokeDasharray || '';
+                } else if (key === 'opacity') {
+                    startValues[key] = parseFloat(elem.getAttribute('opacity') || elem.style.opacity || '0');
+                }
+            }
+
+            function step(ts) {
+                if (!startTS) startTS = ts;
+                var elapsed = ts - startTS;
+                if (elapsed < delayMs) { requestAnimationFrame(step); return; }
+                var progress = Math.min((elapsed - delayMs) / duration, 1);
+                var eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+                for (var i = 0; i < propKeys.length; i++) {
+                    var k = propKeys[i];
+                    var from = startValues[k];
+                    var to = props[k];
+                    if (k === 'strokeDasharray') {
+                        elem.setAttribute('stroke-dasharray', String(to));
+                        elem.style.strokeDasharray = String(to);
+                    } else if (k === 'strokeDashoffset') {
+                        elem.style.strokeDashoffset = String(from + (to - from) * eased);
+                    } else if (k === 'opacity') {
+                        elem.setAttribute('opacity', String(from + (to - from) * eased));
+                    }
+                }
+                if (progress < 1) requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
+        function startStandbyAnimation() {
+            var circuitGroup = document.getElementById('circuits');
+            if (!circuitGroup) return;
+            var lights = circuitGroup.querySelectorAll('.circuit-light');
+            if (!lights.length) return;
+
+            function run() {
+                var count = w > 420 ? rand(2, 4) : rand(1, 2);
+                var longest = 0;
+                for (var i = 0; i < count; i++) {
+                    var path = lights[rand(0, lights.length - 1)];
+                    if (!path || typeof path.getTotalLength !== 'function') continue;
+                    var length = path.getTotalLength();
+                    var circDuration = Math.min(length * 1.5, 2500);
+                    if (circDuration > longest) longest = circDuration;
+                    animateLightPulse(path, length, 20, circDuration, i % 2 === 0 ? 1 : -1);
+                }
+                standbyTimer = setTimeout(run, longest + 300);
+            }
+            run();
+        }
+
+        function animateLightPulse(pathEl, totalLen, pulseSize, duration, direction) {
+            var startTS = null;
+            pathEl.setAttribute('opacity', '1');
+
+            function step(ts) {
+                if (!startTS) startTS = ts;
+                var rawProgress = Math.min((ts - startTS) / duration, 1);
+                var pos = direction < 0 ? totalLen * (1 - rawProgress) : totalLen * rawProgress;
+                pathEl.setAttribute('stroke-dasharray', '0 ' + Math.max(0, pos) + ' ' + pulseSize + ' ' + totalLen);
+                if (rawProgress >= 1) {
+                    pathEl.setAttribute('opacity', '0');
+                    pathEl.removeAttribute('stroke-dasharray');
+                    return;
+                }
+                requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
+        function stopStandbyAnimation() {
+            clearTimeout(standbyTimer);
+            standbyTimer = null;
+            var circuitGroup = document.getElementById('circuits');
+            if (!circuitGroup) return;
+            var lights = circuitGroup.querySelectorAll('.circuit-light');
+            for (var i = 0; i < lights.length; i++) {
+                lights[i].setAttribute('opacity', '0');
+                lights[i].removeAttribute('stroke-dasharray');
+            }
+        }
+
+        function hideAllPhases() {
+            el.phaseLogin.style.display = 'none';
+            el.phasePower.style.display = 'none';
+            el.phaseLogo.style.display = 'none';
+            el.phaseTerminal.style.display = 'none';
+            el.phaseMenu.style.display = 'none';
+            el.skipButton.style.display = 'none';
+        }
+
+        function showLoginPhase() {
+            hideAllPhases();
+            el.phaseLogin.style.display = 'flex';
+            if (!backgroundAnimated) animateBackgroundIn();
+            setTimeout(function() { el.loginBox.classList.add('entering'); }, 200);
+        }
+
+        function showPowerPhase() {
+            hideAllPhases();
+            el.phasePower.style.display = 'flex';
+            el.skipButton.style.display = 'block';
+            if (!backgroundAnimated) animateBackgroundIn();
+        }
+
+        function initLoginEvents() {
+            el.showRegister.addEventListener('click', function() {
+                sndPlay('click');
+                el.loginForm.style.display = 'none';
+                el.registerForm.style.display = 'block';
+                clearAllErrors();
+            });
+            el.showLogin.addEventListener('click', function() {
+                sndPlay('click');
+                el.registerForm.style.display = 'none';
+                el.loginForm.style.display = 'block';
+                clearAllErrors();
+            });
+            el.loginButton.addEventListener('click', function() {
+                sndPlay('click');
+                handleLogin();
+            });
+            el.registerButton.addEventListener('click', function() {
+                sndPlay('click');
+                handleRegister();
+            });
+
+            var inputs = [el.loginUsername, el.loginPassword, el.registerUsername, el.registerPassword];
+            for (var i = 0; i < inputs.length; i++) {
+                inputs[i].addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        if (el.loginForm.style.display !== 'none') handleLogin();
+                        else handleRegister();
+                    }
+                });
+            }
+        }
+
+        function clearAllErrors() {
+            var errors = document.querySelectorAll('.form-error');
+            for (var i = 0; i < errors.length; i++) errors[i].style.display = 'none';
+        }
+
+        async function handleLogin() {
+            var username = el.loginUsername.value.trim();
+            var password = el.loginPassword.value;
+            var hasErr = false;
+
+            if (!username) { el.loginUsernameError.style.display = 'block'; hasErr = true; }
+            else { el.loginUsernameError.style.display = 'none'; }
+            if (!password) { el.loginPasswordError.style.display = 'block'; hasErr = true; }
+            else { el.loginPasswordError.style.display = 'none'; }
+            if (hasErr) return;
+
+            el.loginButton.disabled = true;
+            el.loginButton.textContent = 'ПОДКЛЮЧЕНИЕ...';
+
+            try {
+                var resp = await fetch(API_URL + '/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password }),
+                    credentials: 'include'
+                });
+                var data = await resp.json();
+                if (!resp.ok) {
+                    el.loginError.textContent = data.message || 'Ошибка входа';
+                    el.loginError.style.display = 'block';
+                    el.loginButton.disabled = false;
+                    el.loginButton.textContent = 'ВОЙТИ';
+                    return;
+                }
+                localStorage.setItem('username', data.username);
+                authenticatedUsername = data.username;
+                sndPlay('deploy');
+                sndPlay('fade');
+                el.loginBox.classList.add('exit-fade');
+                setTimeout(function() { showPowerPhase(); }, 500);
+            } catch (err) {
+                console.error('Login error:', err);
+                el.loginError.textContent = 'Проблемы с соединением';
+                el.loginError.style.display = 'block';
+                el.loginButton.disabled = false;
+                el.loginButton.textContent = 'ВОЙТИ';
+            }
+        }
+
+        async function handleRegister() {
+            var username = el.registerUsername.value.trim();
+            var password = el.registerPassword.value;
+            var hasErr = false;
+
+            if (!username || username.length < 3) { el.registerUsernameError.style.display = 'block'; hasErr = true; }
+            else { el.registerUsernameError.style.display = 'none'; }
+            if (!password || password.length < 6) { el.registerPasswordError.style.display = 'block'; hasErr = true; }
+            else { el.registerPasswordError.style.display = 'none'; }
+            if (hasErr) return;
+
+            el.registerButton.disabled = true;
+            el.registerButton.textContent = 'РЕГИСТРАЦИЯ...';
+
+            try {
+                var resp = await fetch(API_URL + '/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password }),
+                    credentials: 'include'
+                });
+                var data = await resp.json();
+                if (!resp.ok) {
+                    el.registerError.textContent = data.message || 'Ошибка регистрации';
+                    el.registerError.style.display = 'block';
+                    el.registerButton.disabled = false;
+                    el.registerButton.textContent = 'ЗАРЕГИСТРИРОВАТЬСЯ';
+                    return;
+                }
+                localStorage.setItem('username', data.username);
+                authenticatedUsername = data.username;
+                sndPlay('deploy');
+                sndPlay('fade');
+                el.loginBox.classList.add('exit-fade');
+                setTimeout(function() { showPowerPhase(); }, 500);
+            } catch (err) {
+                console.error('Register error:', err);
+                el.registerError.textContent = 'Проблемы с соединением';
+                el.registerError.style.display = 'block';
+                el.registerButton.disabled = false;
+                el.registerButton.textContent = 'ЗАРЕГИСТРИРОВАТЬСЯ';
+            }
+        }
+
+        async function checkExistingAuth() {
+            if (!API_URL) await loadConfig();
+            try {
+                var resp = await fetch(API_URL + '/check-auth', { credentials: 'include' });
+                var data = await resp.json();
+                if (data.isAuthenticated) {
+                    authenticatedUsername = data.username;
+                    return true;
+                }
+            } catch (e) {
+                console.error('Auth check error:', e);
+            }
+            return false;
+        }
+
+        function startSplashSequence() {
+            el.usernameEl.textContent = capitalizeName(authenticatedUsername || 'ГОСТЬ');
+
+            hideAllPhases();
+            el.skipButton.style.display = 'block';
+
+            el.phaseLogo.style.display = 'flex';
+
+            var logoStarted = false;
+            function startLogo() {
+                if (logoStarted) return;
+                logoStarted = true;
+                sndPlay('logo');
+                el.campaignLogo.classList.add('show');
+            }
+
+            el.powerSound.addEventListener('playing', startLogo, { once: true });
+            el.powerSound.play().catch(function() {});
+            setTimeout(startLogo, 100);
+
+            setTimeout(function() {
+                el.campaignLogo.classList.add('fade');
+            }, 3000);
+
+            setTimeout(function() {
+                el.phaseLogo.style.display = 'none';
+                sndPlay('deploy');
+                el.phaseTerminal.style.display = 'block';
+                el.welcomeMessage.style.display = 'block';
+
+                initTerminalCodeScroll();
+                typeStatus();
+
+                setTimeout(function() {
+                    fadeOutAudio(el.powerSound, 2000);
+                }, 42000);
+            }, 3500);
+        }
+
+        function showMenuPhase() {
+            sndPlay('fade');
+            hideAllPhases();
+            el.phaseMenu.style.display = 'flex';
+            animateMenuExpand();
+        }
+
+        function animateMenuExpand() {
+            sndPlay('expand');
+
+            var items = el.phaseMenu.querySelectorAll('.menu-item');
+            var overlayEl = document.getElementById('menu-title-overlay');
+            var titleText = 'ТЕРМИНАЛ GMS-4521';
+            var randomChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*<>/\\';
+
+            for (var ti = 0; ti < items.length; ti++) {
+                items[ti].style.opacity = '0';
+                items[ti].style.transform = '';
+                items[ti].style.transition = 'none';
+            }
+
+            var titleDuration = 600;
+            var titleStart = null;
+            var randStr = '';
+            for (var ri = 0; ri < titleText.length; ri++) {
+                randStr += randomChars.charAt(Math.floor(Math.random() * randomChars.length));
+            }
+            overlayEl.textContent = randStr;
+
+            function stepTitle(ts) {
+                if (!titleStart) titleStart = ts;
+                var elapsed = ts - titleStart;
+                var rawProgress = Math.min(elapsed / titleDuration, 1);
+                var revealed = Math.round(rawProgress * titleText.length);
+                var result = titleText.substring(0, revealed);
+                for (var ci = revealed; ci < titleText.length; ci++) {
+                    result += randomChars.charAt(Math.floor(Math.random() * randomChars.length));
+                }
+                overlayEl.textContent = result;
+                if (rawProgress < 1) {
+                    requestAnimationFrame(stepTitle);
+                } else {
+                    overlayEl.textContent = titleText;
+                }
+            }
+            requestAnimationFrame(stepTitle);
+
+            var itemDuration = 300;
+            var staggerDelay = 100;
+
+            for (var li = 0; li < items.length; li++) {
+                (function(item, idx) {
+                    var startY = 30;
+                    item.style.transform = 'translateY(' + startY + 'px)';
+                    item.style.transition = 'none';
+
+                    setTimeout(function() {
+                        requestAnimationFrame(function() {
+                            item.style.transition = 'opacity ' + itemDuration + 'ms ease-out, transform ' + itemDuration + 'ms ease-out, background-color 0.3s ease, box-shadow 0.3s ease, text-shadow 0.3s ease';
+                            item.style.opacity = '1';
+                            item.style.transform = 'translateY(0)';
+                        });
+                    }, staggerDelay * idx);
+                })(items[li], li);
+            }
+        }
+
+        function initTerminalCodeScroll() {
+            var codeGen = new TerminalCodeGenerator();
+            var lineCount = 0;
+            var speed = 2.0;
+            var addRate = 0.5;
+
+            for (var i = 0; i < 100; i++) {
+                var line = document.createElement('div');
+                line.classList.add('terminal-line');
+                line.textContent = String(lineCount).padStart(4, '0') + ': ' + codeGen.generateCodeLine();
+                el.codeScroll.appendChild(line);
+                line.classList.add('visible');
+                lineCount++;
+            }
+
+            function animateScroll() {
+                speed = Math.max(0.3, speed - 0.003);
+                addRate = Math.max(0.08, addRate - 0.003);
+                el.codeScroll.style.transform = 'translateY(-' + (lineCount * speed) + 'px)';
+                if (Math.random() < addRate) {
+                    var newline = document.createElement('div');
+                    newline.classList.add('terminal-line');
+                    newline.textContent = String(lineCount).padStart(4, '0') + ': ' + codeGen.generateCodeLine();
+                    el.codeScroll.appendChild(newline);
+                    requestAnimationFrame(function() { newline.classList.add('visible'); });
+                    lineCount++;
+                    if (el.codeScroll.children.length > 300) {
+                        el.codeScroll.removeChild(el.codeScroll.firstChild);
+                    }
+                }
+                requestAnimationFrame(animateScroll);
+            }
+            animateScroll();
+        }
+
+        var statuses = [
+            'GENERAL MASSIVE SYSTEM INIT',
+            'ИНИЦИАЛИЗАЦИЯ СИСТЕМЫ...',
+            'ПРОВЕРКА КРИПТОЗАЩИТЫ...',
+            'УСТАНОВКА СВЯЗИ...',
+            'СИСТЕМА ГОТОВА'
+        ];
+
+        function typeStatus() {
+            var idx = 0;
+            var barPromise = createLoadingBar();
+
+            function next() {
+                if (idx < statuses.length) {
+                    el.statusEl.textContent = '';
+                    var msg = statuses[idx];
+                    var ci = 0;
+                    function typeChar() {
+                        if (ci < msg.length) {
+                            el.statusEl.textContent += msg[ci];
+                            ci++;
+                            setTimeout(typeChar, 50);
+                        } else {
+                            setTimeout(function() { idx++; next(); }, 10000);
+                        }
+                    }
+                    typeChar();
+                } else {
+                    barPromise.then(function() { showMenuPhase(); });
+                }
+            }
+            next();
+        }
+
+        function createLoadingBar() {
+            var totalDuration = 43000;
+            var stutterPoints = [
+                { at: 0.2, duration: 500 },
+                { at: 0.5, duration: 1000 },
+                { at: 0.75, duration: 700 }
+            ];
+            return new Promise(function(resolve) {
+                var startTime = null;
+                function animate(ts) {
+                    if (!startTime) startTime = ts;
+                    var elapsed = ts - startTime;
+                    var stutter = null;
+                    for (var i = 0; i < stutterPoints.length; i++) {
+                        if (Math.abs((elapsed / totalDuration) - stutterPoints[i].at) < 0.05) {
+                            stutter = stutterPoints[i];
+                            break;
+                        }
+                    }
+                    if (stutter) {
+                        setTimeout(function() { requestAnimationFrame(animate); }, stutter.duration);
+                        return;
+                    }
+                    var progress = Math.min(elapsed / totalDuration, 1);
+                    el.loadingBar.style.width = (progress * 100) + '%';
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(animate);
+            });
+        }
+
+        function fadeOutAudio(audio, dur) {
+            dur = dur || 2000;
+            var origVol = audio.volume;
+            var steps = 20;
+            var stepTime = dur / steps;
+            var dec = origVol / steps;
+            var interval = setInterval(function() {
+                if (audio.volume > dec) {
+                    audio.volume -= dec;
+                } else {
+                    audio.pause();
+                    audio.volume = origVol;
+                    clearInterval(interval);
+                }
+            }, stepTime);
+        }
+
+        function faderExit(elements) {
+            for (var i = 0; i < elements.length; i++) {
+                elements[i].style.transition = 'none';
+            }
+            requestAnimationFrame(function() {
+                for (var i = 0; i < elements.length; i++) {
+                    elements[i].style.transition = 'opacity 83ms ease-out';
+                    elements[i].style.opacity = '0';
+                }
+                setTimeout(function() {
+                    for (var i = 0; i < elements.length; i++) {
+                        elements[i].style.transition = 'opacity 50ms ease-out';
+                        elements[i].style.opacity = '1';
+                    }
+                    setTimeout(function() {
+                        for (var i = 0; i < elements.length; i++) {
+                            elements[i].style.transition = 'opacity 125ms ease-out';
+                            elements[i].style.opacity = '0';
+                        }
+                    }, 50);
+                }, 83);
+            });
+        }
+
+        function smoothTransition(targetUrl) {
+            var url = targetUrl || 'index.html';
+            sndPlay('click');
+            sndPlay('fade');
+
+            fadeOutAudio(el.powerSound, 300);
+
+            var items = el.phaseMenu.querySelectorAll('.menu-item');
+            var title = el.phaseMenu.querySelector('.menu-title');
+            var all = [title];
+            for (var i = 0; i < items.length; i++) all.push(items[i]);
+            faderExit(all);
+
+            setTimeout(function() {
+                el.transitionOverlay.classList.add('active');
+            }, 250);
+
+            setTimeout(function() {
+                window.location.href = url;
+            }, 600);
+        }
+
+        el.powerButton.addEventListener('click', function() {
+            sndPlay('click');
+            el.phasePower.style.display = 'none';
+            startSplashSequence();
+        });
+
+        el.skipButton.addEventListener('click', function() {
+            sndPlay('click');
+            el.powerSound.pause();
+            el.powerSound.currentTime = 0;
+            showMenuPhase();
+        });
+
+        var menuItems = el.phaseMenu.querySelectorAll('.menu-item');
+        for (var mi = 0; mi < menuItems.length; mi++) {
+            menuItems[mi].addEventListener('click', function(e) {
+                e.preventDefault();
+                var target = this.getAttribute('data-target');
+                if (target) smoothTransition(target);
+            });
+            menuItems[mi].addEventListener('mouseenter', function() {
+                sndPlay('hover');
+            });
+        }
+
+        el.loginButton.addEventListener('mouseenter', function() { sndPlay('hover'); });
+        el.registerButton.addEventListener('mouseenter', function() { sndPlay('hover'); });
+        el.showRegister.addEventListener('mouseenter', function() { sndPlay('hover'); });
+        el.showLogin.addEventListener('mouseenter', function() { sndPlay('hover'); });
+        el.powerButton.addEventListener('mouseenter', function() { sndPlay('hover'); });
+        el.skipButton.addEventListener('mouseenter', function() { sndPlay('hover'); });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initSounds();
+            buildBackground();
+            initLoginEvents();
+
+            loadConfig().then(function() {
+                return checkExistingAuth();
+            }).then(function(alreadyAuth) {
+                if (alreadyAuth) {
+                    showPowerPhase();
+                } else {
+                    showLoginPhase();
+                }
+            });
+
+            el.powerSound.load();
+        });
+
+        window.addEventListener('resize', function() {
+            stopStandbyAnimation();
+            buildBackground();
+            if (backgroundAnimated) animateBackgroundIn();
+        });
+
+        function TerminalCodeGenerator() {
+            this.registers = ['EAX', 'EBX', 'ECX', 'EDX', 'ESI', 'EDI', 'ESP', 'EBP'];
+            this.operations = ['MOV', 'PUSH', 'POP', 'ADD', 'SUB', 'XOR', 'AND', 'OR', 'TEST', 'CMP', 'CALL', 'RET'];
+            this.memoryTypes = ['[EAX]', '[EBX+8]', '[ECX]', 'DWORD PTR [EDX]', 'WORD PTR [ESI]'];
+            this.hexValues = ['0x00', '0x01', '0x10', '0x20', '0x40', '0x80', '0xFF', '0xA5'];
+        }
+
+        TerminalCodeGenerator.prototype.generateCodeLine = function() {
+            var op = this.operations[Math.floor(Math.random() * this.operations.length)];
+            var r1 = this.registers[Math.floor(Math.random() * this.registers.length)];
+            var r2 = this.registers[Math.floor(Math.random() * this.registers.length)];
+            var mem = this.memoryTypes[Math.floor(Math.random() * this.memoryTypes.length)];
+            var hex = this.hexValues[Math.floor(Math.random() * this.hexValues.length)];
+            var templates = [
+                op + ' ' + r1 + ', ' + hex,
+                op + ' ' + r1 + ', ' + mem,
+                op + ' ' + r1 + ', ' + r2,
+                op + ' ' + mem + ', ' + hex
+            ];
+            return templates[Math.floor(Math.random() * templates.length)];
+        };
+
+    })();
+    </script>
+</body>
+</html>

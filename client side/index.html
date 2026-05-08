@@ -102,6 +102,9 @@
 <!-- Кнопка для вызова плеера -->
 <div id="music-float-btn">P</div>
 
+<!-- Кнопка перехода в админ-панель -->
+<a id="admin-float-btn" href="admin.html" style="display:none;">A</a>
+
 <!-- Всплывающее окно плеера -->
 <div id="music-popup">
     <audio id="background-music" loop>
@@ -814,6 +817,19 @@
 
 <!-- partial -->
 	<script type="module" src="./scripts/dialogue.js"></script>
+
+	<script type="module">
+		import AppConfig from './scripts/config.js';
+
+		document.addEventListener('DOMContentLoaded', () => {
+			const adminBtn = document.getElementById('admin-float-btn');
+
+			fetch(`${AppConfig.API_URL}/admin/check`, { credentials: 'include' })
+				.then(resp => { if (!resp.ok) throw new Error(); return resp.json(); })
+				.then(data => { if (data.isAdmin) adminBtn.style.display = 'flex'; })
+				.catch(() => {});
+		});
+	</script>
 
 </body>
 </html>

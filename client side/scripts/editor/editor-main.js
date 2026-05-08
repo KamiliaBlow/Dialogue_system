@@ -78,6 +78,14 @@ async init() {
             this.addConversationAfter(afterNode, position);
         });
         
+        this.treeVisualizer.on('nodeAddBefore', (beforeNode) => {
+            this.addConversationBefore(beforeNode);
+        });
+        
+        this.treeVisualizer.on('nodeUnlink', (nodeData) => {
+            this.unlinkConversation(nodeData);
+        });
+        
         this.treeVisualizer.on('connectionCreate', (fromNode, toNode) => {
             this.createChoiceConnection(fromNode, toNode);
         });
@@ -287,6 +295,59 @@ renderDialogueInfo(dialogue) {
         this.openConversationModal(null, branchId);
     }
     
+    addConversationBefore(beforeNode) {
+        if (!beforeNode) return;
+        const branchId = beforeNode.branchId;
+        const targetSortOrder = beforeNode.sortOrder;
+        
+        fetch(`${API_URL}/editor/conversations/shift`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                dialogueId: this.state.currentDialogueId,
+                branchId: branchId,
+                fromSortOrder: targetSortOrder
+            })
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok) {
+                alert(data.message || 'Ошибка сдвига реплик');
+                return;
+            }
+            this.openConversationModal(null, branchId, targetSortOrder);
+        })
+        .catch(err => {
+            console.error('Error adding conversation before:', err);
+            alert('Ошибка создания реплики');
+        });
+    }
+    
+    unlinkConversation(nodeData) {
+        if (!nodeData) return;
+        if (!confirm('Отсоединить реплику? Она будет перемещена в отдельную ветку.')) return;
+        
+        fetch(`${API_URL}/editor/conversations/unlink`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ conversationId: nodeData.conversationId })
+        })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+            if (!ok) {
+                alert(data.message || 'Ошибка отсоединения');
+                return;
+            }
+            this.selectDialogue(this.state.currentDialogueId);
+        })
+        .catch(err => {
+            console.error('Error unlinking conversation:', err);
+            alert('Ошибка отсоединения');
+        });
+    }
+    
     createChoiceConnection(fromNode, toNode) {
         if (fromNode.hasChoice) {
             alert('Нельзя создать связь от реплики с выбором');
@@ -303,8 +364,8 @@ renderDialogueInfo(dialogue) {
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
-                fromConversationId: toNode.conversationId,
-                toConversationId: fromNode.conversationId
+                fromConversationId: fromNode.conversationId,
+                toConversationId: toNode.conversationId
             })
         })
         .then(res => res.json().then(data => ({ ok: res.ok, data })))
@@ -848,8 +909,8 @@ async saveCharacter() {
         }
     }
     
-openConversationModal(id = null, defaultBranch = 'main') {
-        debug('openConversationModal called with id:', id, 'defaultBranch:', defaultBranch);
+openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null) {
+        debug('openConversationModal called with id:', id, 'defaultBranch:', defaultBranch, 'forcedSortOrder:', forcedSortOrder);
         const modal = document.getElementById('conversation-modal');
         
         this.updateCharacterSelects();
@@ -882,11 +943,14 @@ openConversationModal(id = null, defaultBranch = 'main') {
                     document.getElementById('choice-id').value = choices[0].choice_id;
                     this.renderChoiceOptions(choices);
                 } else {
-                    document.getElementById('has-choice').checked = false;
-                    document.getElementById('choice-options-container').classList.add('hidden');
-                    document.getElementById('choice-id').value = '';
-                    document.getElementById('choice-options-list').innerHTML = '';
-                }
+            document.getElementById('has-choice').checked = false;
+            document.getElementById('choice-options-container').classList.add('hidden');
+            document.getElementById('choice-id').value = '';
+            document.getElementById('choice-options-list').innerHTML = '';
+            
+            const sortInput = document.getElementById('conversation-forced-sort');
+            if (sortInput) sortInput.value = forcedSortOrder !== null ? forcedSortOrder : '';
+        }
             } else {
                 console.warn('Conversation not found:', id, 'Available:', this.state.conversations.map(c => c.id));
             }
@@ -993,9 +1057,14 @@ async saveConversation() {
             
             let sortOrder;
             if (!id) {
-                const branchConvs = this.state.conversations.filter(c => c.branch_id === branchId);
-                const maxSortOrder = branchConvs.reduce((max, c) => Math.max(max, c.sort_order || 0), -1);
-                sortOrder = maxSortOrder + 1;
+                const forcedSort = document.getElementById('conversation-forced-sort')?.value;
+                if (forcedSort !== '' && forcedSort !== null && forcedSort !== undefined) {
+                    sortOrder = parseInt(forcedSort);
+                } else {
+                    const branchConvs = this.state.conversations.filter(c => c.branch_id === branchId);
+                    const maxSortOrder = branchConvs.reduce((max, c) => Math.max(max, c.sort_order || 0), -1);
+                    sortOrder = maxSortOrder + 1;
+                }
             } else {
                 const existingConv = this.state.conversations.find(c => String(c.id) === String(id));
                 if (existingConv) {

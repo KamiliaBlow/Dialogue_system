@@ -457,60 +457,96 @@ router.post('/conversations', (req, res) => {
                             
                             const dialogueId = fromConv.dialogue_id;
                             const targetBranch = fromConv.branch_id;
-                            const fromSortOrder = fromConv.sort_order || 0;
                             
-                            db.all(
-                                'SELECT * FROM conversations WHERE dialogue_id = ? AND branch_id = ? AND sort_order > ? ORDER BY sort_order',
-                                [dialogueId, targetBranch, fromSortOrder],
-                                (err, afterConvs) => {
+                            db.get(
+                                'SELECT MAX(sort_order) as maxSort FROM conversations WHERE dialogue_id = ? AND branch_id = ?',
+                                [dialogueId, targetBranch],
+                                (err, row) => {
                                     if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
                                     
-                                    const detachedBranch = `detached_${Date.now()}`;
-                                    let moveDetached = Promise.resolve();
+                                    const newSortOrder = (row.maxSort || 0) + 1;
                                     
-                                    if (afterConvs.length > 0) {
-                                        moveDetached = new Promise((resolve, reject) => {
-                                            db.run(
-                                                'INSERT INTO conversation_branches (dialogue_id, branch_id) VALUES (?, ?)',
-                                                [dialogueId, detachedBranch],
-                                                (err) => {
-                                                    if (err) return reject(err);
-                                                    
-                                                    let moved = 0;
-                                                    afterConvs.forEach((conv, idx) => {
-                                                        db.run(
-                                                            'UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
-                                                            [detachedBranch, idx, conv.id],
-                                                            (err) => {
-                                                                if (err) Logger.error('Error moving conversation:', err);
-                                                                moved++;
-                                                                if (moved === afterConvs.length) resolve();
-                                                            }
-                                                        );
-                                                    });
-                                                    if (afterConvs.length === 0) resolve();
-                                                }
-                                            );
-                                        });
-                                    }
-                                    
-                                    moveDetached.then(() => {
-                                        db.run(
-                                            'UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
-                                            [targetBranch, fromSortOrder + 1, toConversationId],
-                                            (err) => {
-                                                if (err) return res.status(500).json({ message: 'Ошибка создания связи' });
-                                                res.json({ message: 'Связь создана' });
-                                            }
-                                        );
-                                    }).catch(err => {
-                                        Logger.error('Error:', err);
-                                        res.status(500).json({ message: 'Ошибка пересоздания цепочки' });
-                                    });
+                                    db.run(
+                                        'UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
+                                        [targetBranch, newSortOrder, toConversationId],
+                                        (err) => {
+                                            if (err) return res.status(500).json({ message: 'Ошибка создания связи' });
+                                            res.json({ message: 'Связь создана' });
+                                        }
+                                    );
                                 }
                             );
                         });
                     });
+                });
+            });
+        });
+    });
+
+    // Сдвинуть sort_order реплик в ветке (для вставки перед)
+    router.post('/conversations/shift', (req, res) => {
+        const { dialogueId, branchId, fromSortOrder } = req.body;
+        
+        if (!dialogueId || !branchId || fromSortOrder === undefined) {
+            return res.status(400).json({ message: 'dialogueId, branchId и fromSortOrder обязательны' });
+        }
+        
+        db.all(
+            'SELECT id, sort_order FROM conversations WHERE dialogue_id = ? AND branch_id = ? AND sort_order >= ? ORDER BY sort_order DESC',
+            [dialogueId, branchId, fromSortOrder],
+            (err, convs) => {
+                if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+                
+                let done = 0;
+                if (convs.length === 0) return res.json({ message: 'ОК' });
+                
+                convs.forEach(conv => {
+                    db.run('UPDATE conversations SET sort_order = ? WHERE id = ?',
+                        [conv.sort_order + 1, conv.id],
+                        (err) => {
+                            if (err) Logger.error('Error shifting conversation:', err);
+                            done++;
+                            if (done === convs.length) res.json({ message: 'ОК' });
+                        }
+                    );
+                });
+            }
+        );
+    });
+
+    // Отсоединить реплику (перенести в отдельную ветку)
+    router.post('/conversations/unlink', (req, res) => {
+        const { conversationId } = req.body;
+        
+        if (!conversationId) {
+            return res.status(400).json({ message: 'conversationId обязателен' });
+        }
+        
+        db.serialize(() => {
+            db.get('SELECT * FROM conversations WHERE id = ?', [conversationId], (err, conv) => {
+                if (err) return res.status(500).json({ message: 'Ошибка получения реплики' });
+                if (!conv) return res.status(404).json({ message: 'Реплика не найдена' });
+                
+                db.get('SELECT id FROM choice_options WHERE conversation_id = ?', [conversationId], (err, choice) => {
+                    if (err) return res.status(500).json({ message: 'Ошибка проверки выбора' });
+                    if (choice) return res.status(400).json({ message: 'Нельзя отсоединить реплику с выбором' });
+                    
+                    const detachedBranch = `detached_${Date.now()}`;
+                    
+                    db.run('INSERT INTO conversation_branches (dialogue_id, branch_id) VALUES (?, ?)',
+                        [conv.dialogue_id, detachedBranch],
+                        (err) => {
+                            if (err) return res.status(500).json({ message: 'Ошибка создания ветки' });
+                            
+                            db.run('UPDATE conversations SET branch_id = ?, sort_order = 0 WHERE id = ?',
+                                [detachedBranch, conversationId],
+                                (err) => {
+                                    if (err) return res.status(500).json({ message: 'Ошибка отсоединения' });
+                                    res.json({ message: 'Реплика отсоединена', newBranch: detachedBranch });
+                                }
+                            );
+                        }
+                    );
                 });
             });
         });

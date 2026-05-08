@@ -46,7 +46,9 @@ class DialogueTreeVisualizer {
             onNodeEdit: null,
             onNodeDelete: null,
             onConnectionCreate: null,
-            onNodeAdd: null
+            onNodeAdd: null,
+            onNodeAddBefore: null,
+            onNodeUnlink: null
         };
         
         this.contextMenu = null;
@@ -383,6 +385,19 @@ class DialogueTreeVisualizer {
         return branchConvs.length > 0 && branchConvs[0].id === nodeData.conversationId;
     }
     
+    hasIncomingEdges(nodeData) {
+        const isSequential = !this.isFirstInBranch(nodeData);
+        if (isSequential) return true;
+        
+        const nodeBranchId = nodeData.branchId;
+        const hasChoiceIncoming = this.data.choices.some(choice => {
+            return choice.target_branch === nodeBranchId;
+        });
+        if (hasChoiceIncoming) return true;
+        
+        return this.edges.some(edge => edge.target === nodeData.id);
+    }
+    
     handleNodeClick(e, nodeData) {
         if (this.state.connectingFrom && this.state.connectingFrom !== nodeData.id) {
             const fromNode = this.nodes.get(this.state.connectingFrom);
@@ -584,19 +599,37 @@ class DialogueTreeVisualizer {
         this.contextMenu.style.top = `${y}px`;
         
         if (nodeData) {
+            const hasIncoming = this.hasIncomingEdges(nodeData);
+            
             let menuItems = `
                 <div class="tree-context-menu-item" data-action="edit">✏️ Редактировать</div>
             `;
             
             if (!nodeData.hasChoice) {
+                if (!hasIncoming) {
+                    menuItems += `
+                        <div class="tree-context-menu-item" data-action="add-before">⬆️ Добавить перед</div>
+                    `;
+                }
                 menuItems += `
                     <div class="tree-context-menu-item" data-action="add-after">➕ Добавить после</div>
                     <div class="tree-context-menu-item" data-action="connect">🔗 Создать связь</div>
                 `;
             } else {
                 menuItems += `
+                    <div class="tree-context-menu-item disabled" title="Недоступно для реплик с выбором">⬆️ Добавить перед</div>
                     <div class="tree-context-menu-item disabled" title="Недоступно для реплик с выбором">➕ Добавить после</div>
                     <div class="tree-context-menu-item disabled" title="Недоступно для реплик с выбором">🔗 Создать связь</div>
+                `;
+            }
+            
+            if (!nodeData.hasChoice) {
+                menuItems += `
+                    <div class="tree-context-menu-item" data-action="unlink">🔓 Удалить связи</div>
+                `;
+            } else {
+                menuItems += `
+                    <div class="tree-context-menu-item disabled" title="Недоступно для реплик с выбором">🔓 Удалить связи</div>
                 `;
             }
             
@@ -654,9 +687,19 @@ class DialogueTreeVisualizer {
                     this.callbacks.onNodeAdd(nodeData, pos);
                 }
                 break;
+            case 'add-before':
+                if (this.callbacks.onNodeAddBefore) {
+                    this.callbacks.onNodeAddBefore(nodeData);
+                }
+                break;
             case 'connect':
                 if (nodeData) {
                     this.toggleConnecting(nodeData.id);
+                }
+                break;
+            case 'unlink':
+                if (this.callbacks.onNodeUnlink) {
+                    this.callbacks.onNodeUnlink(nodeData);
                 }
                 break;
             case 'delete':

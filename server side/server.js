@@ -1151,10 +1151,20 @@ const convObj = {
         branches[c.branch_id].push(convObj);
     });
     
-    result.conversations = branches['main'] || [];
+    if (branches['main'] && branches['main'].length > 0) {
+        result.conversations = branches['main'];
+    } else {
+        const fallbackBranch = Object.keys(branches).find(b => !b.startsWith('detached_') && branches[b].length > 0)
+            || Object.keys(branches).find(b => branches[b].length > 0);
+        result.conversations = fallbackBranch ? branches[fallbackBranch] : [];
+    }
+    
+    const mainBranchKey = (branches['main'] && branches['main'].length > 0) ? 'main' 
+        : Object.keys(branches).find(b => !b.startsWith('detached_') && branches[b].length > 0)
+        || Object.keys(branches).find(b => branches[b].length > 0);
     
     Object.keys(branches).forEach(branchId => {
-        if (branchId !== 'main') {
+        if (branchId !== mainBranchKey) {
             result[branchId] = {
                 choiceId: branchId,
                 responses: branches[branchId]

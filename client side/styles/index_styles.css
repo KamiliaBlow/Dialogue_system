@@ -499,6 +499,36 @@ body.theme-green {
 			0 0 15px rgba(3, 251, 141, 0.5);
 	}
 
+	#admin-float-btn {
+		position: fixed;
+		bottom: 30px;
+		right: 80px;
+		width: 50px;
+		height: 50px;
+		background-color: black;
+		border: 2px solid #03FB8D;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		cursor: pointer;
+		font-family: 'Courier New', monospace;
+		font-size: 20px;
+		color: #03FB8D;
+		box-shadow: 
+			inset 0 0 5px #03FB8D,
+			0 0 10px rgba(3, 251, 141, 0.3);
+		text-transform: uppercase;
+		text-decoration: none;
+		transition: all 0.3s ease;
+		z-index: 99999;
+	}
+
+	#admin-float-btn:hover {
+		box-shadow: 
+			inset 0 0 10px #03FB8D,
+			0 0 15px rgba(3, 251, 141, 0.5);
+	}
+
 	#music-popup {
 		position: fixed;
 		bottom: 80px;
