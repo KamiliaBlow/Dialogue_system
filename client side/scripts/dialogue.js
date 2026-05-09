@@ -5,6 +5,57 @@ let API_URL = null;
 let ASSETS_URL = null;
 let dialoguesCache = {};
 let assetPreloader = null;
+let audioContext = null;
+const audioBufferCache = new Map();
+
+function getAudioContext() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    return audioContext;
+}
+
+async function loadAudioBuffer(url) {
+    if (audioBufferCache.has(url)) {
+        return audioBufferCache.get(url);
+    }
+    
+    try {
+        const ctx = getAudioContext();
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+        audioBufferCache.set(url, audioBuffer);
+        return audioBuffer;
+    } catch (e) {
+        debug('Failed to load audio buffer:', url, e);
+        return null;
+    }
+}
+
+function playBeep(audioBuffer, volume, playbackRate) {
+    if (!audioBuffer) return;
+    try {
+        const ctx = getAudioContext();
+        const source = ctx.createBufferSource();
+        const gainNode = ctx.createGain();
+        
+        source.buffer = audioBuffer;
+        source.playbackRate.value = playbackRate;
+        gainNode.gain.value = volume;
+        
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        source.start(0);
+    } catch (e) {
+        debug('playBeep error:', e);
+    }
+}
 
 async function loadConfig() {
     try {
@@ -14,6 +65,7 @@ async function loadConfig() {
         
         const preloaderModule = await import('./asset-preloader.js');
         assetPreloader = preloaderModule.default;
+        assetPreloader.setUrlTransformer(getAssetUrl);
         
         const response = await fetch(`${API_URL}/frequencies`, {
             credentials: 'include'
@@ -44,6 +96,7 @@ async function loadConfig() {
             
             const preloaderModule = await import('./asset-preloader.js');
             assetPreloader = preloaderModule.default;
+            assetPreloader.setUrlTransformer(getAssetUrl);
             
             debug('Config loaded from Config.js (fallback)');
         } catch (fallbackError) {
@@ -57,7 +110,7 @@ function getAssetUrl(path) {
     if (!path) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     
-    if (!ASSETS_URL || ASSETS_URL.includes('DOMENHERE') || ASSETS_URL.includes('localhost')) {
+    if (!ASSETS_URL || ASSETS_URL.includes('DOMENHERE') || ASSETS_URL.includes('REPLACEME') || ASSETS_URL.includes('localhost')) {
         return path;
     }
     
@@ -1266,8 +1319,11 @@ function getCharacterVoice(speakerIndex, voicelinePath = null) {
             };
         }
         const fullUrl = getAssetUrl(voicelinePath);
+        const audio = new Audio(fullUrl);
+        audio.preload = 'auto';
+        audio.load();
         return {
-            audio: new Audio(fullUrl),
+            audio: audio,
             mode: 'voiceline'
         };
     }
@@ -1277,20 +1333,18 @@ function getCharacterVoice(speakerIndex, voicelinePath = null) {
         speakerIndex < state.currentDialogue.characters.length) {
         const char = state.currentDialogue.characters[speakerIndex];
         
-        if (char.voice && assetPreloader) {
-            const cachedAudio = assetPreloader.getCachedAudio(char.voice);
-            if (cachedAudio) {
-                return {
-                    audio: cachedAudio,
-                    mode: char.voiceMode || 'typing'
-                };
-            }
+        if (char.voice) {
+            const fullUrl = getAssetUrl(char.voice);
+            const bufferPromise = loadAudioBuffer(fullUrl);
+            return {
+                audio: null,
+                audioBufferPromise: bufferPromise,
+                audioUrl: fullUrl,
+                mode: char.voiceMode || 'typing'
+            };
         }
         
-        return {
-            audio: char.voice ? new Audio(getAssetUrl(char.voice)) : null,
-            mode: char.voiceMode || 'none'
-        };
+        return { audio: null, mode: 'none' };
     }
     return { audio: null, mode: 'none' };
 }
@@ -2051,6 +2105,20 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         state.currentVoiceline = null;
     }
     
+    const voiceBufferPromise = (voiceMode === 'typing') ? voiceData.audioBufferPromise : null;
+    
+    if (voiceMode === 'typing' && voiceBufferPromise) {
+        voiceBufferPromise.then(buffer => {
+            if (buffer) {
+                debug('Voice buffer ready, starting typing');
+            } else {
+                debug('Voice buffer failed, starting typing without sound');
+            }
+            typing(buffer);
+        });
+        return;
+    }
+    
     if (voiceMode === 'voiceline' && voiceAudio) {
         try {
             const voicelineClone = voiceAudio.cloneNode();
@@ -2062,19 +2130,19 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         }
     }
     
-    function typing() {
+    function typing(voiceBuffer) {
         const isGlitchActive = glitchEffects.isActive && getCurrentFrequency() === 'PER';
         
         if (i < segments.length && $('#text-con').hasClass('typing-in-progress')) {
             const pauseBefore = pauses[i];
             if (pauseBefore > 0) {
                 state.typingTimeout = setTimeout(() => {
-                    processCharacter();
+                    processCharacter(voiceBuffer);
                 }, pauseBefore * 1000);
                 return;
             }
             
-            processCharacter();
+            processCharacter(voiceBuffer);
         } else {
             isTyping = false;
             $('#text-con').removeClass('typing-in-progress');
@@ -2083,7 +2151,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         }
     }
     
-    function processCharacter() {
+    function processCharacter(voiceBuffer) {
         currentHtml = buildHtml(segments.slice(0, i + 1));
         element.html(currentHtml);
         
@@ -2116,31 +2184,23 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         
         const punctuationMarks = ['.', ',', '!', '?', ':', ';'];
         
-        if (voiceMode === 'typing' && voiceAudio && currentChar !== ' ' && currentChar !== '\n') {
-            try {
-                const voiceClone = voiceAudio.cloneNode();
-                voiceClone.currentTime = 0;
-                
-                let volume = 0.03;
-                
-                if (punctuationMarks.includes(currentChar)) {
-                    volume = 0.015;
-                } else if (currentChar === currentChar.toUpperCase() && currentChar.match(/[A-ZА-Я]/)) {
-                    volume = 0.045;
-                }
-                
-                if (isGlitchActive && Math.random() < (glitchEffects.intensity / 30)) {
-                    volume *= 2;
-                    voiceClone.playbackRate = 0.7 + Math.random() * 0.8;
-                }
-                
-                voiceClone.volume = volume;
-                voiceClone.playbackRate = 0.9 + Math.random() * 0.3;
-                
-                voiceClone.play().catch(err => console.warn('Не удалось воспроизвести звук:', err));
-            } catch (e) {
-                console.warn('Ошибка при воспроизведении звука:', e);
+        if (voiceMode === 'typing' && voiceBuffer && currentChar !== ' ' && currentChar !== '\n') {
+            let volume = 0.15;
+            
+            if (punctuationMarks.includes(currentChar)) {
+                volume = 0.08;
+            } else if (currentChar === currentChar.toUpperCase() && currentChar.match(/[A-ZА-Я]/)) {
+                volume = 0.22;
             }
+            
+            let rate = 0.98 + Math.random() * 0.04;
+            
+            if (isGlitchActive && Math.random() < (glitchEffects.intensity / 30)) {
+                volume *= 2;
+                rate = 0.7 + Math.random() * 0.8;
+            }
+            
+            playBeep(voiceBuffer, volume, rate);
         }
         
         const prevChar = segments[i - 1] ? segments[i - 1].char : '';
@@ -2160,7 +2220,7 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         
         i++;
         
-        state.typingTimeout = setTimeout(typing, delay);
+        state.typingTimeout = setTimeout(() => typing(voiceBuffer), delay);
     }
     
     function skipTyping() {
@@ -2609,7 +2669,11 @@ $('#text-con').on('click', function(event) {
             return;
         }
         
-        // Если диалог существует, не завершен и не идет печать
+        if (!$('#start-transmission').hasClass('hidden') || !$('#repeat-transmission').hasClass('hidden')) {
+            debug('Кнопка старта/повтора видна, игнорируем клик на текст');
+            return;
+        }
+
         if (state.currentDialogue && !state.isTransmissionEnded && !$(this).hasClass('typing-in-progress')) {
             // Если мы на последней строке диалога, игнорируем клик на текст
             if (state.isOnLastLine) {

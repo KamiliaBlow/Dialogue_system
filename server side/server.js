@@ -1057,6 +1057,51 @@ app.use('/api/admin', adminRoutes);
 const dialogueEditorRoutes = require('./routes/dialogue-editor');
 app.use('/api/editor', requireAuth, requireAdmin(db), dialogueEditorRoutes(db, upload));
 
+app.get('/api/user-settings', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ message: 'Не авторизован' });
+    }
+    
+    db.get('SELECT auto_play_music, theme FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
+        
+        if (!settings) {
+            db.run('INSERT INTO user_settings (user_id, auto_play_music, theme) VALUES (?, 1, ?)', [req.session.userId, 'yellow'], (err) => {
+                if (err) Logger.error('Error creating user settings:', err.message);
+            });
+            return res.json({ auto_play_music: 1, theme: 'yellow' });
+        }
+        
+        res.json({ auto_play_music: settings.auto_play_music, theme: settings.theme || 'yellow' });
+    });
+});
+
+app.post('/api/user-settings', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ message: 'Не авторизован' });
+    }
+    
+    const { auto_play_music, theme } = req.body;
+    
+    if (auto_play_music === undefined && theme === undefined) {
+        return res.status(400).json({ message: 'Отсутствуют параметры' });
+    }
+    
+    db.get('SELECT * FROM user_settings WHERE user_id = ?', [req.session.userId], (err, existing) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
+        
+        const newAutoPlay = auto_play_music !== undefined ? (auto_play_music ? 1 : 0) : (existing?.auto_play_music || 1);
+        const newTheme = theme || existing?.theme || 'yellow';
+        
+        db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music, theme) VALUES (?, ?, ?)', 
+            [req.session.userId, newAutoPlay, newTheme],
+            function(err) {
+                if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
+                res.json({ success: true, auto_play_music: newAutoPlay, theme: newTheme });
+            });
+    });
+});
+
 // API для получения диалогов клиентом
 app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
     const { frequency } = req.params;
@@ -1198,51 +1243,6 @@ app.post('/api/setup/first-admin', (req, res) => {
             if (err) return res.status(500).json({ message: 'Ошибка назначения' });
             res.json({ message: 'Администратор назначен', userId: user.id });
         });
-    });
-});
-
-app.get('/api/user-settings', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).json({ message: 'Не авторизован' });
-    }
-    
-    db.get('SELECT auto_play_music, theme FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
-        if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
-        
-        if (!settings) {
-            db.run('INSERT INTO user_settings (user_id, auto_play_music, theme) VALUES (?, 1, ?)', [req.session.userId, 'yellow'], (err) => {
-                if (err) Logger.error('Error creating user settings:', err.message);
-            });
-            return res.json({ auto_play_music: 1, theme: 'yellow' });
-        }
-        
-        res.json({ auto_play_music: settings.auto_play_music, theme: settings.theme || 'yellow' });
-    });
-});
-
-app.post('/api/user-settings', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).json({ message: 'Не авторизован' });
-    }
-    
-    const { auto_play_music, theme } = req.body;
-    
-    if (auto_play_music === undefined && theme === undefined) {
-        return res.status(400).json({ message: 'Отсутствуют параметры' });
-    }
-    
-    db.get('SELECT * FROM user_settings WHERE user_id = ?', [req.session.userId], (err, existing) => {
-        if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
-        
-        const newAutoPlay = auto_play_music !== undefined ? (auto_play_music ? 1 : 0) : (existing?.auto_play_music || 1);
-        const newTheme = theme || existing?.theme || 'yellow';
-        
-        db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music, theme) VALUES (?, ?, ?)', 
-            [req.session.userId, newAutoPlay, newTheme],
-            function(err) {
-                if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
-                res.json({ success: true, auto_play_music: newAutoPlay, theme: newTheme });
-            });
     });
 });
 

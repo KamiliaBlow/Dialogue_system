@@ -10,12 +10,23 @@ class AssetPreloader {
             images: new Map(),
             audio: new Map()
         };
+        this._urlTransformer = null;
+    }
+
+    setUrlTransformer(fn) {
+        this._urlTransformer = fn;
+    }
+
+    _resolveUrl(url) {
+        if (this._urlTransformer) return this._urlTransformer(url);
+        if (typeof getAssetUrl === 'function') return getAssetUrl(url);
+        return url;
     }
 
     async preloadImage(url) {
         if (!url) return null;
         
-        const fullUrl = typeof getAssetUrl === 'function' ? getAssetUrl(url) : url;
+        const fullUrl = this._resolveUrl(url);
         
         if (this.cache.images.has(fullUrl)) {
             return this.cache.images.get(fullUrl);
@@ -47,7 +58,7 @@ class AssetPreloader {
     async preloadAudio(url) {
         if (!url) return null;
         
-        const fullUrl = typeof getAssetUrl === 'function' ? getAssetUrl(url) : url;
+        const fullUrl = this._resolveUrl(url);
         
         if (this.cache.audio.has(fullUrl)) {
             return this.cache.audio.get(fullUrl);
@@ -89,13 +100,13 @@ class AssetPreloader {
 
     getCachedImage(url) {
         if (!url) return null;
-        const fullUrl = typeof getAssetUrl === 'function' ? getAssetUrl(url) : url;
+        const fullUrl = this._resolveUrl(url);
         return this.cache.images.get(fullUrl) || null;
     }
 
     getCachedAudio(url) {
         if (!url) return null;
-        const fullUrl = typeof getAssetUrl === 'function' ? getAssetUrl(url) : url;
+        const fullUrl = this._resolveUrl(url);
         return this.cache.audio.get(fullUrl) || null;
     }
 
