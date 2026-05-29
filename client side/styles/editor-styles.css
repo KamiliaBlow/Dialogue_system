@@ -288,6 +288,12 @@
     max-width: 700px;
 }
 
+.modal-large .modal-body,
+#conversation-modal .modal-body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
 .file-selector {
     display: flex;
     flex-direction: column;
@@ -580,4 +586,172 @@
     .editor-main {
         max-height: none;
     }
+}
+
+/* NPC Catalog */
+.npc-catalog-header {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: rgba(3, 251, 141, 0.03);
+    border: 1px solid var(--primary-border);
+}
+
+.npc-catalog-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 15px;
+}
+
+.npc-catalog-item {
+    background-color: rgba(3, 251, 141, 0.05);
+    border: 1px solid var(--primary-border);
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.npc-catalog-portrait {
+    width: 50px;
+    height: 50px;
+    background-size: cover;
+    background-position: center;
+    background-color: var(--bg-dark);
+    border: 1px solid var(--primary-border);
+    flex-shrink: 0;
+}
+
+.npc-catalog-info {
+    flex: 1;
+}
+
+.npc-catalog-name {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.npc-relation-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.npc-relation-row label {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 40px;
+}
+
+.npc-relation-row input {
+    width: 70px;
+    font-size: 12px;
+    padding: 3px 6px;
+}
+
+.npc-relation-bar {
+    flex: 1;
+    height: 6px;
+    background-color: #333;
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.npc-relation-bar-fill {
+    height: 100%;
+    position: absolute;
+    top: 0;
+    transition: width 0.3s, left 0.3s, background-color 0.3s;
+}
+
+.npc-relation-value {
+    font-size: 11px;
+    min-width: 30px;
+    text-align: right;
+}
+
+.npc-catalog-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Choice option relation fields */
+.choice-option-main {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.choice-option-relation {
+    margin-top: 6px;
+    border: 1px dashed var(--primary-border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.relation-header {
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    background-color: rgba(3, 251, 141, 0.05);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.relation-header:hover {
+    background-color: rgba(3, 251, 141, 0.1);
+}
+
+.relation-toggle-icon {
+    font-size: 9px;
+    transition: transform 0.2s;
+}
+
+.relation-fields {
+    padding: 10px;
+    display: none;
+}
+
+.choice-option-relation.expanded .relation-fields {
+    display: block;
+}
+
+.choice-option-relation.expanded .relation-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.relation-fields .form-row {
+    margin-bottom: 8px;
+}
+
+.relation-fields .form-group {
+    gap: 4px;
+}
+
+.relation-fields .form-group label {
+    font-size: 11px;
+}
+
+.relation-fields .form-input {
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+.relation-fields .form-help {
+    font-size: 10px;
+}
+
+/* NPC relation indicator in choice options */
+.option-relation-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    background-color: rgba(3, 251, 141, 0.1);
+    border: 1px solid var(--primary-border);
+    border-radius: 3px;
+    white-space: nowrap;
 }

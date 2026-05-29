@@ -84,7 +84,7 @@ async function handleLogin() {
         }
 
         localStorage.setItem('username', data.username);
-        window.location.href = 'splash.html';
+        window.location.href = 'index.html';
     } catch (error) {
         console.error('Ошибка:', error);
         document.getElementById('loginError').textContent = 'Проблемы с соединением';
@@ -131,7 +131,7 @@ async function handleRegister() {
 
         localStorage.setItem('username', data.username);
 
-        window.location.href = 'splash.html';
+        window.location.href = 'index.html';
     } catch (error) {
         console.error('Ошибка:', error);
         document.getElementById('registerError').textContent = 'Проблемы с соединением';
@@ -148,7 +148,7 @@ async function checkExistingAuth() {
         const data = await response.json();
 
         if (data.isAuthenticated) {
-            window.location.href = 'splash.html';
+            window.location.href = 'index.html';
         }
     } catch (error) {
         console.error('Ошибка при проверке авторизации:', error);

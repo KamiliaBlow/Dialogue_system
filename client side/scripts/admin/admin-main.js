@@ -92,7 +92,8 @@ class AdminApp {
                 await this.updateFrequencyTabs();
                 this.loadChoicesData();
             },
-            progress: () => this.loadProgressData()
+            progress: () => this.loadProgressData(),
+            relations: () => this.loadRelationsData()
         };
         
         await loaders[tabName]?.();
@@ -718,6 +719,81 @@ class AdminApp {
             console.error('Logout error:', error);
             alert('Ошибка при выходе');
         }
+    }
+
+    async loadRelationsData() {
+        const loading = document.getElementById('relations-loading');
+        const tbody = document.getElementById('relations-table-body');
+        if (loading) loading.style.display = 'flex';
+        tbody.innerHTML = '';
+
+        try {
+            const response = await fetch(`${AppConfig.API_URL}/editor/global-characters/relations`, {
+                credentials: 'include',
+                headers: AppConfig.CACHE_HEADERS
+            });
+            const data = await response.json();
+
+            if (!data?.relations || data.relations.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных об отношениях</td></tr>';
+            } else {
+                tbody.innerHTML = data.relations.map(r => {
+                    const val = r.relation_value;
+                    let color = '#03FB8D';
+                    if (val < -30) color = '#ff4444';
+                    else if (val < 0) color = '#ff9500';
+                    else if (val > 50) color = '#03FB8D';
+
+                    const barPercent = ((val + 100) / 200) * 100;
+                    const barStyle = val >= 0
+                        ? `left:50%;width:${barPercent - 50}%;background-color:${color};`
+                        : `left:${barPercent}%;width:${50 - barPercent}%;background-color:${color};`;
+
+                    return `<tr data-relation-id="${r.id}">
+                        <td>${r.username}</td>
+                        <td>${r.character_name}</td>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <input type="number" class="form-input rel-edit-input" value="${val}" min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;">
+                                <div style="flex:1;height:6px;background:#333;border-radius:3px;position:relative;overflow:hidden;min-width:60px;">
+                                    <div style="height:100%;position:absolute;top:0;${barStyle}"></div>
+                                </div>
+                                <span style="font-size:11px;min-width:30px;text-align:right;color:${color};">${val > 0 ? '+' : ''}${val}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <button class="btn rel-save-btn" data-id="${r.id}" style="font-size:11px;padding:3px 8px;">Сохранить</button>
+                        </td>
+                    </tr>`;
+                }).join('');
+
+                tbody.querySelectorAll('.rel-save-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const row = btn.closest('tr');
+                        const id = btn.dataset.id;
+                        const input = row.querySelector('.rel-edit-input');
+                        const val = parseInt(input.value) || 0;
+                        try {
+                            await fetch(`${AppConfig.API_URL}/editor/global-characters/relation/${id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ relationValue: val })
+                            });
+                            btn.textContent = 'OK';
+                            setTimeout(() => { btn.textContent = 'Сохранить'; }, 1000);
+                            this.loadRelationsData();
+                        } catch (e) {
+                            alert('Ошибка сохранения');
+                        }
+                    });
+                });
+            }
+        } catch (error) {
+            console.error('Relations error:', error);
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Ошибка загрузки</td></tr>';
+        }
+        if (loading) loading.style.display = 'none';
     }
 }
 

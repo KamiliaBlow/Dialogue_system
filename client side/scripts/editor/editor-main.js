@@ -34,6 +34,7 @@ class DialogueEditor {
             audioPreview: null
         };
         this.treeVisualizer = null;
+        this.globalCharacters = [];
     }
     
 async init() {
@@ -166,6 +167,8 @@ async loadFiles() {
         document.getElementById('editor-placeholder').classList.add('hidden');
         document.getElementById('editor-content').classList.remove('hidden');
         
+        await this.loadGlobalCharacters();
+        
         const response = await fetch(`${API_URL}/editor/dialogues/${id}`, { credentials: 'include' });
         const data = await response.json();
         
@@ -241,9 +244,9 @@ renderDialogueInfo(dialogue) {
         
         container.innerHTML = this.state.characters.map(c => `
             <div class="character-card" data-id="${c.id}">
-                <div class="character-portrait" style="background-image: url('${getAssetUrl(c.image) || getAssetUrl('assets/images/portraits/static.gif')}')"></div>
+                <div class="character-portrait" style="background-image: url('${getAssetUrl(c.gc_image || c.image) || getAssetUrl('assets/images/portraits/static.gif')}')"></div>
                 <div class="character-info">
-                    <div class="character-name">${c.name}</div>
+                    <div class="character-name">${c.gc_name || c.name}</div>
                     <div class="character-window-label">Окно ${c.window}</div>
                 </div>
                 <div class="character-actions">
@@ -391,7 +394,7 @@ renderDialogueInfo(dialogue) {
             const currentValue = select.value;
             select.innerHTML = '<option value="">Выберите персонажа</option>' +
                 this.state.characters.map(c => 
-                    `<option value="${c.id}">${c.name}</option>`
+                    `<option value="${c.id}">${c.gc_name || c.name}</option>`
                 ).join('');
             select.value = currentValue;
         });
@@ -445,7 +448,7 @@ document.getElementById('save-dialogue-btn').addEventListener('click', () => thi
         });
         
         document.getElementById('add-character-btn').addEventListener('click', () => this.openCharacterModal());
-        
+
         document.getElementById('cancel-character').addEventListener('click', () => {
             document.getElementById('character-modal').style.display = 'none';
         });
@@ -480,49 +483,6 @@ document.getElementById('save-dialogue-btn').addEventListener('click', () => thi
         });
         
         document.getElementById('add-choice-option-btn').addEventListener('click', () => this.addChoiceOption());
-        
-        document.getElementById('character-portrait').addEventListener('change', (e) => {
-            const preview = document.getElementById('portrait-preview');
-            const bg = e.target.value ? `url('${getAssetUrl(e.target.value)}')` : 'none';
-            this.setPortraitPreview(bg);
-        });
-        
-        document.getElementById('portrait-scale').addEventListener('input', (e) => {
-            const scale = parseInt(e.target.value) / 100;
-            document.getElementById('portrait-scale-value').textContent = `${e.target.value}%`;
-            const preview = document.getElementById('portrait-preview');
-            preview.style.backgroundSize = `${e.target.value}%`;
-            if (this._portraitState) this._portraitState.scale = scale;
-        });
-        
-        document.getElementById('portrait-mirror-btn').addEventListener('click', () => {
-            const preview = document.getElementById('portrait-preview');
-            if (this._portraitState) {
-                this._portraitState.mirror = !this._portraitState.mirror;
-                preview.classList.toggle('mirrored', this._portraitState.mirror);
-            }
-        });
-        
-        document.getElementById('portrait-center-btn').addEventListener('click', () => {
-            const preview = document.getElementById('portrait-preview');
-            if (this._portraitState) {
-                this._portraitState.posX = 0;
-                this._portraitState.posY = 0;
-                preview.style.backgroundPosition = '0px 0px';
-            }
-        });
-        
-        document.getElementById('portrait-reset-btn').addEventListener('click', () => {
-            this.setPortraitPreview(
-                document.getElementById('portrait-preview').style.backgroundImage
-            );
-        });
-        
-        document.getElementById('upload-portrait-btn').addEventListener('click', () => {
-            document.getElementById('upload-portrait').click();
-        });
-        
-        document.getElementById('upload-portrait').addEventListener('change', (e) => this.uploadFile(e, 'portrait'));
         
         document.getElementById('upload-voice-btn').addEventListener('click', () => {
             document.getElementById('upload-voice').click();
@@ -650,12 +610,12 @@ async saveDialogue() {
     
 openCharacterModal(id = null) {
         const modal = document.getElementById('character-modal');
-        const portraitSelect = document.getElementById('character-portrait');
         const voiceSelect = document.getElementById('character-voice');
         const voiceModeSelect = document.getElementById('character-voice-mode');
+        const globalSelect = document.getElementById('character-global-select');
         
-        portraitSelect.innerHTML = '<option value="">Выберите файл...</option>' +
-            this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
+        globalSelect.innerHTML = '<option value="">Выберите персонажа...</option>' +
+            this.globalCharacters.map(gc => `<option value="${gc.id}">${gc.name}</option>`).join('');
         
         voiceSelect.innerHTML = '<option value="">Выберите файл...</option>' +
             this.state.sounds.map(s => `<option value="${s}">${s.split('/').pop()}</option>`).join('');
@@ -664,97 +624,22 @@ openCharacterModal(id = null) {
             const char = this.state.characters.find(c => c.id == id);
             if (char) {
                 document.getElementById('character-id').value = char.id;
-                document.getElementById('character-name').value = char.name;
+                document.getElementById('character-global-select').value = char.global_character_id || '';
                 document.getElementById('character-window').value = char.window;
-                document.getElementById('character-portrait').value = char.image || '';
                 document.getElementById('character-voice').value = char.voice || '';
                 document.getElementById('character-voice-mode').value = char.voice_mode || 'none';
-                this.setPortraitPreview(
-                    char.image ? `url('${getAssetUrl(char.image)}')` : 'none',
-                    char.portrait_scale || 1.0,
-                    char.portrait_x || 0,
-                    char.portrait_y || 0,
-                    char.portrait_mirror || false
-                );
                 this.updateVoiceModeUI(char.voice_mode || 'none');
             }
         } else {
             document.getElementById('character-id').value = '';
-            document.getElementById('character-name').value = '';
+            document.getElementById('character-global-select').value = '';
             document.getElementById('character-window').value = '1';
-            document.getElementById('character-portrait').value = '';
             document.getElementById('character-voice').value = '';
             document.getElementById('character-voice-mode').value = 'none';
-            this.setPortraitPreview('none');
             this.updateVoiceModeUI('none');
         }
         
-        this.initPortraitDrag();
         modal.style.display = 'flex';
-    }
-    
-    setPortraitPreview(bgImage, scale = 1.0, posX = 0, posY = 0, mirror = false) {
-        const preview = document.getElementById('portrait-preview');
-        const scaleSlider = document.getElementById('portrait-scale');
-        const scaleValue = document.getElementById('portrait-scale-value');
-        
-        preview.style.backgroundImage = bgImage;
-        preview.style.backgroundSize = `${scale * 100}%`;
-        preview.style.backgroundPosition = `${posX}px ${posY}px`;
-        preview.classList.toggle('mirrored', mirror);
-        
-        scaleSlider.value = Math.round(scale * 100);
-        scaleValue.textContent = `${Math.round(scale * 100)}%`;
-        
-        this._portraitState = { scale, posX, posY, mirror };
-    }
-    
-    initPortraitDrag() {
-        const preview = document.getElementById('portrait-preview');
-        
-        if (this._portraitDragCleanup) {
-            this._portraitDragCleanup();
-        }
-        
-        if (!this._portraitState) {
-            this._portraitState = { scale: 1.0, posX: 0, posY: 0, mirror: false };
-        }
-        
-        let isDragging = false;
-        let startX, startY, startPosX, startPosY;
-        
-        const onMouseDown = (e) => {
-            if (!preview.style.backgroundImage || preview.style.backgroundImage === 'none') return;
-            isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startPosX = this._portraitState.posX;
-            startPosY = this._portraitState.posY;
-            e.preventDefault();
-        };
-        
-        const onMouseMove = (e) => {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            this._portraitState.posX = startPosX + dx;
-            this._portraitState.posY = startPosY + dy;
-            preview.style.backgroundPosition = `${this._portraitState.posX}px ${this._portraitState.posY}px`;
-        };
-        
-        const onMouseUp = () => {
-            isDragging = false;
-        };
-        
-        preview.addEventListener('mousedown', onMouseDown);
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-        
-        this._portraitDragCleanup = () => {
-            preview.removeEventListener('mousedown', onMouseDown);
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        };
     }
     
     updateVoiceModeUI(mode) {
@@ -838,19 +723,18 @@ openCharacterModal(id = null) {
     
 async saveCharacter() {
         const id = document.getElementById('character-id').value;
-        const name = document.getElementById('character-name').value.trim();
-        const window = document.getElementById('character-window').value;
-        const image = document.getElementById('character-portrait').value;
+        const globalCharacterId = parseInt(document.getElementById('character-global-select').value);
+        const window = parseInt(document.getElementById('character-window').value);
         const voiceMode = document.getElementById('character-voice-mode').value;
         const voice = document.getElementById('character-voice').value;
+        const voiceDuration = 0;
         
-        if (!name) {
-            alert('Укажите имя персонажа');
+        if (!id && !globalCharacterId) {
+            alert('Выберите персонажа из каталога');
             return;
         }
         
         const voicePath = voiceMode === 'typing' ? voice : '';
-        const ps = this._portraitState || { scale: 1.0, posX: 0, posY: 0, mirror: false };
         
         try {
             const url = id 
@@ -858,16 +742,9 @@ async saveCharacter() {
                 : `${API_URL}/editor/characters`;
             const method = id ? 'PUT' : 'POST';
             
-            const portraitData = {
-                portraitScale: ps.scale,
-                portraitX: ps.posX,
-                portraitY: ps.posY,
-                portraitMirror: ps.mirror
-            };
-            
             const body = id 
-                ? { name, image, voice: voicePath, voiceMode, window: parseInt(window), ...portraitData }
-                : { dialogueId: this.state.currentDialogueId, name, image, voice: voicePath, voiceMode, window: parseInt(window), ...portraitData };
+                ? { voice: voicePath, voiceMode, voiceDuration, window }
+                : { dialogueId: this.state.currentDialogueId, globalCharacterId, voice: voicePath, voiceMode, voiceDuration, window };
             
             const response = await fetch(url, {
                 method,
@@ -909,6 +786,17 @@ async saveCharacter() {
         }
     }
     
+    async loadGlobalCharacters() {
+        try {
+            const res = await fetch(`${API_URL}/editor/global-characters`, { credentials: 'include', headers: AppConfig.CACHE_HEADERS });
+            const data = await res.json();
+            this.globalCharacters = data.characters || [];
+        } catch (err) {
+            console.error('Error loading global characters:', err);
+            this.globalCharacters = [];
+        }
+    }
+
 openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null) {
         debug('openConversationModal called with id:', id, 'defaultBranch:', defaultBranch, 'forcedSortOrder:', forcedSortOrder);
         const modal = document.getElementById('conversation-modal');
@@ -978,8 +866,13 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
         
         choices.forEach(ch => {
             const isNewBranch = !ch.target_branch;
-            // Сохраняем реальный ID строки из БД в dataset.dbId
-            this.addChoiceOption(ch.option_id, ch.option_text, ch.target_branch, ch.id);
+            const relationData = (ch.relation_global_char_id !== null && ch.relation_global_char_id !== undefined) || (ch.relationGlobalCharId !== null && ch.relationGlobalCharId !== undefined) ? {
+                globalCharId: ch.relation_global_char_id || ch.relationGlobalCharId,
+                min: ch.relation_require_min !== null ? ch.relation_require_min : -100,
+                max: ch.relation_require_max !== null ? ch.relation_require_max : 100,
+                effect: ch.relation_effect || 0
+            } : null;
+            this.addChoiceOption(ch.option_id, ch.option_text, ch.target_branch, ch.id, relationData);
             
             if (isNewBranch) {
                 const lastOption = container.lastElementChild;
@@ -991,14 +884,13 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
         });
     }
     
-    addChoiceOption(id = '', text = '', target = '', dbId = null) {
+    addChoiceOption(id = '', text = '', target = '', dbId = null, relationData = null) {
         const container = document.getElementById('choice-options-list');
         const template = document.getElementById('choice-option-template');
         const optionEl = template.content.cloneNode(true);
         
         const optionDiv = optionEl.querySelector('.choice-option');
         optionDiv.dataset.optionId = id || Date.now();
-        // Сохраняем реальный ID строки из БД
         if (dbId) {
             optionDiv.dataset.dbId = dbId;
         }
@@ -1015,7 +907,7 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
         const characterSelect = optionEl.querySelector('.option-character');
         characterSelect.innerHTML = '<option value="">Выберите персонажа</option>' +
             this.state.characters.map(c => 
-                `<option value="${c.id}">${c.name}</option>`
+                `<option value="${c.id}">${c.gc_name || c.name}</option>`
             ).join('');
         
         targetSelect.addEventListener('change', (e) => {
@@ -1025,7 +917,47 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
         if (!target) {
             characterSelect.classList.remove('hidden');
         }
-        
+
+        const npcLabel = optionEl.querySelector('.relation-npc-name');
+        const updateNpcLabel = () => {
+            const selCharId = parseInt(characterSelect.value);
+            const selChar = this.state.characters.find(c => c.id === selCharId);
+            if (npcLabel) {
+                npcLabel.textContent = selChar ? `Персонаж: ${selChar.gc_name || selChar.name}` : 'Персонаж: не выбран';
+            }
+        };
+        characterSelect.addEventListener('change', updateNpcLabel);
+        updateNpcLabel();
+
+        if (relationData) {
+            if (relationData.min !== undefined) optionEl.querySelector('.relation-min').value = relationData.min;
+            if (relationData.max !== undefined) optionEl.querySelector('.relation-max').value = relationData.max;
+            if (relationData.effect !== undefined) optionEl.querySelector('.relation-effect').value = relationData.effect;
+
+            if (relationData.globalCharId) {
+                const relationSection = optionDiv.querySelector('.choice-option-relation');
+                if (relationSection) {
+                    relationSection.classList.add('expanded');
+                    const icon = relationSection.querySelector('.relation-toggle-icon');
+                    if (icon) icon.innerHTML = '&#9660;';
+                }
+            }
+        }
+
+        const relationHeader = optionDiv.querySelector('.relation-header');
+        if (relationHeader) {
+            relationHeader.addEventListener('click', () => {
+                const relationSection = optionDiv.querySelector('.choice-option-relation');
+                if (relationSection) {
+                    relationSection.classList.toggle('expanded');
+                    const icon = relationSection.querySelector('.relation-toggle-icon');
+                    if (icon) {
+                        icon.innerHTML = relationSection.classList.contains('expanded') ? '&#9660;' : '&#9654;';
+                    }
+                }
+            });
+        }
+
         optionEl.querySelector('.remove-option-btn').addEventListener('click', () => {
             optionDiv.remove();
         });
@@ -1115,14 +1047,32 @@ async saveConversation() {
             const characterSelect = opt.querySelector('.option-character');
             const characterId = characterSelect ? characterSelect.value : '';
             
+            const npcSelect = opt.querySelector('.relation-npc');
+            let relationGlobalCharId = npcSelect ? (parseInt(npcSelect.value) || null) : null;
+            const relationEffect = opt.querySelector('.relation-effect');
+            const effectVal = relationEffect ? parseInt(relationEffect.value) || 0 : 0;
+            if (!relationGlobalCharId && effectVal !== 0) {
+                const optCharId = parseInt(opt.querySelector('.option-character').value);
+                const optChar = this.state.characters.find(c => c.id === optCharId);
+                if (optChar && optChar.global_character_id) {
+                    relationGlobalCharId = optChar.global_character_id;
+                }
+            }
+            const relationMin = opt.querySelector('.relation-min');
+            const relationMax = opt.querySelector('.relation-max');
+
             options.push({
-                dbId: opt.dataset.dbId || null, // Реальный ID строки из БД
+                dbId: opt.dataset.dbId || null,
                 optionId: opt.dataset.optionId || `opt_${i}_${Date.now()}`,
                 optionText: opt.querySelector('.option-text').value,
                 targetBranch: targetBranch,
                 characterId: characterId,
                 isNewBranch: !targetBranch,
-                sortOrder: i
+                sortOrder: i,
+                relationGlobalCharId: relationGlobalCharId,
+                relationRequireMin: relationMin ? parseInt(relationMin.value) : -100,
+                relationRequireMax: relationMax ? parseInt(relationMax.value) : 100,
+                relationEffect: relationEffect ? parseInt(relationEffect.value) : 0
             });
         });
         
@@ -1172,9 +1122,7 @@ async saveConversation() {
                 }
             }
             
-            // Проверяем, есть ли реальный ID строки из БД
             if (opt.dbId) {
-                // Обновляем существующий выбор по ID строки
                 await fetch(`${API_URL}/editor/choices/${opt.dbId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -1185,11 +1133,14 @@ async saveConversation() {
                         optionId: opt.optionId,
                         optionText: opt.optionText,
                         targetBranch: targetBranch,
-                        sortOrder: opt.sortOrder
+                        sortOrder: opt.sortOrder,
+                        relationGlobalCharId: opt.relationGlobalCharId,
+                        relationRequireMin: opt.relationRequireMin,
+                        relationRequireMax: opt.relationRequireMax,
+                        relationEffect: opt.relationEffect
                     })
                 });
             } else {
-                // Создаем новый выбор
                 await fetch(`${API_URL}/editor/choices`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1200,7 +1151,11 @@ async saveConversation() {
                         optionId: opt.optionId,
                         optionText: opt.optionText,
                         targetBranch: targetBranch,
-                        sortOrder: opt.sortOrder
+                        sortOrder: opt.sortOrder,
+                        relationGlobalCharId: opt.relationGlobalCharId,
+                        relationRequireMin: opt.relationRequireMin,
+                        relationRequireMax: opt.relationRequireMax,
+                        relationEffect: opt.relationEffect
                     })
                 });
             }
@@ -1301,13 +1256,7 @@ async uploadFile(event, type) {
             
             await this.loadFiles();
             
-            if (type === 'portrait') {
-                const select = document.getElementById('character-portrait');
-                select.innerHTML = '<option value="">Выберите файл...</option>' +
-                    this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
-                select.value = data.path;
-                this.setPortraitPreview(`url('${getAssetUrl(data.path)}')`);
-            } else if (type === 'sound') {
+            if (type === 'sound') {
                 const select = document.getElementById('character-voice');
                 select.innerHTML = '<option value="">Выберите файл...</option>' +
                     this.state.sounds.map(s => `<option value="${s}">${s.split('/').pop()}</option>`).join('');

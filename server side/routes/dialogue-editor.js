@@ -31,7 +31,7 @@ const dialogueEditorRoutes = (db, upload) => {
             if (!dialogue) return res.status(404).json({ message: 'Диалог не найден' });
             
             // Получаем персонажей
-            db.all('SELECT * FROM characters WHERE dialogue_id = ? ORDER BY sort_order', [dialogue.id], (err, characters) => {
+            db.all(`SELECT c.*, gc.name as gc_name, gc.image as gc_image, gc.portrait_scale as gc_portrait_scale, gc.portrait_x as gc_portrait_x, gc.portrait_y as gc_portrait_y, gc.portrait_mirror as gc_portrait_mirror, gc.default_relation FROM characters c LEFT JOIN global_characters gc ON c.global_character_id = gc.id WHERE c.dialogue_id = ? ORDER BY c.sort_order`, [dialogue.id], (err, characters) => {
                 if (err) return res.status(500).json({ message: 'Ошибка получения персонажей' });
                 
                 // Получаем ветки
@@ -203,28 +203,31 @@ const dialogueEditorRoutes = (db, upload) => {
 
     // ==================== ПЕРСОНАЖИ ====================
     
-// Создать персонажа
     router.post('/characters', (req, res) => {
-        const { dialogueId, name, image, voice, voiceMode, voiceDuration, window, portraitScale, portraitX, portraitY, portraitMirror } = req.body;
+        const { dialogueId, globalCharacterId, voice, voiceMode, voiceDuration, window } = req.body;
         
-        if (!dialogueId || !name) {
-            return res.status(400).json({ message: 'dialogueId и name обязательны' });
+        if (!dialogueId || !globalCharacterId) {
+            return res.status(400).json({ message: 'dialogueId и globalCharacterId обязательны' });
         }
         
-        db.run(`INSERT INTO characters (dialogue_id, name, image, voice, voice_mode, voice_duration, window, portrait_scale, portrait_x, portrait_y, portrait_mirror) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [dialogueId, name, image, voice || '', voiceMode || 'none', voiceDuration || 0, window || 1, portraitScale || 1.0, portraitX || 0, portraitY || 0, portraitMirror ? 1 : 0],
-            function(err) {
-                if (err) return res.status(500).json({ message: 'Ошибка создания персонажа' });
-                res.status(201).json({ message: 'Персонаж создан', characterId: this.lastID });
-            });
+        db.get('SELECT name FROM global_characters WHERE id = ?', [globalCharacterId], (err, gc) => {
+            if (err || !gc) return res.status(400).json({ message: 'Глобальный персонаж не найден' });
+            
+            db.run(`INSERT INTO characters (dialogue_id, name, image, global_character_id, voice, voice_mode, voice_duration, window) VALUES (?, ?, '', ?, ?, ?, ?, ?)`,
+                [dialogueId, gc.name, globalCharacterId, voice || '', voiceMode || 'none', voiceDuration || 0, window || 1],
+                function(err) {
+                    if (err) return res.status(500).json({ message: 'Ошибка создания персонажа' });
+                    res.status(201).json({ message: 'Персонаж создан', characterId: this.lastID });
+                });
+        });
     });
 
     router.put('/characters/:id', (req, res) => {
         const { id } = req.params;
-        const { name, image, voice, voiceMode, voiceDuration, window, portraitScale, portraitX, portraitY, portraitMirror } = req.body;
+        const { voice, voiceMode, voiceDuration, window } = req.body;
         
-        db.run(`UPDATE characters SET name = ?, image = ?, voice = ?, voice_mode = ?, voice_duration = ?, window = ?, portrait_scale = ?, portrait_x = ?, portrait_y = ?, portrait_mirror = ? WHERE id = ?`,
-            [name, image, voice || '', voiceMode || 'none', voiceDuration, window, portraitScale || 1.0, portraitX || 0, portraitY || 0, portraitMirror ? 1 : 0, id],
+        db.run(`UPDATE characters SET voice = ?, voice_mode = ?, voice_duration = ?, window = ? WHERE id = ?`,
+            [voice || '', voiceMode || 'none', voiceDuration || 0, window || 1, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления персонажа' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Персонаж не найден' });
@@ -366,8 +369,8 @@ router.post('/conversations', (req, res) => {
                                 return res.status(500).json({ message: 'Ошибка создания реплики' });
                             }
                             
-                            db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
-                                [conversationId, choiceId, optionId, optionText, branchId, sortOrder || 0], (err) => {
+                            db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order, relation_npc_id, relation_require_min, relation_require_max, relation_effect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                [conversationId, choiceId, optionId, optionText, branchId, sortOrder || 0, null, -100, 100, 0], (err) => {
                                     if (err) {
                                         db.run('ROLLBACK');
                                         return res.status(500).json({ message: 'Ошибка создания выбора' });
@@ -556,27 +559,34 @@ router.post('/conversations', (req, res) => {
     
     // Создать выбор
     router.post('/choices', (req, res) => {
-        const { conversationId, choiceId, optionId, optionText, targetBranch, sortOrder } = req.body;
+        const { conversationId, choiceId, optionId, optionText, targetBranch, sortOrder, relationGlobalCharId, relationRequireMin, relationRequireMax, relationEffect } = req.body;
         
         if (!conversationId || !choiceId || !optionId || !optionText) {
             return res.status(400).json({ message: 'Не все обязательные поля заполнены' });
         }
         
-        db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order) VALUES (?, ?, ?, ?, ?, ?)`,
-            [conversationId, choiceId, optionId, optionText, targetBranch, sortOrder || 0],
+        db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order, relation_global_char_id, relation_require_min, relation_require_max, relation_effect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [conversationId, choiceId, optionId, optionText, targetBranch, sortOrder || 0,
+             relationGlobalCharId || null,
+             relationRequireMin !== undefined ? relationRequireMin : -100,
+             relationRequireMax !== undefined ? relationRequireMax : 100,
+             relationEffect || 0],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания выбора' });
                 res.status(201).json({ message: 'Выбор создан', choiceOptionId: this.lastID });
             });
     });
 
-    // Обновить выбор
     router.put('/choices/:id', (req, res) => {
         const { id } = req.params;
-        const { choiceId, optionId, optionText, targetBranch, sortOrder } = req.body;
+        const { choiceId, optionId, optionText, targetBranch, sortOrder, relationGlobalCharId, relationRequireMin, relationRequireMax, relationEffect } = req.body;
         
-        db.run(`UPDATE choice_options SET choice_id = ?, option_id = ?, option_text = ?, target_branch = ?, sort_order = ? WHERE id = ?`,
-            [choiceId, optionId, optionText, targetBranch, sortOrder, id],
+        db.run(`UPDATE choice_options SET choice_id = ?, option_id = ?, option_text = ?, target_branch = ?, sort_order = ?, relation_global_char_id = ?, relation_require_min = ?, relation_require_max = ?, relation_effect = ? WHERE id = ?`,
+            [choiceId, optionId, optionText, targetBranch, sortOrder,
+             relationGlobalCharId || null,
+             relationRequireMin !== undefined ? relationRequireMin : -100,
+             relationRequireMax !== undefined ? relationRequireMax : 100,
+             relationEffect || 0, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления выбора' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Выбор не найден' });
@@ -593,7 +603,170 @@ router.post('/conversations', (req, res) => {
         });
     });
 
-// ==================== ФАЙЛЫ ====================
+    // ==================== ГЛОБАЛЬНЫЕ ПЕРСОНАЖИ ====================
+
+    router.get('/global-characters', (req, res) => {
+        db.all('SELECT * FROM global_characters ORDER BY name', (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения персонажей' });
+            res.json({ characters: rows });
+        });
+    });
+
+    router.post('/global-characters', upload.single('portrait'), (req, res) => {
+        const { name, defaultRelation, keepImage } = req.body;
+        let image;
+        if (req.file) {
+            image = `/assets/images/portraits/${req.file.filename}`;
+        } else if (keepImage) {
+            image = `/assets/images/portraits/${keepImage}`;
+        } else {
+            image = null;
+        }
+        const rel = defaultRelation !== undefined ? Math.max(-100, Math.min(100, parseInt(defaultRelation) || 0)) : 0;
+        const ps = parseFloat(req.body.portraitScale) || 1.0;
+        const px = parseFloat(req.body.portraitX) || 0;
+        const py = parseFloat(req.body.portraitY) || 0;
+        const pm = req.body.portraitMirror === '1' || req.body.portraitMirror === true ? 1 : 0;
+
+        if (!name) return res.status(400).json({ message: 'Имя обязательно' });
+
+        db.run(`INSERT INTO global_characters (name, image, portrait_scale, portrait_x, portrait_y, portrait_mirror, default_relation) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [name, image, ps, px, py, pm, rel],
+            function(err) {
+                if (err) return res.status(500).json({ message: 'Ошибка создания персонажа' });
+                res.status(201).json({ message: 'Персонаж создан', characterId: this.lastID });
+            });
+    });
+
+    router.put('/global-characters/:id', upload.single('portrait'), (req, res) => {
+        const { id } = req.params;
+        const { name, defaultRelation, portraitScale, portraitX, portraitY, portraitMirror, keepImage } = req.body;
+        const ps = parseFloat(portraitScale) || 1.0;
+        const px = parseFloat(portraitX) || 0;
+        const py = parseFloat(portraitY) || 0;
+        const pm = portraitMirror === '1' || portraitMirror === true ? 1 : 0;
+        const rel = defaultRelation !== undefined ? Math.max(-100, Math.min(100, parseInt(defaultRelation) || 0)) : 0;
+
+        db.get('SELECT image FROM global_characters WHERE id = ?', [id], (err, existing) => {
+            if (err) return res.status(500).json({ message: 'Ошибка' });
+            if (!existing) return res.status(404).json({ message: 'Персонаж не найден' });
+
+            let image;
+            if (req.file) {
+                image = `/assets/images/portraits/${req.file.filename}`;
+            } else if (keepImage && keepImage !== 'false' && keepImage !== '') {
+                if (keepImage.startsWith('/assets/')) {
+                    image = keepImage;
+                } else {
+                    image = `/assets/images/portraits/${keepImage}`;
+                }
+            } else if (keepImage === 'false' || keepImage === '') {
+                image = null;
+            } else {
+                image = existing.image;
+            }
+
+            db.run(`UPDATE global_characters SET name = ?, image = ?, portrait_scale = ?, portrait_x = ?, portrait_y = ?, portrait_mirror = ?, default_relation = ? WHERE id = ?`,
+                [name, image, ps, px, py, pm, rel, id],
+                function(err) {
+                    if (err) return res.status(500).json({ message: 'Ошибка обновления персонажа' });
+                    if (this.changes === 0) return res.status(404).json({ message: 'Персонаж не найден' });
+                    res.json({ message: 'Персонаж обновлен' });
+                });
+        });
+    });
+
+    router.delete('/global-characters/:id', (req, res) => {
+        const { id } = req.params;
+        db.get('SELECT COUNT(*) as cnt FROM characters WHERE global_character_id = ?', [id], (err, row) => {
+            if (err) return res.status(500).json({ message: 'Ошибка' });
+            if (row && row.cnt > 0) {
+                return res.status(400).json({ message: `Персонаж используется в ${row.cnt} диалогах. Сначала удалите его оттуда.` });
+            }
+            db.run('DELETE FROM user_relations WHERE global_character_id = ?', [id], (err) => {
+                if (err) return res.status(500).json({ message: 'Ошибка удаления отношений' });
+                db.run('DELETE FROM global_characters WHERE id = ?', [id], function(err) {
+                    if (err) return res.status(500).json({ message: 'Ошибка удаления персонажа' });
+                    if (this.changes === 0) return res.status(404).json({ message: 'Персонаж не найден' });
+                    res.json({ message: 'Персонаж удален' });
+                });
+            });
+        });
+    });
+
+    router.post('/global-characters/init-relations', (req, res) => {
+        db.all('SELECT id, default_relation FROM global_characters', [], (err, gcs) => {
+            if (err) return res.status(500).json({ message: 'Ошибка' });
+            if (gcs.length === 0) return res.json({ message: 'Нет персонажей' });
+
+            db.all('SELECT id FROM users', [], (err, users) => {
+                if (err) return res.status(500).json({ message: 'Ошибка' });
+
+                let count = 0;
+                const total = gcs.length * users.length;
+                if (total === 0) return res.json({ message: 'Нет пользователей' });
+
+                gcs.forEach(gc => {
+                    users.forEach(user => {
+                        db.run(`INSERT INTO user_relations (user_id, global_character_id, relation_value)
+                                VALUES (?, ?, ?)
+                                ON CONFLICT(user_id, global_character_id) DO NOTHING`,
+                            [user.id, gc.id, gc.default_relation || 0], (err) => {
+                                count++;
+                                if (count === total) res.json({ message: `Инициализировано ${total} отношений` });
+                            });
+                    });
+                });
+            });
+        });
+    });
+
+    router.get('/global-characters/relations', (req, res) => {
+        db.all(`SELECT ur.id, ur.user_id, u.username, ur.global_character_id,
+                       gc.name as character_name, gc.image as character_image, ur.relation_value
+                FROM user_relations ur
+                JOIN users u ON ur.user_id = u.id
+                JOIN global_characters gc ON ur.global_character_id = gc.id
+                ORDER BY u.username, gc.name`, (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения отношений' });
+            res.json({ relations: rows });
+        });
+    });
+
+    router.get('/global-characters/:id/relations', (req, res) => {
+        const { id } = req.params;
+        db.get('SELECT id, name, default_relation FROM global_characters WHERE id = ?', [id], (err, gc) => {
+            if (err) return res.status(500).json({ message: 'Ошибка' });
+            if (!gc) return res.status(404).json({ message: 'Персонаж не найден' });
+
+            db.all(`SELECT ur.id, ur.user_id, u.username, ur.relation_value
+                    FROM user_relations ur
+                    JOIN users u ON ur.user_id = u.id
+                    WHERE ur.global_character_id = ?
+                    ORDER BY u.username`, [id], (err, rows) => {
+                if (err) return res.status(500).json({ message: 'Ошибка получения отношений' });
+
+                db.all('SELECT id, username FROM users ORDER BY username', [], (err, allUsers) => {
+                    if (err) return res.status(500).json({ message: 'Ошибка' });
+                    res.json({ character: gc, relations: rows, users: allUsers });
+                });
+            });
+        });
+    });
+
+    router.put('/global-characters/relation/:id', (req, res) => {
+        const { id } = req.params;
+        const { relationValue } = req.body;
+        const val = Math.max(-100, Math.min(100, relationValue || 0));
+        db.run('UPDATE user_relations SET relation_value = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [val, id], function(err) {
+                if (err) return res.status(500).json({ message: 'Ошибка обновления отношения' });
+                if (this.changes === 0) return res.status(404).json({ message: 'Запись не найдена' });
+                res.json({ message: 'Отношение обновлено' });
+            });
+    });
+
+    // ==================== ФАЙЛЫ ====================
     
     router.get('/files/portraits', (req, res) => {
         const portraitsDir = path.join(__dirname, '../assets/images/portraits');
@@ -767,7 +940,7 @@ router.post('/conversations', (req, res) => {
             const dialogueId = dialogue.id;
             
             // Получаем персонажей
-            db.all('SELECT * FROM characters WHERE dialogue_id = ? ORDER BY sort_order', [dialogueId], (err, characters) => {
+            db.all(`SELECT c.*, gc.name as gc_name, gc.image as gc_image, gc.portrait_scale as gc_portrait_scale, gc.portrait_x as gc_portrait_x, gc.portrait_y as gc_portrait_y, gc.portrait_mirror as gc_portrait_mirror, gc.default_relation FROM characters c LEFT JOIN global_characters gc ON c.global_character_id = gc.id WHERE c.dialogue_id = ? ORDER BY c.sort_order`, [dialogueId], (err, characters) => {
                 if (err) return res.status(500).json({ message: 'Ошибка' });
                 
                 // Получаем все реплики
@@ -797,8 +970,8 @@ router.post('/conversations', (req, res) => {
         const result = {
             frequency: dialogue.frequency,
             characters: characters.map(c => ({
-                name: c.name,
-                image: c.image,
+                name: c.gc_name || c.name,
+                image: c.gc_image || c.image,
                 voice: c.voice,
                 voiceMode: c.voice_mode || 'none',
                 voiceDuration: c.voice_duration,
@@ -835,11 +1008,23 @@ const convObj = {
                 convObj.hasChoice = true;
                 convObj.choice = {
                     choiceId: choice.choice_id,
-                    options: convChoices.map(ch => ({
-                        id: ch.option_id,
-                        text: ch.option_text,
-                        targetBranch: ch.target_branch
-                    }))
+                    options: convChoices.map(ch => {
+                        const opt = {
+                            id: ch.option_id,
+                            text: ch.option_text,
+                            targetBranch: ch.target_branch
+                        };
+                        if ((ch.relation_global_char_id !== null && ch.relation_global_char_id !== undefined) || (ch.relation_npc_id !== null && ch.relation_npc_id !== undefined)) {
+                            const gcId = ch.relation_global_char_id || ch.relation_npc_id;
+                            if (gcId) {
+                                opt.relationGlobalCharId = gcId;
+                                opt.relationRequireMin = ch.relation_require_min !== null ? ch.relation_require_min : -100;
+                                opt.relationRequireMax = ch.relation_require_max !== null ? ch.relation_require_max : 100;
+                                opt.relationEffect = ch.relation_effect || 0;
+                            }
+                        }
+                        return opt;
+                    })
                 };
             }
             

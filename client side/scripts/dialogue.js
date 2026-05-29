@@ -1105,27 +1105,51 @@ function handleOldFormatChoiceDialog(conversation) {
  * @param {Array} options - Варианты выбора
  */
 function showChoiceOptions(choiceId, options) {
-    // Создаем контейнер для вариантов ответа
     const choiceContainer = document.createElement('div');
     choiceContainer.className = 'choice-container';
 	
-	// Помечаем контейнер текста как активный с выбором
     $('#text-con').addClass('choices-active');
-    
-    // Создаем кнопки для каждого варианта
+
+    const npcRelations = state.currentDialogue?.npcRelations || {};
+
     options.forEach(option => {
         const button = document.createElement('button');
         button.className = 'choice-button';
-        button.textContent = option.text;
-        button.dataset.choiceId = option.id;
-        
-        // Добавляем обработчик клика
-        button.addEventListener('click', () => handleChoiceSelection(choiceId, option));
-        
+
+        let isLocked = false;
+        let lockReason = '';
+
+        if (option.relationNpcName && option.relationRequireMin !== undefined && option.relationRequireMax !== undefined) {
+            const currentRel = npcRelations[option.relationNpcName];
+            if (currentRel !== undefined) {
+                if (currentRel < option.relationRequireMin || currentRel > option.relationRequireMax) {
+                    isLocked = true;
+                    if (currentRel < option.relationRequireMin) {
+                        lockReason = ` (нужно: ${option.relationRequireMin}+, сейчас: ${currentRel})`;
+                    } else {
+                        lockReason = ` (нужно: до ${option.relationRequireMax}, сейчас: ${currentRel})`;
+                    }
+                }
+            }
+        }
+
+        if (isLocked) {
+            button.textContent = '\uD83D\uDD12 ' + option.text + lockReason;
+            button.classList.add('choice-locked');
+            button.disabled = true;
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        } else {
+            button.textContent = option.text;
+            button.dataset.choiceId = option.id;
+            button.addEventListener('click', () => handleChoiceSelection(choiceId, option));
+        }
+
         choiceContainer.appendChild(button);
     });
     
-    // Добавляем контейнер с кнопками выбора в DOM
     document.getElementById('text-con').appendChild(choiceContainer);
 }
 
@@ -1626,15 +1650,12 @@ function handleChoiceSelection(choiceId, selectedOption) {
 	debug(`Обновлены локальные выборы:`, state.userChoices[currentFrequency]);
 
 	try {
-		// Пытаемся сохранить выбор на сервере, но продолжаем независимо от результата
-		saveUserChoice(currentFrequency, choiceId, selectedOption.id, selectedOption.text)
+		saveUserChoice(currentFrequency, choiceId, selectedOption.id, selectedOption.text, selectedOption.relationNpcName, selectedOption.relationEffect)
 			.catch(error => {
 				console.error('Ошибка при сохранении выбора на сервере:', error);
-				// Не прерываем выполнение, даже если сохранение не удалось
 			});
 	} catch (error) {
 		console.error('Ошибка при попытке сохранить выбор:', error);
-		// Продолжаем выполнение даже при ошибке
 	}
 
 	// Удаляем контейнер с кнопками выбора
@@ -1646,6 +1667,14 @@ function handleChoiceSelection(choiceId, selectedOption) {
 	// Устанавливаем currentChoiceId для дальнейшего ветвления
 	state.currentChoiceId = choiceId;
 	state.selectedOptionId = selectedOption.id;
+
+	if (selectedOption.relationNpcName && selectedOption.relationEffect && state.currentDialogue?.npcRelations) {
+		const npcName = selectedOption.relationNpcName;
+		const effect = selectedOption.relationEffect;
+		const currentVal = state.currentDialogue.npcRelations[npcName] || 0;
+		state.currentDialogue.npcRelations[npcName] = Math.max(-100, Math.min(100, currentVal + effect));
+		debug(`Отношение с ${npcName}: ${currentVal} -> ${state.currentDialogue.npcRelations[npcName]} (${effect > 0 ? '+' : ''}${effect})`);
+	}
 
 	// Находим targetBranch в диалоге и добавляем её строки в conversations
 	const targetBranch = selectedOption.targetBranch;
@@ -1700,7 +1729,7 @@ function handleChoiceSelection(choiceId, selectedOption) {
  * @param {string} optionText - Текст опции
  * @returns {Promise} - Промис с результатом запроса
  */
-async function saveUserChoice(frequency, choiceId, optionId, optionText) {
+async function saveUserChoice(frequency, choiceId, optionId, optionText, relationNpcName, relationEffect) {
     try {
         debug(`Сохранение выбора: frequency=${frequency}, choiceId=${choiceId}, option=${optionId} (${optionText})`);
         
@@ -1710,12 +1739,13 @@ async function saveUserChoice(frequency, choiceId, optionId, optionText) {
             return;
         }
         
-        // Создаем объект данных для отправки
         const requestData = {
             frequency: frequency,
             choiceId: choiceId,
             optionId: optionId,
-            choiceText: optionText || 'Текст не указан'
+            choiceText: optionText || 'Текст не указан',
+            relationNpcName: relationNpcName || null,
+            relationEffect: relationEffect || 0
         };
         
         debug('Отправка данных на сервер:', JSON.stringify(requestData));
@@ -3253,6 +3283,19 @@ $('<style>')
 		#text-con.choices-active {
 			cursor: default; /* Меняем курсор для визуальной индикации */
 		}
+
+		/* Locked choice button */
+        .choice-button.choice-locked {
+            border-color: #555;
+            color: #555;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .choice-button.choice-locked:hover {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #555;
+        }
     `)
     .appendTo('head');
 

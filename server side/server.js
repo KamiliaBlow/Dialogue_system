@@ -271,6 +271,27 @@ function initDatabase() {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             UNIQUE(user_id, slot_number)
+        )`,
+        `CREATE TABLE IF NOT EXISTS global_characters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            image TEXT,
+            portrait_scale REAL DEFAULT 1.0,
+            portrait_x REAL DEFAULT 0,
+            portrait_y REAL DEFAULT 0,
+            portrait_mirror INTEGER DEFAULT 0,
+            default_relation INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS user_relations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            global_character_id INTEGER NOT NULL,
+            relation_value INTEGER DEFAULT 0,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (global_character_id) REFERENCES global_characters(id) ON DELETE CASCADE,
+            UNIQUE(user_id, global_character_id)
         )`
     ];
     
@@ -332,6 +353,71 @@ tables.forEach(sql => db.run(sql));
     db.run(`ALTER TABLE characters ADD COLUMN portrait_mirror INTEGER DEFAULT 0`, (err) => {
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (portrait_mirror):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE choice_options ADD COLUMN relation_npc_id INTEGER DEFAULT NULL`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (relation_npc_id):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE choice_options ADD COLUMN relation_require_min INTEGER DEFAULT -100`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (relation_require_min):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE choice_options ADD COLUMN relation_require_max INTEGER DEFAULT 100`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (relation_require_max):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE choice_options ADD COLUMN relation_effect INTEGER DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (relation_effect):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE characters ADD COLUMN global_character_id INTEGER DEFAULT NULL`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (global_character_id):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE choice_options ADD COLUMN relation_global_char_id INTEGER DEFAULT NULL`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (relation_global_char_id):', err.message);
+        }
+    });
+
+    db.all("PRAGMA table_info(user_relations)", [], (err, cols) => {
+        if (!err && cols && cols.length > 0) {
+            const hasGlobalCharId = cols.some(c => c.name === 'global_character_id');
+            const hasNpcCharId = cols.some(c => c.name === 'npc_character_id');
+            if (hasNpcCharId && !hasGlobalCharId) {
+                Logger.info('Migrating user_relations from npc_character_id to global_character_id...');
+                db.run('DROP TABLE IF EXISTS user_relations', (err) => {
+                    if (err) {
+                        Logger.error('Failed to drop old user_relations:', err.message);
+                    } else {
+                        db.run(`CREATE TABLE IF NOT EXISTS user_relations (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            global_character_id INTEGER NOT NULL,
+                            relation_value INTEGER DEFAULT 0,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                            FOREIGN KEY (global_character_id) REFERENCES global_characters(id) ON DELETE CASCADE,
+                            UNIQUE(user_id, global_character_id)
+                        )`, (err) => {
+                            if (err) Logger.error('Failed to recreate user_relations:', err.message);
+                            else Logger.info('user_relations migrated successfully');
+                        });
+                    }
+                });
+            }
         }
     });
 }
@@ -620,21 +706,43 @@ progressRoutes.post('/dialogue-progress', requireAuth, (req, res) => {
 });
 
 progressRoutes.post('/user-choice', requireAuth, (req, res) => {
-    const { frequency, choiceId, optionId, choiceText } = req.body;
+    const { frequency, choiceId, optionId, choiceText, relationNpcName, relationEffect } = req.body;
     const userId = req.session.userId;
     
-    // Сначала удаляем старые выборы для этой частоты и этого choiceId
+    const applyRelation = (callback) => {
+        if (!relationNpcName || !relationEffect || relationEffect === 0) {
+            return callback();
+        }
+        
+        db.get('SELECT id FROM global_characters WHERE name = ?', [relationNpcName], (err, gc) => {
+            if (err || !gc) return callback();
+            
+            db.run(`INSERT INTO user_relations (user_id, global_character_id, relation_value)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(user_id, global_character_id)
+                    DO UPDATE SET relation_value = MAX(-100, MIN(100, relation_value + ?)), updated_at = CURRENT_TIMESTAMP`,
+                [userId, gc.id, relationEffect, relationEffect],
+                (err) => {
+                    if (err) Logger.error('Error updating relation:', err.message);
+                    callback();
+                });
+        });
+    };
+    
     db.run('DELETE FROM user_choices WHERE user_id = ? AND frequency = ? AND choice_id = ?',
         [userId, frequency, choiceId],
         function(err) {
             if (err) return res.status(500).json({ message: 'Ошибка удаления старого выбора' });
             
-            // Теперь вставляем новый выбор
             db.run('INSERT INTO user_choices (user_id, frequency, choice_id, option_id, choice_text) VALUES (?, ?, ?, ?, ?)',
                 [userId, frequency, choiceId, optionId, choiceText],
                 function(err) {
                     if (err) return res.status(500).json({ message: 'Ошибка сохранения выбора' });
-                    res.json({ message: 'Выбор сохранен', choiceId: this.lastID });
+                    
+                    const lastId = this.lastID;
+                    applyRelation(() => {
+                        res.json({ message: 'Выбор сохранен', choiceId: lastId });
+                    });
                 });
         });
 });
@@ -1122,47 +1230,82 @@ app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
         
         const dialogueId = dialogue.id;
         
-        db.all('SELECT * FROM characters WHERE dialogue_id = ? ORDER BY sort_order', [dialogueId], (err, characters) => {
-            if (err) return res.status(500).json({ message: 'Ошибка' });
+        db.all(`SELECT c.*, gc.name as gc_name, gc.image as gc_image, 
+                gc.portrait_scale as gc_portrait_scale, gc.portrait_x as gc_portrait_x,
+                gc.portrait_y as gc_portrait_y, gc.portrait_mirror as gc_portrait_mirror,
+                gc.default_relation as gc_default_relation
+                FROM characters c
+                LEFT JOIN global_characters gc ON c.global_character_id = gc.id
+                WHERE c.dialogue_id = ? ORDER BY c.sort_order`, [dialogueId], (err, characters) => {
+            if (err) { Logger.error('Dialogue characters query error:', err.message); return res.status(500).json({ message: 'Ошибка' }); }
             
-            db.all(`SELECT * FROM conversations WHERE dialogue_id = ? ORDER BY branch_id, sort_order`, 
-                [dialogueId], (err, conversations) => {
-                if (err) return res.status(500).json({ message: 'Ошибка' });
+            db.all('SELECT id, name, default_relation FROM global_characters', [], (err, allGlobalChars) => {
+                if (err) { Logger.error('Dialogue global chars query error:', err.message); return res.status(500).json({ message: 'Ошибка' }); }
                 
-                const convIds = conversations.map(c => c.id);
-                if (convIds.length === 0) {
-                    res.json(formatDialogueForClient(dialogue, characters, [], []));
-                    return;
-                }
+                const globalCharMap = {};
+                allGlobalChars.forEach(gc => { globalCharMap[gc.id] = gc; });
                 
-                db.all(`SELECT * FROM choice_options WHERE conversation_id IN (${convIds.map(() => '?').join(',')}) ORDER BY sort_order`, 
-                    convIds, (err, choices) => {
+                db.all(`SELECT ur.*, gc.name as char_name
+                        FROM user_relations ur
+                        JOIN global_characters gc ON ur.global_character_id = gc.id
+                        WHERE ur.user_id = ?`,
+                    [userId], (err, userRels) => {
                     if (err) return res.status(500).json({ message: 'Ошибка' });
-                    res.json(formatDialogueForClient(dialogue, characters, conversations, choices));
+                    
+                    const relMap = {};
+                    userRels.forEach(r => { relMap[r.char_name] = r.relation_value; });
+                    
+                    db.all(`SELECT * FROM conversations WHERE dialogue_id = ? ORDER BY branch_id, sort_order`, 
+                        [dialogueId], (err, conversations) => {
+                        if (err) return res.status(500).json({ message: 'Ошибка' });
+                        
+                        const convIds = conversations.map(c => c.id);
+                        if (convIds.length === 0) {
+                            res.json(formatDialogueForClient(dialogue, characters, [], [], globalCharMap, relMap));
+                            return;
+                        }
+                        
+                        db.all(`SELECT * FROM choice_options WHERE conversation_id IN (${convIds.map(() => '?').join(',')}) ORDER BY sort_order`, 
+                            convIds, (err, choices) => {
+                            if (err) return res.status(500).json({ message: 'Ошибка' });
+                            res.json(formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap, relMap));
+                        });
+                    });
                 });
             });
         });
     });
 });
 
-function formatDialogueForClient(dialogue, characters, conversations, choices) {
+function formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap = {}, relMap = {}) {
     const result = {
         characters: characters.map(c => ({
-            name: c.name,
-            image: c.image,
+            name: c.gc_name || c.name || 'Неизвестный',
+            image: c.gc_image || c.image,
             voice: c.voice,
             voiceMode: c.voice_mode || 'none',
             window: c.window,
-            portraitScale: c.portrait_scale || 1.0,
-            portraitX: c.portrait_x || 0,
-            portraitY: c.portrait_y || 0,
-            portraitMirror: c.portrait_mirror === 1
+            portraitScale: c.gc_portrait_scale || c.portrait_scale || 1.0,
+            portraitX: c.gc_portrait_x || c.portrait_x || 0,
+            portraitY: c.gc_portrait_y || c.portrait_y || 0,
+            portraitMirror: (c.gc_portrait_mirror || c.portrait_mirror) === 1,
+            globalCharacterId: c.global_character_id
         })),
         allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),
         isActive: dialogue.is_active !== 0,
         maxRepeats: dialogue.max_repeats !== undefined ? dialogue.max_repeats : 1,
+        npcRelations: {},
         conversations: []
     };
+
+    characters.forEach(c => {
+        if (c.global_character_id && globalCharMap[c.global_character_id]) {
+            const gcName = c.gc_name || c.name;
+            if (gcName) {
+                result.npcRelations[gcName] = relMap[gcName] !== undefined ? relMap[gcName] : (globalCharMap[c.global_character_id].default_relation || 0);
+            }
+        }
+    });
     
     const branches = {};
     conversations.forEach(c => {
@@ -1171,8 +1314,8 @@ function formatDialogueForClient(dialogue, characters, conversations, choices) {
         const convChoices = choices.filter(ch => ch.conversation_id === c.id);
         const char = characters.find(ch => ch.id === c.character_id);
         
-const convObj = {
-            speaker: char ? char.name : 'Система',
+        const convObj = {
+            speaker: char ? (char.gc_name || char.name) : 'Система',
             text: c.text
         };
         
@@ -1185,11 +1328,21 @@ const convObj = {
             convObj.hasChoice = true;
             convObj.choice = {
                 choiceId: convChoices[0].choice_id,
-                options: convChoices.map(ch => ({
-                    id: ch.option_id,
-                    text: ch.option_text,
-                    targetBranch: ch.target_branch
-                }))
+                options: convChoices.map(ch => {
+                    const opt = {
+                        id: ch.option_id,
+                        text: ch.option_text,
+                        targetBranch: ch.target_branch
+                    };
+                    const gcId = ch.relation_global_char_id || ch.relation_npc_id;
+                    if (gcId && globalCharMap[gcId]) {
+                        opt.relationNpcName = globalCharMap[gcId].name;
+                        opt.relationRequireMin = ch.relation_require_min !== null && ch.relation_require_min !== undefined ? ch.relation_require_min : -100;
+                        opt.relationRequireMax = ch.relation_require_max !== null && ch.relation_require_max !== undefined ? ch.relation_require_max : 100;
+                        opt.relationEffect = ch.relation_effect || 0;
+                    }
+                    return opt;
+                })
             };
         }
         

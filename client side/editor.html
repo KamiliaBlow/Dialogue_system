@@ -18,6 +18,7 @@
         <header class="admin-header">
             <div class="admin-title">ТЕРМИНАЛ GMS-4521 - РЕДАКТОР ДИАЛОГОВ</div>
             <div class="header-buttons">
+                <a href="catalog.html" class="btn">Каталог персонажей</a>
                 <a href="admin.html" class="btn">Админ-панель</a>
                 <button id="logout-btn" class="admin-logout">ВЫХОД</button>
             </div>
@@ -96,7 +97,7 @@
                         </div>
                         <button id="add-character-btn" class="btn">+ Добавить персонажа</button>
                     </section>
-                    
+                     
                     <!-- Визуальное дерево диалога -->
                     <section class="editor-section tree-section">
                         <h3 class="section-title">ДЕРЕВО ДИАЛОГА</h3>
@@ -161,15 +162,18 @@
     
     <!-- Модальное окно: Редактор персонажа -->
     <div id="character-modal" class="modal">
-        <div class="modal-content modal-large">
-            <div class="modal-title">Редактор персонажа</div>
+        <div class="modal-content">
+            <div class="modal-title">Добавить персонажа в диалог</div>
             <div class="modal-body">
                 <input type="hidden" id="character-id">
+                <div class="form-group">
+                    <label>Персонаж из каталога:</label>
+                    <select id="character-global-select" class="form-input">
+                        <option value="">Выберите персонажа...</option>
+                    </select>
+                    <div class="form-help">Управление портретами и именами — в <a href="catalog.html" style="color:var(--primary-color)">Каталоге персонажей</a></div>
+                </div>
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Имя персонажа:</label>
-                        <input type="text" id="character-name" class="form-input">
-                    </div>
                     <div class="form-group">
                         <label>Окно отображения:</label>
                         <select id="character-window" class="form-input">
@@ -179,36 +183,6 @@
                     </div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Портрет:</label>
-                        <div class="file-selector">
-                            <select id="character-portrait" class="form-input">
-                                <option value="">Выберите файл...</option>
-                            </select>
-                            <div class="portrait-editor" id="portrait-editor">
-                                <div class="portrait-preview-large" id="portrait-preview"></div>
-                                <div class="portrait-controls">
-                                    <div class="portrait-control-row">
-                                        <label>Масштаб:</label>
-                                        <input type="range" id="portrait-scale" min="50" max="300" value="100" step="1">
-                                        <span id="portrait-scale-value">100%</span>
-                                    </div>
-                                    <div class="portrait-control-row">
-                                        <button type="button" id="portrait-mirror-btn" class="btn btn-small">↔ Зеркально</button>
-                                        <button type="button" id="portrait-center-btn" class="btn btn-small">⊕ Центрировать</button>
-                                        <button type="button" id="portrait-reset-btn" class="btn btn-small">↺ Сброс</button>
-                                    </div>
-                                    <div class="portrait-hint">Перетащите изображение для позиционирования</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="upload-section">
-                            <input type="file" id="upload-portrait" accept="image/*" class="hidden">
-                            <button id="upload-portrait-btn" class="btn btn-small">Загрузить новый</button>
-                        </div>
-                    </div>
-                </div>
-<div class="form-row">
                     <div class="form-group voice-section">
                         <label>Звук персонажа:</label>
                         <select id="character-voice-mode" class="form-input voice-mode-select">
@@ -405,14 +379,39 @@
     <!-- Шаблон варианта выбора -->
     <template id="choice-option-template">
         <div class="choice-option" data-option-id="">
-            <input type="text" class="option-text form-input" placeholder="Текст варианта">
-            <select class="option-target form-input">
-                <option value="">Новая ветка</option>
-            </select>
-            <select class="option-character form-input hidden" title="Персонаж для новой ветки">
-                <option value="">Выберите персонажа</option>
-            </select>
-            <button class="btn btn-small btn-danger remove-option-btn">×</button>
+            <div class="choice-option-main">
+                <input type="text" class="option-text form-input" placeholder="Текст варианта">
+                <select class="option-target form-input">
+                    <option value="">Новая ветка</option>
+                </select>
+                <select class="option-character form-input hidden" title="Персонаж для новой ветки">
+                    <option value="">Выберите персонажа</option>
+                </select>
+                <button class="btn btn-small btn-danger remove-option-btn">×</button>
+            </div>
+            <div class="choice-option-relation">
+                <div class="relation-header" title="Настройки отношения">
+                    <span class="relation-toggle-icon">&#9654;</span> Отношения (нажмите для настройки)
+                </div>
+                <div class="relation-fields">
+                    <div class="relation-npc-name" style="font-size:12px;color:rgba(3,251,141,0.6);margin-bottom:8px;">Персонаж: определяется спикером реплики</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Мин. порог:</label>
+                            <input type="number" class="relation-min form-input" value="-100" min="-100" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Макс. порог:</label>
+                            <input type="number" class="relation-max form-input" value="100" min="-100" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Эффект выбора:</label>
+                            <input type="number" class="relation-effect form-input" value="0" min="-100" max="100" step="5">
+                            <div class="form-help">+ улучшает, - ухудшает</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </template>
     

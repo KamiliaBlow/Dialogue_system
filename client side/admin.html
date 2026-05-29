@@ -22,7 +22,9 @@
             <button class="admin-tab" data-tab="users">Пользователи</button>
             <button class="admin-tab" data-tab="choices">Выборы</button>
             <button class="admin-tab" data-tab="progress">Прогресс диалогов</button>
+            <button class="admin-tab" data-tab="relations">Отношения</button>
             <a href="editor.html" class="admin-tab" style="text-decoration: none;">Редактор диалогов</a>
+            <a href="catalog.html" class="admin-tab" style="text-decoration: none;">Каталог персонажей</a>
         </nav>
         
         <main class="admin-content">
@@ -139,6 +141,35 @@
                                 </tr>
                             </thead>
                             <tbody id="progress-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Relations Tab -->
+            <section id="relations" class="tab-content">
+                <div class="admin-card">
+                    <div class="admin-card-title">Отношения игроков с NPC персонажами</div>
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label>Выберите диалог:</label>
+                        <select id="relations-dialogue-select" class="form-input" style="max-width:300px;">
+                            <option value="">Загрузка...</option>
+                        </select>
+                    </div>
+                    <div id="relations-loading" class="loading" style="display:none;">
+                        <div class="loading-spinner"></div>
+                    </div>
+                    <div id="relations-content">
+                        <table class="user-table" id="relations-table">
+                            <thead>
+                                <tr>
+                                    <th>Игрок</th>
+                                    <th>Персонаж (NPC)</th>
+                                    <th>Отношение</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="relations-table-body"></tbody>
                         </table>
                     </div>
                 </div>
