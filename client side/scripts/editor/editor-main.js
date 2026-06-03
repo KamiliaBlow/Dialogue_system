@@ -918,21 +918,21 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
             characterSelect.classList.remove('hidden');
         }
 
-        const npcLabel = optionEl.querySelector('.relation-npc-name');
+        const npcLabel = optionDiv.querySelector('.relation-npc-name');
         const updateNpcLabel = () => {
-            const selCharId = parseInt(characterSelect.value);
+            const selCharId = parseInt(document.getElementById('conversation-character').value);
             const selChar = this.state.characters.find(c => c.id === selCharId);
             if (npcLabel) {
                 npcLabel.textContent = selChar ? `Персонаж: ${selChar.gc_name || selChar.name}` : 'Персонаж: не выбран';
             }
         };
-        characterSelect.addEventListener('change', updateNpcLabel);
+        document.getElementById('conversation-character').addEventListener('change', updateNpcLabel);
         updateNpcLabel();
 
         if (relationData) {
-            if (relationData.min !== undefined) optionEl.querySelector('.relation-min').value = relationData.min;
-            if (relationData.max !== undefined) optionEl.querySelector('.relation-max').value = relationData.max;
-            if (relationData.effect !== undefined) optionEl.querySelector('.relation-effect').value = relationData.effect;
+            if (relationData.min !== undefined) optionDiv.querySelector('.relation-min').value = relationData.min;
+            if (relationData.max !== undefined) optionDiv.querySelector('.relation-max').value = relationData.max;
+            if (relationData.effect !== undefined) optionDiv.querySelector('.relation-effect').value = relationData.effect;
 
             if (relationData.globalCharId) {
                 const relationSection = optionDiv.querySelector('.choice-option-relation');
@@ -954,6 +954,7 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
                     if (icon) {
                         icon.innerHTML = relationSection.classList.contains('expanded') ? '&#9660;' : '&#9654;';
                     }
+                    updateNpcLabel();
                 }
             });
         }
@@ -962,7 +963,7 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
             optionDiv.remove();
         });
         
-        container.appendChild(optionEl);
+        container.appendChild(optionDiv);
     }
     
 async saveConversation() {
@@ -1049,17 +1050,21 @@ async saveConversation() {
             
             const npcSelect = opt.querySelector('.relation-npc');
             let relationGlobalCharId = npcSelect ? (parseInt(npcSelect.value) || null) : null;
-            const relationEffect = opt.querySelector('.relation-effect');
-            const effectVal = relationEffect ? parseInt(relationEffect.value) || 0 : 0;
-            if (!relationGlobalCharId && effectVal !== 0) {
-                const optCharId = parseInt(opt.querySelector('.option-character').value);
-                const optChar = this.state.characters.find(c => c.id === optCharId);
-                if (optChar && optChar.global_character_id) {
-                    relationGlobalCharId = optChar.global_character_id;
-                }
-            }
             const relationMin = opt.querySelector('.relation-min');
             const relationMax = opt.querySelector('.relation-max');
+            const relationEffect = opt.querySelector('.relation-effect');
+            const minVal = relationMin ? parseInt(relationMin.value) : -100;
+            const maxVal = relationMax ? parseInt(relationMax.value) : 100;
+            const effectVal = relationEffect ? parseInt(relationEffect.value) || 0 : 0;
+
+            const hasRelationData = minVal !== -100 || maxVal !== 100 || effectVal !== 0;
+            if (!relationGlobalCharId && hasRelationData) {
+                const convCharId = parseInt(document.getElementById('conversation-character').value);
+                const convChar = this.state.characters.find(c => c.id === convCharId);
+                if (convChar && convChar.global_character_id) {
+                    relationGlobalCharId = convChar.global_character_id;
+                }
+            }
 
             options.push({
                 dbId: opt.dataset.dbId || null,
