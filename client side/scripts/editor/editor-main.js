@@ -1,6 +1,7 @@
 import AppConfig from '../config.js';
 import DialogueTreeVisualizer from './dialogue-tree-visualizer.js';
 import debug from '../debug.js';
+import { escapeHtml, escapeAttr, safeNumber } from '../escape-utils.js';
 
 const { API_URL, ASSETS_URL } = AppConfig;
 
@@ -147,9 +148,9 @@ async loadFiles() {
         }
         
         container.innerHTML = this.state.dialogues.map(d => `
-            <div class="dialogue-item ${d.is_active === 0 ? 'dialogue-inactive' : ''}" data-id="${d.id}">
-                <div class="dialogue-item-frequency">${d.frequency}</div>
-                <div class="dialogue-item-title">${d.title || 'Без названия'}</div>
+            <div class="dialogue-item ${d.is_active === 0 ? 'dialogue-inactive' : ''}" data-id="${escapeAttr(d.id)}">
+                <div class="dialogue-item-frequency">${escapeHtml(d.frequency)}</div>
+                <div class="dialogue-item-title">${escapeHtml(d.title || 'Без названия')}</div>
                 ${d.is_active === 0 ? '<div class="dialogue-inactive-badge">Неактивен</div>' : ''}
             </div>
         `).join('');
@@ -207,9 +208,9 @@ renderDialogueInfo(dialogue) {
         
         container.innerHTML = this.state.users.map(user => `
             <div class="user-item">
-                <input type="checkbox" id="user-${user.id}" value="${user.id}" 
+                <input type="checkbox" id="user-${escapeAttr(user.id)}" value="${escapeAttr(user.id)}"
                     ${this.state.selectedAllowedUsers.includes(user.id) ? 'checked' : ''}>
-                <label for="user-${user.id}">${user.username} (ID: ${user.id})</label>
+                <label for="user-${escapeAttr(user.id)}">${escapeHtml(user.username)} (ID: ${escapeHtml(user.id)})</label>
             </div>
         `).join('');
         
@@ -243,11 +244,11 @@ renderDialogueInfo(dialogue) {
         }
         
         container.innerHTML = this.state.characters.map(c => `
-            <div class="character-card" data-id="${c.id}">
-                <div class="character-portrait" style="background-image: url('${getAssetUrl(c.gc_image || c.image) || getAssetUrl('assets/images/portraits/static.gif')}')"></div>
+            <div class="character-card" data-id="${escapeAttr(c.id)}">
+                <div class="character-portrait" style="background-image: url('${escapeAttr(getAssetUrl(c.gc_image || c.image) || getAssetUrl('assets/images/portraits/static.gif'))}')"></div>
                 <div class="character-info">
-                    <div class="character-name">${c.gc_name || c.name}</div>
-                    <div class="character-window-label">Окно ${c.window}</div>
+                    <div class="character-name">${escapeHtml(c.gc_name || c.name)}</div>
+                    <div class="character-window-label">Окно ${escapeHtml(c.window)}</div>
                 </div>
                 <div class="character-actions">
                     <button class="btn btn-small edit-character-btn">Редактировать</button>
@@ -393,8 +394,8 @@ renderDialogueInfo(dialogue) {
             
             const currentValue = select.value;
             select.innerHTML = '<option value="">Выберите персонажа</option>' +
-                this.state.characters.map(c => 
-                    `<option value="${c.id}">${c.gc_name || c.name}</option>`
+                this.state.characters.map(c =>
+                    `<option value="${escapeAttr(c.id)}">${escapeHtml(c.gc_name || c.name)}</option>`
                 ).join('');
             select.value = currentValue;
         });
@@ -615,10 +616,10 @@ openCharacterModal(id = null) {
         const globalSelect = document.getElementById('character-global-select');
         
         globalSelect.innerHTML = '<option value="">Выберите персонажа...</option>' +
-            this.globalCharacters.map(gc => `<option value="${gc.id}">${gc.name}</option>`).join('');
-        
+            this.globalCharacters.map(gc => `<option value="${escapeAttr(gc.id)}">${escapeHtml(gc.name)}</option>`).join('');
+
         voiceSelect.innerHTML = '<option value="">Выберите файл...</option>' +
-            this.state.sounds.map(s => `<option value="${s}">${s.split('/').pop()}</option>`).join('');
+            this.state.sounds.map(s => `<option value="${escapeAttr(s)}">${escapeHtml(s.split('/').pop())}</option>`).join('');
         
         if (id) {
             const char = this.state.characters.find(c => c.id == id);
@@ -806,11 +807,11 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
         
         const customImageSelect = document.getElementById('conversation-custom-image');
         customImageSelect.innerHTML = '<option value="">По умолчанию</option>' +
-            this.state.portraits.map(p => `<option value="${p}">${p.split('/').pop()}</option>`).join('');
-        
+            this.state.portraits.map(p => `<option value="${escapeAttr(p)}">${escapeHtml(p.split('/').pop())}</option>`).join('');
+
         const voicelineSelect = document.getElementById('conversation-voiceline');
         voicelineSelect.innerHTML = '<option value="">Без озвучки (звук персонажа)</option>' +
-            this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
+            this.state.voicelines.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v.split('/').pop())}</option>`).join('');
         
         if (id) {
             const conv = this.state.conversations.find(c => String(c.id) === String(id));
@@ -899,15 +900,15 @@ openConversationModal(id = null, defaultBranch = 'main', forcedSortOrder = null)
         
         const targetSelect = optionEl.querySelector('.option-target');
         targetSelect.innerHTML = '<option value="">Новая ветка</option>' +
-            this.state.branches.map(b => 
-                `<option value="${b.branch_id}">${b.branch_id}</option>`
+            this.state.branches.map(b =>
+                `<option value="${escapeAttr(b.branch_id)}">${escapeHtml(b.branch_id)}</option>`
             ).join('');
         targetSelect.value = target;
-        
+
         const characterSelect = optionEl.querySelector('.option-character');
         characterSelect.innerHTML = '<option value="">Выберите персонажа</option>' +
-            this.state.characters.map(c => 
-                `<option value="${c.id}">${c.gc_name || c.name}</option>`
+            this.state.characters.map(c =>
+                `<option value="${escapeAttr(c.id)}">${escapeHtml(c.gc_name || c.name)}</option>`
             ).join('');
         
         targetSelect.addEventListener('change', (e) => {
@@ -1264,20 +1265,20 @@ async uploadFile(event, type) {
             if (type === 'sound') {
                 const select = document.getElementById('character-voice');
                 select.innerHTML = '<option value="">Выберите файл...</option>' +
-                    this.state.sounds.map(s => `<option value="${s}">${s.split('/').pop()}</option>`).join('');
+                    this.state.sounds.map(s => `<option value="${escapeAttr(s)}">${escapeHtml(s.split('/').pop())}</option>`).join('');
                 select.value = data.path;
             } else if (type === 'voiceline') {
                 const characterSelect = document.getElementById('character-voiceline');
                 if (characterSelect) {
                     characterSelect.innerHTML = '<option value="">Выберите файл...</option>' +
-                        this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
+                        this.state.voicelines.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v.split('/').pop())}</option>`).join('');
                     characterSelect.value = data.path;
                 }
-                
+
                 const conversationSelect = document.getElementById('conversation-voiceline');
                 if (conversationSelect) {
                     conversationSelect.innerHTML = '<option value="">Без озвучки (звук персонажа)</option>' +
-                        this.state.voicelines.map(v => `<option value="${v}">${v.split('/').pop()}</option>`).join('');
+                        this.state.voicelines.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v.split('/').pop())}</option>`).join('');
                     conversationSelect.value = data.path;
                 }
             }

@@ -586,7 +586,7 @@ authRoutes.post('/register', authLimiter, validateBody({
                     }
                     
                     const userId = this.lastID;
-                    
+
                     db.run('INSERT INTO user_settings (user_id, auto_play_music) VALUES (?, 1)',
                         [userId],
                         function(err) {
@@ -594,14 +594,21 @@ authRoutes.post('/register', authLimiter, validateBody({
                                 Logger.error('Error creating user settings:', err.message);
                             }
                         });
-                    
-                    req.session.userId = userId;
-                    req.session.username = normalizedUsername;
-                    
-                    res.status(201).json({
-                        message: 'Пользователь создан',
-                        userId: userId,
-                        username: normalizedUsername
+
+                    // Пересоздание сессии после регистрации (защита от session fixation).
+                    req.session.regenerate((err) => {
+                        if (err) {
+                            Logger.error('Session regenerate error (register):', err.message);
+                            return res.status(500).json({ message: 'Ошибка сервера' });
+                        }
+                        req.session.userId = userId;
+                        req.session.username = normalizedUsername;
+
+                        res.status(201).json({
+                            message: 'Пользователь создан',
+                            userId: userId,
+                            username: normalizedUsername
+                        });
                     });
                 });
         } catch (error) {
@@ -615,30 +622,38 @@ authRoutes.post('/login', authLimiter, validateBody({
     password: Validator.password
 }), async (req, res) => {
     const { username, password } = req.sanitizedBody;
-    
+
     db.get('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', [username], async (err, user) => {
         if (err) {
             return res.status(500).json({ message: 'Ошибка сервера' });
         }
-        
-        if (!user) {
-            return res.status(401).json({ message: 'Неверные данные' });
-        }
-        
+
+        // Валидный фиктивный bcrypt-хеш для несуществующих пользователей — выравнивает
+        // время ответа и мешает timing-атаке на перечисление логинов.
+        const dummyHash = '$2a$10$FYc8IWIJbWCZ9ZRS1429eO7pLTcTRe90ZxQrRYgJWqmLy9EfeM8sC';
+        const hashToCheck = user ? user.password : dummyHash;
+
         try {
-            const valid = await bcrypt.compare(password, user.password);
-            
-            if (!valid) {
+            const valid = await bcrypt.compare(password, hashToCheck);
+
+            if (!user || !valid) {
                 return res.status(401).json({ message: 'Неверные данные' });
             }
-            
-            req.session.userId = user.id;
-            req.session.username = user.username;
-            
-            res.json({
-                message: 'Успешная авторизация',
-                userId: user.id,
-                username: user.username
+
+            // Пересоздание сессии после успешного входа (защита от session fixation).
+            req.session.regenerate((err) => {
+                if (err) {
+                    Logger.error('Session regenerate error (login):', err.message);
+                    return res.status(500).json({ message: 'Ошибка сервера' });
+                }
+                req.session.userId = user.id;
+                req.session.username = user.username;
+
+                res.json({
+                    message: 'Успешная авторизация',
+                    userId: user.id,
+                    username: user.username
+                });
             });
         } catch (error) {
             res.status(500).json({ message: 'Ошибка сервера' });
@@ -787,6 +802,11 @@ pilotRoutes.post('/pilot-profiles/upload-avatar/:slot_number', requireAuth, uplo
     const { slot_number } = req.params;
     const userId = req.session.userId;
 
+    const slotNum = parseInt(slot_number, 10);
+    if (!Number.isInteger(slotNum) || slotNum < 1 || slotNum > 3) {
+        return res.status(400).json({ message: 'Номер слота должен быть от 1 до 3' });
+    }
+
     if (!req.file) {
         return res.status(400).json({ message: 'Файл не загружен' });
     }
@@ -823,29 +843,42 @@ progressRoutes.get('/dialogue-progress', requireAuth, (req, res) => {
 progressRoutes.post('/dialogue-progress', requireAuth, (req, res) => {
     const { frequency, progress, completed, lastLine } = req.body;
     const userId = req.session.userId;
-    
+
     const freqValid = Validator.frequency(frequency);
     if (!freqValid.valid) {
         return res.status(400).json({ message: freqValid.error });
     }
-    
+
+    const progressValid = Validator.progress(progress);
+    if (!progressValid.valid) {
+        return res.status(400).json({ message: progressValid.error });
+    }
+
+    const lastLineValid = Validator.progress(lastLine);
+    if (!lastLineValid.valid) {
+        return res.status(400).json({ message: 'Некорректное значение lastLine' });
+    }
+
+    const safeProgress = progressValid.value;
+    const safeLastLine = lastLineValid.value;
+
     db.get('SELECT * FROM dialogue_progress WHERE user_id = ? AND frequency = ?',
         [userId, frequency],
         (err, row) => {
             if (err) {
                 return res.status(500).json({ message: 'Ошибка БД' });
             }
-            
+
             if (row) {
                 db.run('UPDATE dialogue_progress SET progress = ?, completed = ?, last_line = ? WHERE user_id = ? AND frequency = ?',
-                    [progress, completed ? 1 : 0, lastLine, userId, frequency],
+                    [safeProgress, completed ? 1 : 0, safeLastLine, userId, frequency],
                     (err) => {
                         if (err) return res.status(500).json({ message: 'Ошибка обновления' });
                         res.json({ message: 'Прогресс обновлен' });
                     });
             } else {
                 db.run('INSERT INTO dialogue_progress (user_id, frequency, progress, completed, last_line) VALUES (?, ?, ?, ?, ?)',
-                    [userId, frequency, progress, completed ? 1 : 0, lastLine],
+                    [userId, frequency, safeProgress, completed ? 1 : 0, safeLastLine],
                     (err) => {
                         if (err) return res.status(500).json({ message: 'Ошибка сохранения' });
                         res.json({ message: 'Прогресс сохранен' });
@@ -947,29 +980,37 @@ progressRoutes.get('/repeat-counts', requireAuth, (req, res) => {
 
 progressRoutes.post('/repeat-counts', requireAuth, (req, res) => {
     const { repeatCounts } = req.body;
-    
-    if (!repeatCounts || typeof repeatCounts !== 'object') {
+
+    if (!repeatCounts || typeof repeatCounts !== 'object' || Array.isArray(repeatCounts)) {
         return res.status(400).json({ message: 'Неверный формат' });
     }
-    
+
+    const entries = Object.entries(repeatCounts);
+    const MAX_KEYS = 100;
+    if (entries.length > MAX_KEYS) {
+        return res.status(400).json({ message: `Слишком много записей (максимум ${MAX_KEYS})` });
+    }
+
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
-        
+
         const stmt = db.prepare(`
             INSERT INTO dialogue_repeats (user_id, frequency, repeat_count, updated_at)
             VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id, frequency) 
+            ON CONFLICT(user_id, frequency)
             DO UPDATE SET repeat_count = MAX(repeat_count, ?), updated_at = CURRENT_TIMESTAMP
         `);
-        
-        Object.entries(repeatCounts).forEach(([freq, count]) => {
-            if (typeof count === 'number' && count >= 0) {
+
+        entries.forEach(([freq, count]) => {
+            // frequency ограничиваем по длине, count — положительное число в разумном диапазоне.
+            if (typeof freq === 'string' && freq.length > 0 && freq.length <= 20 &&
+                typeof count === 'number' && Number.isFinite(count) && count >= 0 && count <= 1000) {
                 stmt.run(req.session.userId, freq, count, count);
             }
         });
-        
+
         stmt.finalize();
-        
+
         db.run('COMMIT', (err) => {
             if (err) return res.status(500).json({ message: 'Ошибка сохранения' });
             res.json({ message: 'Сохранено' });

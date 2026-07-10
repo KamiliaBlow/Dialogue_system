@@ -2,6 +2,7 @@ import AppConfig from '../config.js';
 import AdminAPI from './admin-api.js';
 import ChartManager from './admin-charts.js';
 import AdminUtils from './admin-utils.js';
+import { escapeHtml, escapeAttr } from '../escape-utils.js';
 
 const { ITEMS_PER_PAGE } = AppConfig;
 
@@ -256,23 +257,23 @@ class AdminApp {
             ? '<tr><td colspan="4" class="text-center">Пользователи не найдены</td></tr>'
             : pageUsers.map(user => `
                 <tr>
-                    <td>${user.id}</td>
-                    <td>${user.username}</td>
-                    <td>${this.utils.formatDate(user.created_at)}</td>
+                    <td>${escapeHtml(user.id)}</td>
+                    <td>${escapeHtml(user.username)}</td>
+                    <td>${escapeHtml(this.utils.formatDate(user.created_at))}</td>
                     <td>
-                        <button class="btn change-password-btn" 
-                                data-id="${user.id}" 
-                                data-username="${user.username}">
+                        <button class="btn change-password-btn"
+                                data-id="${escapeAttr(user.id)}"
+                                data-username="${escapeAttr(user.username)}">
                             Сменить пароль
                         </button>
-                        <button class="btn clear-progress-btn" 
-                                data-id="${user.id}" 
-                                data-username="${user.username}">
+                        <button class="btn clear-progress-btn"
+                                data-id="${escapeAttr(user.id)}"
+                                data-username="${escapeAttr(user.username)}">
                             Очистить прохождение
                         </button>
-                        <button class="btn btn-danger delete-user-btn" 
-                                data-id="${user.id}" 
-                                data-username="${user.username}">
+                        <button class="btn btn-danger delete-user-btn"
+                                data-id="${escapeAttr(user.id)}"
+                                data-username="${escapeAttr(user.username)}">
                             Удалить
                         </button>
                     </td>
@@ -429,8 +430,8 @@ class AdminApp {
             const data = await this.api.getFrequencies();
             if (data?.frequencies?.length) {
                 select.innerHTML = '<option value="all">Очистить все</option>' +
-                    data.frequencies.map(f => 
-                    `<option value="${f.frequency}">${f.frequency}${f.title ? ' - ' + f.title : ''}</option>`
+                    data.frequencies.map(f =>
+                    `<option value="${escapeAttr(f.frequency)}">${escapeHtml(f.frequency)}${f.title ? ' - ' + escapeHtml(f.title) : ''}</option>`
                 ).join('');
             } else {
                 select.innerHTML = '<option value="">Нет диалогов</option>';
@@ -542,9 +543,9 @@ class AdminApp {
             choice.options.sort((a, b) => b.count - a.count);
             
             return `
-                <li class="choice-item" data-frequency="${choice.frequency}" data-choice="${choice.choiceId}">
+                <li class="choice-item" data-frequency="${escapeAttr(choice.frequency)}" data-choice="${escapeAttr(choice.choiceId)}">
                     <div class="choice-header">
-                        <div class="choice-title">Выборы на частоте: ${choice.frequency} #${choice.indexInFrequency}</div>
+                        <div class="choice-title">Выборы на частоте: ${escapeHtml(choice.frequency)} #${escapeHtml(choice.indexInFrequency)}</div>
                         <div class="choice-count">${choice.total} выборов</div>
                     </div>
                     <div class="choice-options">
@@ -552,7 +553,7 @@ class AdminApp {
                             const percent = this.utils.calculatePercent(opt.count, choice.total);
                             return `
                                 <div class="choice-option">
-                                    <div class="choice-option-text">${opt.text}</div>
+                                    <div class="choice-option-text">${escapeHtml(opt.text)}</div>
                                     <div class="choice-option-count">${opt.count}</div>
                                     <div class="choice-option-percent">${percent}%</div>
                                     <div class="progress-bar">
@@ -635,17 +636,17 @@ class AdminApp {
         
         sorted.forEach(option => {
             const div = document.createElement('div');
-            div.innerHTML = `<strong>${option.text} (${option.count} выборов)</strong>`;
+            div.innerHTML = `<strong>${escapeHtml(option.text)} (${escapeHtml(option.count)} выборов)</strong>`;
             optionsContainer.appendChild(div);
         });
-        
+
         this.chartManager.createDetailChart(sorted);
-        
+
         tableBody.innerHTML = details.map(detail => `
             <tr>
-                <td>${detail.username}</td>
-                <td>${detail.choice_text}</td>
-                <td>${this.utils.formatDate(detail.created_at)}</td>
+                <td>${escapeHtml(detail.username)}</td>
+                <td>${escapeHtml(detail.choice_text)}</td>
+                <td>${escapeHtml(this.utils.formatDate(detail.created_at))}</td>
             </tr>
         `).join('');
         
@@ -700,10 +701,10 @@ class AdminApp {
             
             return `
                 <tr>
-                    <td>${progress.username}</td>
-                    <td>${progress.frequency}</td>
-                    <td>${repeatCount} / ${maxRepeats}</td>
-                    <td><span class="status-badge ${statusClass}">${progress.status}</span></td>
+                    <td>${escapeHtml(progress.username)}</td>
+                    <td>${escapeHtml(progress.frequency)}</td>
+                    <td>${escapeHtml(repeatCount)} / ${escapeHtml(maxRepeats)}</td>
+                    <td><span class="status-badge ${statusClass}">${escapeHtml(progress.status)}</span></td>
                 </tr>
             `;
         }).join('');
@@ -749,9 +750,9 @@ class AdminApp {
                         ? `left:50%;width:${barPercent - 50}%;background-color:${color};`
                         : `left:${barPercent}%;width:${50 - barPercent}%;background-color:${color};`;
 
-                    return `<tr data-relation-id="${r.id}">
-                        <td>${r.username}</td>
-                        <td>${r.character_name}</td>
+                    return `<tr data-relation-id="${escapeAttr(r.id)}">
+                        <td>${escapeHtml(r.username)}</td>
+                        <td>${escapeHtml(r.character_name)}</td>
                         <td>
                             <div style="display:flex;align-items:center;gap:8px;">
                                 <input type="number" class="form-input rel-edit-input" value="${val}" min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;">

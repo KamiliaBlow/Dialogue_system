@@ -1,4 +1,5 @@
 import AppConfig from './config.js';
+import { escapeAttr, safeNumber } from './escape-utils.js';
 
 const { API_URL, ASSETS_URL, CACHE_HEADERS } = AppConfig;
 
@@ -188,17 +189,20 @@ class CharacterCatalog {
         grid.innerHTML = this.characters.map(c => {
             const imgSrc = c.image ? `${ASSETS_URL}/${c.image.replace('/assets/', '')}` : '';
             const relColor = c.default_relation > 0 ? '#03fb8d' : c.default_relation < 0 ? '#ff3333' : 'rgba(3,251,141,0.7)';
+            const scale = safeNumber(c.portrait_scale, 1);
+            const posX = safeNumber(c.portrait_x, 0);
+            const posY = safeNumber(c.portrait_y, 0);
             return `
-                <div class="catalog-card" data-id="${c.id}">
+                <div class="catalog-card" data-id="${escapeAttr(c.id)}">
                     <div class="catalog-card-portrait">
-                        ${imgSrc ? `<img src="${imgSrc}" alt="${c.name}" style="transform: scale(${c.portrait_scale || 1}) translateX(${c.portrait_x || 0}px) translateY(${c.portrait_y || 0}px) scaleX(${c.portrait_mirror ? -1 : 1});">` : ''}
+                        ${imgSrc ? `<img src="${escapeAttr(imgSrc)}" alt="${this.escapeHtml(c.name)}" style="transform: scale(${scale}) translateX(${posX}px) translateY(${posY}px) scaleX(${c.portrait_mirror ? -1 : 1});">` : ''}
                     </div>
                     <div class="catalog-card-name">${this.escapeHtml(c.name)}</div>
-                    <div class="catalog-card-relation" style="color:${relColor}">Базовое отношение: ${c.default_relation || 0}</div>
+                    <div class="catalog-card-relation" style="color:${relColor}">Базовое отношение: ${this.escapeHtml(c.default_relation || 0)}</div>
                     <div class="catalog-card-actions">
-                        <button class="btn btn-small relations-btn" data-id="${c.id}" data-name="${this.escapeHtml(c.name)}">Отношения</button>
-                        <button class="btn btn-small edit-btn" data-id="${c.id}">Изменить</button>
-                        <button class="btn btn-small btn-danger delete-btn" data-id="${c.id}">Удалить</button>
+                        <button class="btn btn-small relations-btn" data-id="${escapeAttr(c.id)}" data-name="${this.escapeHtml(c.name)}">Отношения</button>
+                        <button class="btn btn-small edit-btn" data-id="${escapeAttr(c.id)}">Изменить</button>
+                        <button class="btn btn-small btn-danger delete-btn" data-id="${escapeAttr(c.id)}">Удалить</button>
                     </div>
                 </div>
             `;
@@ -445,11 +449,11 @@ class CharacterCatalog {
                 const relId = rel ? rel.id : null;
                 const color = value > 0 ? '#03fb8d' : value < 0 ? '#ff3333' : 'inherit';
                 return `
-                    <tr data-rel-id="${relId}" data-user-id="${user.id}" data-gc-id="${characterId}">
+                    <tr data-rel-id="${escapeAttr(relId)}" data-user-id="${escapeAttr(user.id)}" data-gc-id="${escapeAttr(characterId)}">
                         <td>${this.escapeHtml(user.username)}</td>
                         <td>
                             <input type="number" class="form-input relation-value-input"
-                                   value="${value}" min="-100" max="100" step="5"
+                                   value="${escapeAttr(value)}" min="-100" max="100" step="5"
                                    style="width:100%;color:${color};text-align:center;">
                         </td>
                         <td>
