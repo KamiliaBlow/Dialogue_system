@@ -104,7 +104,7 @@ async function handleRegister() {
         document.getElementById('registerUsernameError').style.display = 'none';
     }
 
-    if (!password || password.length < 6) {
+    if (!password || password.length < 8) {
         document.getElementById('registerPasswordError').style.display = 'block';
         hasErrors = true;
     } else {

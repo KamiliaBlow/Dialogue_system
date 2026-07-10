@@ -1995,20 +1995,40 @@ function extractPauses(text) {
 }
 
 /**
+ * Валидирует значение цвета для безопасной вставки в CSS-атрибут style.
+ * Разрешает: hex (#rgb / #rrggbb / #rrggbbaa), именованные цвета, rgb()/rgba() с цифрами.
+ * Всё прочее (включая url(), expression, точки с запятой) отклоняется.
+ * @param {string} raw - Сырое значение из тега [Color:...]
+ * @returns {string|null} - Очищенное значение или null (тогда стиль не применяется)
+ */
+function sanitizeColor(raw) {
+    if (!raw || typeof raw !== 'string') return null;
+    const v = raw.trim();
+    if (!v) return null;
+    // Hex
+    if (/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v)) return v;
+    // rgb()/rgba() — только числа и запятые/пробелы внутри скобок, без выражений
+    if (/^rgba?\(\s*[\d.,%\s]+\s*\)$/i.test(v)) return v;
+    // Именованные цвета (включая CSS-цвета) — буквы/дефис, без спецсимволов и скобок
+    if (/^[a-zA-Z-]+$/.test(v)) return v;
+    return null;
+}
+
+/**
  * Парсит теги форматирования и возвращает массив сегментов с стилями
  * @param {string} text - Текст с тегами
  * @returns {Array} - Массив сегментов {char, style}
  */
 function parseFormatting(text) {
     if (!text) return [];
-    
+
     const segments = [];
     let style = { shake: false, color: null, size: null };
     let i = 0;
-    
+
     while (i < text.length) {
         let found = false;
-        
+
         // Сначала проверяем теги с значениями (S, Color)
         const sMatch = text.slice(i).match(/^\[S:(\d+\.?\d*)\]/);
         if (sMatch) {
@@ -2021,7 +2041,8 @@ function parseFormatting(text) {
         if (!found) {
             const colorMatch = text.slice(i).match(/^\[Color:(.+?)\]/);
             if (colorMatch) {
-                style.color = colorMatch[1];
+                // Строгая валидация значения цвета (защита от инъекции в атрибут style).
+                style.color = sanitizeColor(colorMatch[1]);
                 i += colorMatch[0].length;
                 found = true;
             }
@@ -2075,8 +2096,10 @@ function buildHtml(segments) {
             if (Object.keys(seg.style).length > 0) {
                 let s = '';
                 if (seg.style.shake) s += 'animation: shake 0.1s infinite; display: inline-block;';
+                // seg.style.color уже отвалидирован sanitizeColor, но проверяем на всякий случай.
                 if (seg.style.color) s += 'color:' + seg.style.color + ';';
-                if (seg.style.size) s += 'font-size:' + seg.style.size + 'em;';
+                // seg.style.size гарантированно число в диапазоне 0.8–1.3.
+                if (typeof seg.style.size === 'number') s += 'font-size:' + seg.style.size + 'em;';
                 html += '<span style="' + s + '">';
             }
             currentStyle = styleKey;

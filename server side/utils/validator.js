@@ -20,8 +20,15 @@ const Validator = {
         if (!value || typeof value !== 'string') {
             return { valid: false, error: 'Пароль обязателен' };
         }
-        if (value.length < 6) {
-            return { valid: false, error: 'Пароль минимум 6 символов' };
+        if (value.length < 8) {
+            return { valid: false, error: 'Пароль минимум 8 символов' };
+        }
+        if (value.length > 100) {
+            return { valid: false, error: 'Пароль максимум 100 символов' };
+        }
+        // Должен содержать буквы и цифры (минимальная сложность).
+        if (!/[a-zA-Zа-яА-Я]/.test(value) || !/[0-9]/.test(value)) {
+            return { valid: false, error: 'Пароль должен содержать буквы и цифры' };
         }
         return { valid: true, value };
     },

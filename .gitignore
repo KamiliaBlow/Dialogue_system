@@ -1,0 +1,48 @@
+# ===== Секреты и конфигурация окружения =====
+.env
+*.env
+.env.local
+.env.*.local
+
+# ===== Базы данных =====
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# ===== SSL-сертификаты и ключи =====
+server side/ssl/*.pem
+server side/ssl/*.key
+server side/ssl/*.crt
+server side/ssl/*.cer
+*.pem
+*.key
+
+# ===== Загруженные пользовательские медиа (генерируются на лету) =====
+server side/assets/images/avatars/*
+server side/assets/images/portraits/portrait_*
+server side/assets/sounds/voices/voice_*
+server side/assets/sounds/voiceline/voiceline_*
+!server side/assets/images/avatars/.gitkeep
+!server side/assets/images/portraits/.gitkeep
+!server side/assets/sounds/voices/.gitkeep
+!server side/assets/sounds/voiceline/.gitkeep
+
+# ===== Node.js =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# ===== Логи и временные файлы =====
+*.log
+logs/
+tmp/
+temp/
+
+# ===== IDE / ОС =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

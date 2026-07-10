@@ -4,6 +4,72 @@ const fs = require('fs');
 const multer = require('multer');
 const Logger = require('../utils/logger');
 
+// Базовые директории для медиа.
+const ASSETS_DIR = path.join(__dirname, '..', 'assets');
+const PORTRAITS_DIR = path.join(ASSETS_DIR, 'images', 'portraits');
+
+// Защита от path traversal: проверяет, что результирующий путь остаётся внутри baseDir.
+function isPathSafe(relativePath, baseDir) {
+    if (!relativePath || typeof relativePath !== 'string') return false;
+    const cleaned = relativePath.replace(/^\/+/, '').replace(/\.\./g, '').trim();
+    if (!cleaned) return false;
+    const full = path.resolve(baseDir, cleaned);
+    const base = path.resolve(baseDir);
+    return full === base || full.startsWith(base + path.sep);
+}
+
+// Нормализует путь медиафайла, сохранённый как /assets/... к безопасному виду.
+// Возвращает null, если путь выходит за пределы assets.
+function sanitizeAssetPath(input) {
+    if (!input || typeof input !== 'string') return null;
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    // Должен начинаться с /assets/...
+    const rel = trimmed.startsWith('/assets/') ? trimmed.slice('/assets/'.length) : trimmed;
+    if (!isPathSafe(rel, ASSETS_DIR)) return null;
+    return '/assets/' + rel.replace(/\\/g, '/');
+}
+
+// Проверка сигнатур (magic bytes) загруженного изображения.
+function validateImageMagicBytes(file) {
+    if (!file || !file.path) return false;
+    try {
+        const fd = fs.openSync(file.path, 'r');
+        const buf = Buffer.alloc(16);
+        const bytes = fs.readSync(fd, buf, 0, 16, 0);
+        fs.closeSync(fd);
+        const b = buf.slice(0, bytes);
+        if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return true;       // JPEG
+        if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return true; // PNG
+        if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return true; // GIF
+        if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
+            && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return true; // WEBP
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+// Проверка сигнатур для аудиофайлов.
+function validateAudioMagicBytes(file) {
+    if (!file || !file.path) return false;
+    try {
+        const fd = fs.openSync(file.path, 'r');
+        const buf = Buffer.alloc(16);
+        const bytes = fs.readSync(fd, buf, 0, 16, 0);
+        fs.closeSync(fd);
+        const b = buf.slice(0, bytes);
+        if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) return true;        // MP3 (ID3)
+        if (b[0] === 0xFF && (b[1] === 0xFB || b[1] === 0xF3 || b[1] === 0xF2)) return true; // MP3
+        if (b[0] === 0x4F && b[1] === 0x67 && b[2] === 0x47 && b[3] === 0x53) return true; // OGG
+        if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
+            && b[8] === 0x57 && b[9] === 0x41 && b[10] === 0x56 && b[11] === 0x45) return true; // WAV
+        return false;
+    } catch {
+        return false;
+    }
+}
+
 const dialogueEditorRoutes = (db, upload) => {
     const router = express.Router();
 
@@ -614,11 +680,31 @@ router.post('/conversations', (req, res) => {
 
     router.post('/global-characters', upload.single('portrait'), (req, res) => {
         const { name, defaultRelation, keepImage } = req.body;
+
+        // Проверка загруженного файла по сигнатурам (защита от замаскированных файлов).
+        if (req.file && !validateImageMagicBytes(req.file)) {
+            try { fs.unlinkSync(req.file.path); } catch {}
+            return res.status(400).json({ message: 'Файл не является корректным изображением' });
+        }
+
         let image;
         if (req.file) {
             image = `/assets/images/portraits/${req.file.filename}`;
         } else if (keepImage) {
-            image = `/assets/images/portraits/${keepImage}`;
+            // keepImage должен указывать только на существующий файл в директории портретов.
+            const candidate = keepImage.startsWith('/assets/')
+                ? keepImage
+                : `/assets/images/portraits/${path.basename(keepImage)}`;
+            const safe = sanitizeAssetPath(candidate);
+            if (!safe || !safe.startsWith('/assets/images/portraits/')) {
+                return res.status(400).json({ message: 'Недопустимый путь изображения' });
+            }
+            // Проверяем, что файл реально существует.
+            const physPath = path.join(ASSETS_DIR, safe.replace('/assets/', ''));
+            if (!fs.existsSync(physPath)) {
+                return res.status(400).json({ message: 'Указанное изображение не найдено' });
+            }
+            image = safe;
         } else {
             image = null;
         }
@@ -628,10 +714,11 @@ router.post('/conversations', (req, res) => {
         const py = parseFloat(req.body.portraitY) || 0;
         const pm = req.body.portraitMirror === '1' || req.body.portraitMirror === true ? 1 : 0;
 
-        if (!name) return res.status(400).json({ message: 'Имя обязательно' });
+        if (!name || typeof name !== 'string' || name.trim() === '') return res.status(400).json({ message: 'Имя обязательно' });
+        const safeName = name.trim().slice(0, 100);
 
         db.run(`INSERT INTO global_characters (name, image, portrait_scale, portrait_x, portrait_y, portrait_mirror, default_relation) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [name, image, ps, px, py, pm, rel],
+            [safeName, image, ps, px, py, pm, rel],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания персонажа' });
                 res.status(201).json({ message: 'Персонаж создан', characterId: this.lastID });
@@ -641,11 +728,21 @@ router.post('/conversations', (req, res) => {
     router.put('/global-characters/:id', upload.single('portrait'), (req, res) => {
         const { id } = req.params;
         const { name, defaultRelation, portraitScale, portraitX, portraitY, portraitMirror, keepImage } = req.body;
+
+        // Проверка загруженного файла по сигнатурам.
+        if (req.file && !validateImageMagicBytes(req.file)) {
+            try { fs.unlinkSync(req.file.path); } catch {}
+            return res.status(400).json({ message: 'Файл не является корректным изображением' });
+        }
+
         const ps = parseFloat(portraitScale) || 1.0;
         const px = parseFloat(portraitX) || 0;
         const py = parseFloat(portraitY) || 0;
         const pm = portraitMirror === '1' || portraitMirror === true ? 1 : 0;
         const rel = defaultRelation !== undefined ? Math.max(-100, Math.min(100, parseInt(defaultRelation) || 0)) : 0;
+
+        if (!name || typeof name !== 'string' || name.trim() === '') return res.status(400).json({ message: 'Имя обязательно' });
+        const safeName = name.trim().slice(0, 100);
 
         db.get('SELECT image FROM global_characters WHERE id = ?', [id], (err, existing) => {
             if (err) return res.status(500).json({ message: 'Ошибка' });
@@ -655,11 +752,18 @@ router.post('/conversations', (req, res) => {
             if (req.file) {
                 image = `/assets/images/portraits/${req.file.filename}`;
             } else if (keepImage && keepImage !== 'false' && keepImage !== '') {
-                if (keepImage.startsWith('/assets/')) {
-                    image = keepImage;
-                } else {
-                    image = `/assets/images/portraits/${keepImage}`;
+                const candidate = keepImage.startsWith('/assets/')
+                    ? keepImage
+                    : `/assets/images/portraits/${path.basename(keepImage)}`;
+                const safe = sanitizeAssetPath(candidate);
+                if (!safe || !safe.startsWith('/assets/images/portraits/')) {
+                    return res.status(400).json({ message: 'Недопустимый путь изображения' });
                 }
+                const physPath = path.join(ASSETS_DIR, safe.replace('/assets/', ''));
+                if (!fs.existsSync(physPath)) {
+                    return res.status(400).json({ message: 'Указанное изображение не найдено' });
+                }
+                image = safe;
             } else if (keepImage === 'false' || keepImage === '') {
                 image = null;
             } else {
@@ -667,7 +771,7 @@ router.post('/conversations', (req, res) => {
             }
 
             db.run(`UPDATE global_characters SET name = ?, image = ?, portrait_scale = ?, portrait_x = ?, portrait_y = ?, portrait_mirror = ?, default_relation = ? WHERE id = ?`,
-                [name, image, ps, px, py, pm, rel, id],
+                [safeName, image, ps, px, py, pm, rel, id],
                 function(err) {
                     if (err) return res.status(500).json({ message: 'Ошибка обновления персонажа' });
                     if (this.changes === 0) return res.status(404).json({ message: 'Персонаж не найден' });
@@ -827,8 +931,13 @@ router.post('/conversations', (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: 'Файл не загружен' });
         }
-        
-        res.json({ 
+
+        if (!validateImageMagicBytes(req.file)) {
+            try { fs.unlinkSync(req.file.path); } catch {}
+            return res.status(400).json({ message: 'Файл не является корректным изображением' });
+        }
+
+        res.json({
             message: 'Файл загружен',
             path: `/assets/images/portraits/${req.file.filename}`,
             filename: req.file.filename
@@ -851,20 +960,19 @@ router.post('/conversations', (req, res) => {
             }
         });
         
-        const soundUpload = multer({ 
+        const soundUpload = multer({
             storage: soundStorage,
             limits: { fileSize: 10 * 1024 * 1024 },
             fileFilter: (req, file, cb) => {
-                const allowedTypes = /wav|mp3|ogg/;
-                const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-                const mimetype = /audio|wav|mp3|mpeg|ogg/.test(file.mimetype);
-                if (mimetype && extname) {
+                const allowedExts = /\.(wav|mp3|ogg)$/i;
+                const allowedMimes = /^(audio|video)\/(x-)?(wav|mpeg|mp3|ogg)$/i;
+                if (allowedExts.test(path.extname(file.originalname).toLowerCase()) && allowedMimes.test(file.mimetype)) {
                     return cb(null, true);
                 }
                 cb(new Error('Только аудиофайлы разрешены'));
             }
         });
-        
+
         soundUpload.single('sound')(req, res, (err) => {
             if (err) {
                 return res.status(400).json({ message: err.message });
@@ -872,8 +980,13 @@ router.post('/conversations', (req, res) => {
             if (!req.file) {
                 return res.status(400).json({ message: 'Файл не загружен' });
             }
-            
-            res.json({ 
+
+            if (!validateAudioMagicBytes(req.file)) {
+                try { fs.unlinkSync(req.file.path); } catch {}
+                return res.status(400).json({ message: 'Файл не является корректным аудиофайлом' });
+            }
+
+            res.json({
                 message: 'Файл загружен',
                 path: `/assets/sounds/voices/${req.file.filename}`,
                 filename: req.file.filename
@@ -897,20 +1010,19 @@ router.post('/conversations', (req, res) => {
             }
         });
         
-        const voicelineUpload = multer({ 
+        const voicelineUpload = multer({
             storage: voicelineStorage,
             limits: { fileSize: 50 * 1024 * 1024 },
             fileFilter: (req, file, cb) => {
-                const allowedTypes = /wav|mp3|ogg/;
-                const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-                const mimetype = /audio|wav|mp3|mpeg|ogg/.test(file.mimetype);
-                if (mimetype && extname) {
+                const allowedExts = /\.(wav|mp3|ogg)$/i;
+                const allowedMimes = /^(audio|video)\/(x-)?(wav|mpeg|mp3|ogg)$/i;
+                if (allowedExts.test(path.extname(file.originalname).toLowerCase()) && allowedMimes.test(file.mimetype)) {
                     return cb(null, true);
                 }
                 cb(new Error('Только аудиофайлы разрешены'));
             }
         });
-        
+
         voicelineUpload.single('voiceline')(req, res, (err) => {
             if (err) {
                 return res.status(400).json({ message: err.message });
@@ -918,7 +1030,12 @@ router.post('/conversations', (req, res) => {
             if (!req.file) {
                 return res.status(400).json({ message: 'Файл не загружен' });
             }
-            
+
+            if (!validateAudioMagicBytes(req.file)) {
+                try { fs.unlinkSync(req.file.path); } catch {}
+                return res.status(400).json({ message: 'Файл не является корректным аудиофайлом' });
+            }
+
             res.json({ 
                 message: 'Файл загружен',
                 path: `/assets/sounds/voiceline/${req.file.filename}`,

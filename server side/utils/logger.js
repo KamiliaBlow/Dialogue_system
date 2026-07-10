@@ -1,6 +1,6 @@
 const config = require('../config');
 
-const isDebug = config.DEBUG;
+const isDebug = config.DEBUG === true;
 
 class Logger {
     static formatMessage(level, message, data = null) {

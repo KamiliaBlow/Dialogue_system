@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
@@ -13,6 +15,39 @@ const config = require('./config');
 const Logger = require('./utils/logger');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const { Validator, validateBody } = require('./utils/validator');
+
+// ====== Утилиты безопасности ======
+
+// Проверка сигнатур (magic bytes) загружаемых файлов.
+function detectMimeFromHeader(buf) {
+    if (!buf || buf.length < 12) return null;
+    if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47
+        && buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A) return 'image/png';
+    if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return 'image/gif';
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
+        && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+    // Аудио
+    if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return 'audio/mp3'; // ID3
+    if (buf[0] === 0xFF && (buf[1] === 0xFB || buf[1] === 0xF3 || buf[1] === 0xF2)) return 'audio/mp3';
+    if (buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53) return 'audio/ogg';
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
+        && buf[8] === 0x57 && buf[9] === 0x41 && buf[10] === 0x56 && buf[11] === 0x45) return 'audio/wav';
+    return null;
+}
+
+// Нормализация и проверка пути внутри разрешённой директории (защита от path traversal).
+function isPathSafe(relativePath, baseDir) {
+    if (!relativePath || typeof relativePath !== 'string') return false;
+    const cleaned = relativePath.replace(/^\/+/, '').replace(/\.\./g, '').trim();
+    if (!cleaned) return false;
+    const full = path.resolve(baseDir, cleaned);
+    const base = path.resolve(baseDir);
+    return full === base || full.startsWith(base + path.sep);
+}
+
+// Экземпляр-синглтон БД для использования в утилитах.
+let dbInstance = null;
 
 // Настройка загрузки файлов
 const storage = multer.diskStorage({
@@ -30,19 +65,36 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ 
+const imageFileFilter = (req, file, cb) => {
+    const allowedExts = /\.(jpe?g|png|gif|webp)$/i;
+    const allowedMimes = /^image\/(jpeg|png|gif|webp)$/i;
+    if (!allowedExts.test(path.extname(file.originalname).toLowerCase()) || !allowedMimes.test(file.mimetype)) {
+        return cb(new Error('Только изображения разрешены'));
+    }
+    cb(null, true);
+};
+
+const upload = multer({
     storage: storage,
     limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|webp/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        if (mimetype && extname) {
-            return cb(null, true);
-        }
-        cb(new Error('Только изображения разрешены'));
-    }
+    fileFilter: imageFileFilter
 });
+
+// Дополнительная проверка содержимого файла по сигнатурам (magic bytes).
+// Использовать ПОСЛЕ multer: удаляет файл, если сигнатура не соответствует изображению.
+function validateImageMagicBytes(file) {
+    if (!file || !file.path) return false;
+    try {
+        const fd = fs.openSync(file.path, 'r');
+        const buf = Buffer.alloc(16);
+        const bytes = fs.readSync(fd, buf, 0, 16, 0);
+        fs.closeSync(fd);
+        const detected = detectMimeFromHeader(buf.slice(0, bytes));
+        return detected ? /^image\//.test(detected) : false;
+    } catch {
+        return false;
+    }
+}
 
 const avatarStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -59,18 +111,10 @@ const avatarStorage = multer.diskStorage({
     }
 });
 
-const uploadAvatar = multer({ 
+const uploadAvatar = multer({
     storage: avatarStorage,
     limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|webp/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        if (mimetype && extname) {
-            return cb(null, true);
-        }
-        cb(new Error('Только изображения разрешены'));
-    }
+    fileFilter: imageFileFilter
 });
 
 config.validate();
@@ -79,9 +123,52 @@ const sslKeyPath = path.join(__dirname, config.SSL_KEY_PATH);
 const sslCertPath = path.join(__dirname, config.SSL_CERT_PATH);
 const hasSSL = fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath);
 
+// Запрет фолбэка на HTTP в проде: SSL обязателен, если явно не разрешён ALLOW_HTTP=1.
+if (!hasSSL && !config.ALLOW_HTTP) {
+    console.error('\n========================================');
+    console.error(' КРИТИЧЕСКАЯ ОШИБКА: SSL-сертификаты не найдены');
+    console.error('========================================');
+    console.error(' Сертификаты не найдены по путям:');
+    console.error('   ' + sslKeyPath);
+    console.error('   ' + sslCertPath);
+    console.error('\n Запуск по HTTP в проде небезопасен (сессионные куки передаются открыто).');
+    console.error(' Положите сертификаты в server side/ssl/ (privkey.pem, cert.pem)');
+    console.error(' или установите ALLOW_HTTP=1 в .env ТОЛЬКО для локальной разработки.');
+    console.error('========================================\n');
+    process.exit(1);
+}
+
 const app = express();
 
-const allowedHeadersList = 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, expires, pragma, if-modified-since, cache-control, x-request-id';
+// ====== Security headers (Helmet) ======
+app.use(helmet({
+    contentSecurityPolicy: {
+        // CSP: разрешаем ресурсы только с разрешённых origin'ов и самих себя.
+        // media-src/img-src также подключают data: (для озвучки/портретов, встроенных в разметку).
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", ...config.CORS_ORIGINS],
+            mediaSrc: ["'self'", "data:", "blob:", ...config.CORS_ORIGINS],
+            fontSrc: ["'self'", "data:"],
+            connectSrc: ["'self'", ...config.CORS_ORIGINS],
+            frameAncestors: ["'none'"],
+            formAction: ["'self'"],
+            baseUri: ["'self'"],
+            objectSrc: ["'none'"]
+        }
+    },
+    // HSTS только при HTTPS (helmet сам применит только к https-запросам).
+    strictTransportSecurity: hasSSL ? {
+        maxAge: 63072000,         // 2 года
+        includeSubDomains: true,
+        preload: true
+    } : false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' } // раздаём assets с other-origin
+}));
+
+const allowedHeadersList = ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'Expires', 'Pragma', 'If-Modified-Since', 'X-Request-Id'];
 
 const corsOptions = {
     origin: function(origin, callback) {
@@ -96,8 +183,8 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
-    allowedHeaders: allowedHeadersList.split(', '),
-    exposedHeaders: ['Set-Cookie', 'Content-Length', 'X-Request-Id'],
+    allowedHeaders: allowedHeadersList,
+    exposedHeaders: ['Content-Length', 'X-Request-Id'],
     optionsSuccessStatus: 204
 };
 
@@ -118,8 +205,9 @@ const db = new sqlite3.Database(config.DB_PATH, (err) => {
         initDatabase();
     }
 });
+dbInstance = db;
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 const assetsCorsMiddleware = (req, res, next) => {
     const origin = req.headers.origin;
     if (origin && config.CORS_ORIGINS.includes(origin)) {
@@ -132,20 +220,67 @@ const assetsCorsMiddleware = (req, res, next) => {
 app.use('/DIALOGUE_rework/assets', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets')));
 app.use('/assets', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets')));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ====== Сессии ======
+// SameSite=lax по умолчанию (защита от CSRF для запросов с других сайтов).
+// secure=true при HTTPS. В режиме HTTP-разработки (ALLOW_HTTP=1) cookie не secure.
 app.use(session({
     secret: config.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { 
+    cookie: {
         secure: hasSSL,
         maxAge: config.SESSION_MAX_AGE,
-        sameSite: hasSSL ? 'none' : 'lax',
+        sameSite: 'lax',
         httpOnly: true,
         path: '/'
     },
     name: 'sessionId'
 }));
 app.use(Logger.request);
+
+// ====== Защита от CSRF через проверку Origin/Referer ======
+// Для state-changing запросов (POST/PUT/PATCH/DELETE) с разрешённых origin'ов.
+// Дополняет SameSite=lax и работает даже при cross-origin запросах из разрешённых доменов.
+const csrfOriginCheck = (req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+        return next();
+    }
+    const origin = req.headers.origin || req.headers.referer;
+    if (!origin) {
+        return res.status(403).json({ message: 'Запрос без Origin запрещён' });
+    }
+    let normalized = origin;
+    try {
+        const u = new URL(origin);
+        normalized = u.origin;
+    } catch {}
+    if (!config.CORS_ORIGINS.includes(normalized)) {
+        return res.status(403).json({ message: 'Недопустимый источник запроса' });
+    }
+    next();
+};
+app.use(csrfOriginCheck);
+
+// ====== Rate limiting ======
+// Общий лимит для всего API.
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,   // 15 минут
+    max: 300,                   // 300 запросов на IP за окно
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Слишком много запросов, попробуйте позже' }
+});
+app.use('/api', apiLimiter);
+
+// Строгий лимит для аутентификации (защита от brute-force / credential stuffing).
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,                    // 10 попыток на IP за 15 минут
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Слишком много попыток входа, попробуйте позже' }
+});
 
 function initDatabase() {
     const tables = [
@@ -424,7 +559,7 @@ tables.forEach(sql => db.run(sql));
 
 const authRoutes = express.Router();
 
-authRoutes.post('/register', validateBody({
+authRoutes.post('/register', authLimiter, validateBody({
     username: Validator.username,
     password: Validator.password
 }), async (req, res) => {
@@ -475,7 +610,7 @@ authRoutes.post('/register', validateBody({
     });
 });
 
-authRoutes.post('/login', validateBody({
+authRoutes.post('/login', authLimiter, validateBody({
     username: Validator.username,
     password: Validator.password
 }), async (req, res) => {
@@ -567,19 +702,32 @@ pilotRoutes.get('/pilot-profiles/active', requireAuth, (req, res) => {
 pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
     const { slot_number, callsign, full_name, mech_name, avatar_path } = req.body;
     const userId = req.session.userId;
-    
+
     if (!slot_number || slot_number < 1 || slot_number > 3) {
         return res.status(400).json({ message: 'Номер слота должен быть от 1 до 3' });
     }
-    
+
     if (!callsign || callsign.trim() === '') {
         return res.status(400).json({ message: 'Позывной обязателен' });
     }
-    
+
     if (!mech_name || mech_name.trim() === '') {
         return res.status(400).json({ message: 'Название меха обязательно' });
     }
-    
+
+    // avatar_path должен указывать только на директорию аватаров (защита от path traversal).
+    let safeAvatarPath = null;
+    if (avatar_path && typeof avatar_path === 'string') {
+        const avatarsDir = path.join(__dirname, 'assets/images/avatars');
+        // Приводим к виду относительно директории аватаров.
+        const rel = avatar_path.replace(/^\/assets\/images\/avatars\//, '').replace(/^\/+/, '');
+        if (isPathSafe(rel, avatarsDir)) {
+            safeAvatarPath = `/assets/images/avatars/${path.basename(rel)}`;
+        } else {
+            return res.status(400).json({ message: 'Недопустимый путь аватара' });
+        }
+    }
+
     db.run(`INSERT INTO pilot_profiles (user_id, slot_number, callsign, full_name, mech_name, avatar_path, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, slot_number) DO UPDATE SET
@@ -588,10 +736,10 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
                 mech_name = excluded.mech_name,
                 avatar_path = excluded.avatar_path,
                 updated_at = CURRENT_TIMESTAMP`,
-        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), avatar_path || null],
+        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), safeAvatarPath],
         function(err) {
             if (err) return res.status(500).json({ message: 'Ошибка сохранения профиля' });
-            
+
             db.get('SELECT * FROM pilot_profiles WHERE user_id = ? AND slot_number = ?', [userId, slot_number], (err, profile) => {
                 if (err) return res.status(500).json({ message: 'Ошибка получения профиля' });
                 res.json({ message: 'Профиль сохранен', profile });
@@ -638,23 +786,24 @@ pilotRoutes.post('/pilot-profiles/set-active/:slot_number', requireAuth, (req, r
 pilotRoutes.post('/pilot-profiles/upload-avatar/:slot_number', requireAuth, uploadAvatar.single('avatar'), (req, res) => {
     const { slot_number } = req.params;
     const userId = req.session.userId;
-    
+
     if (!req.file) {
         return res.status(400).json({ message: 'Файл не загружен' });
     }
-    
+
+    // Проверка содержимого файла по сигнатурам (защита от замаскированных файлов).
+    if (!validateImageMagicBytes(req.file)) {
+        try { fs.unlinkSync(req.file.path); } catch {}
+        return res.status(400).json({ message: 'Файл не является корректным изображением' });
+    }
+
     const avatarPath = `/assets/images/avatars/${req.file.filename}`;
-    const host = req.get('host'); // Keep port (e.g., YOUDOMAIN:3000)
-    const fullAvatarUrl = `https://${host}${avatarPath}`;
-    const fullPath = path.join(__dirname, 'assets', 'images/avatars', req.file.filename);
-    console.log('[AVATAR UPLOAD] Saving to:', fullPath);
-    console.log('[AVATAR UPLOAD] Full URL:', fullAvatarUrl);
-    
+
     db.run('UPDATE pilot_profiles SET avatar_path = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND slot_number = ?',
         [avatarPath, userId, slot_number],
         function(err) {
             if (err) return res.status(500).json({ message: 'Ошибка сохранения аватара' });
-            res.json({ message: 'Аватар загружен', avatar_path: avatarPath, full_url: fullAvatarUrl });
+            res.json({ message: 'Аватар загружен', avatar_path: avatarPath });
         });
 });
 
@@ -1381,25 +1530,50 @@ app.get('/api/frequencies', (req, res) => {
     });
 });
 
-app.post('/api/setup/first-admin', (req, res) => {
+// Специальный лимитер для первичной настройки администратора.
+const setupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,    // 1 час
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Слишком много попыток, попробуйте позже' }
+});
+
+app.post('/api/setup/first-admin', setupLimiter, (req, res) => {
     const { setupKey } = req.body;
-    
-    if (setupKey !== config.SETUP_KEY) {
+
+    if (!setupKey || setupKey !== config.SETUP_KEY) {
         return res.status(403).json({ message: 'Неверный ключ' });
     }
-    
-    db.get('SELECT id FROM users ORDER BY id LIMIT 1', (err, user) => {
+
+    // Блокировка повторной настройки: если администратор уже существует — отказ.
+    db.get('SELECT id FROM users WHERE is_admin = 1 LIMIT 1', (err, existingAdmin) => {
         if (err) return res.status(500).json({ message: 'Ошибка сервера' });
-        if (!user) return res.status(404).json({ message: 'Пользователи не найдены' });
-        
-        db.run('UPDATE users SET is_admin = 1 WHERE id = ?', [user.id], (err) => {
-            if (err) return res.status(500).json({ message: 'Ошибка назначения' });
-            res.json({ message: 'Администратор назначен', userId: user.id });
+        if (existingAdmin) {
+            return res.status(409).json({ message: 'Администратор уже назначен. Обратитесь к существующему администратору.' });
+        }
+
+        db.get('SELECT id FROM users ORDER BY id LIMIT 1', (err, user) => {
+            if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+            if (!user) return res.status(404).json({ message: 'Пользователи не найдены' });
+
+            db.run('UPDATE users SET is_admin = 1 WHERE id = ?', [user.id], (err) => {
+                if (err) return res.status(500).json({ message: 'Ошибка назначения' });
+                res.json({ message: 'Администратор назначен', userId: user.id });
+            });
         });
     });
 });
 
 app.use((err, req, res, next) => {
+    // Ошибки CORS (чужой origin) — отдаём 403, не раскрывая детали.
+    if (err && (err.message === 'Not allowed by CORS' || err.name === 'CORSError')) {
+        return res.status(403).json({ message: 'Недопустимый источник запроса' });
+    }
+    // Ошибки загрузки файлов (multer) — отдаём 400.
+    if (err && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'Файл слишком большой' });
+    }
     Logger.error('Unhandled error:', err);
     res.status(500).json({ message: 'Внутренняя ошибка сервера' });
 });
