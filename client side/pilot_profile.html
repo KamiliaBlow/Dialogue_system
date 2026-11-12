@@ -40,118 +40,132 @@
       font-display: swap;
     }
 
+    /* IPS-N (по умолчанию): глубокий морской синий, фирменный #1C9AE8 (COMP/CON). */
     :root {
-      --bg: #050508;
-      --screen-bg: rgba(18, 18, 28, 0.85);
-      --screen-border: rgba(255, 107, 53, 0.35);
-      --screen-glow: rgba(255, 107, 53, 0.15);
-      --text: #d8d8f0;
-      --text-dim: #787895;
-      --accent: #ff6b35;
-      --success: #00f5a0;
-      --grid-line: rgba(100, 100, 130, 0.12);
+      --bg: #040a12;
+      --screen-bg: rgba(8, 20, 34, 0.88);
+      --screen-border: rgba(28, 154, 232, 0.38);
+      --screen-glow: rgba(28, 154, 232, 0.16);
+      --text: #d6e6f4;
+      --text-dim: #6f8aa3;
+      --accent: #1c9ae8;
+      --accent-soft: rgba(28, 154, 232, 0.12);
+      --success: #4fd1c5;
+      --danger: #ff5a4e;
+      --grid-line: rgba(28, 154, 232, 0.07);
     }
 
-    /* Green Theme */
+    /* GMS: графит и фирменный красный #DB1A2D (COMP/CON). */
     .theme-green {
-      --screen-border: rgba(3, 251, 141, 0.35);
-      --screen-glow: rgba(3, 251, 141, 0.15);
-      --accent: #03FB8D;
-      --success: #00f5a0;
+      --bg: #08090b;
+      --screen-bg: rgba(18, 19, 22, 0.92);
+      --screen-border: rgba(219, 26, 45, 0.42);
+      --screen-glow: rgba(219, 26, 45, 0.16);
+      --text: #e4e6e9;
+      --text-dim: #8a8f97;
+      --accent: #db1a2d;
+      --accent-soft: rgba(219, 26, 45, 0.12);
+      --success: #e4e6e9;
+      --danger: #f5a623;  /* янтарь опасности: не путается с акцентным красным GMS */
+      --grid-line: rgba(228, 230, 233, 0.045);
     }
 
-    .theme-green .bg-grid { display: none; }
-
-    /* КТБ — старое золото, тёмное дерево и сдержанное сияние */
+    /* КТБ: чёрный лак, карракинский маронский (Royal Prime), тусклая позолота, пергамент. */
     .theme-ktb {
-      --bg: #090806;
-      --screen-bg: rgba(24, 19, 11, 0.9);
-      --screen-border: rgba(197, 160, 73, 0.52);
-      --screen-glow: rgba(212, 175, 55, 0.2);
-      --text: #f0e5c8;
-      --text-dim: #b5a47a;
-      --accent: #d4af37;
-      --success: #e5c96a;
-      --grid-line: rgba(197, 160, 73, 0.09);
+      --bg: #0c0908;
+      --screen-bg: rgba(24, 13, 14, 0.92);
+      --screen-border: rgba(198, 160, 82, 0.45);
+      --screen-glow: rgba(110, 31, 37, 0.35);
+      --text: #ece2cb;
+      --text-dim: #b3a588;
+      --accent: #c6a052;
+      --accent-soft: rgba(110, 31, 37, 0.35);
+      --success: #e9d7a5;
+      --danger: #c2414b;
+      --grid-line: rgba(198, 160, 82, 0.05);
     }
 
     .theme-ktb .bg-grid {
       background-image:
+        radial-gradient(ellipse 80% 45% at 50% -5%, rgba(110, 31, 37, 0.45), transparent 70%),
         linear-gradient(var(--grid-line) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
-        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.08), transparent 55%);
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 100% 100%, 96px 96px, 96px 96px;
     }
 
-    .theme-ktb .vignette {
-      background: radial-gradient(ellipse at center, transparent 25%, rgba(5, 4, 2, 0.9) 100%);
-    }
-
-    .theme-ktb .scanlines {
-      background: repeating-linear-gradient(0deg, transparent 3px, rgba(212, 175, 55, 0.018) 3px, rgba(212, 175, 55, 0.018) 4px);
-    }
+    .theme-ktb .vignette { background: radial-gradient(ellipse at center, transparent 30%, rgba(8, 4, 4, 0.92) 100%); }
+    .theme-ktb .scanlines { display: none; }
 
     .theme-ktb .page-title,
     .theme-ktb .header-title,
     .theme-ktb .editor-header,
     .theme-ktb .slot-callsign {
-      color: #e5c96a;
+      color: #e9d7a5;
       font-family: 'Cormorant', Georgia, serif;
       font-weight: 600;
-      text-shadow: 0 0 18px rgba(212, 175, 55, 0.24);
+      font-variant: small-caps;
+      letter-spacing: 0.12em;
     }
 
-    .theme-ktb .page-title {
-      font-size: 2rem;
-    }
+    .theme-ktb .page-title { font-size: 2.1rem; }
 
     .theme-ktb .slot-mech,
     .theme-ktb .form-hint,
-    .theme-ktb .slot-empty-text {
-      font-family: 'Alegreya', Georgia, serif;
-    }
+    .theme-ktb .slot-empty-text { font-family: 'Alegreya', Georgia, serif; }
 
     .theme-ktb .form-input,
     .theme-ktb .form-label,
-    .theme-ktb .slot-number {
-      font-family: 'JetBrains Mono', monospace;
-    }
+    .theme-ktb .slot-number { font-family: 'JetBrains Mono', monospace; }
 
-    .theme-ktb .theme-selector,
+    /* Гравированная табличка: двойной кант, угловые заклёпки, ромб по центру. */
     .theme-ktb .slot-card,
     .theme-ktb .profile-editor {
       position: relative;
       border-radius: 0;
-      outline: 1px solid rgba(212, 175, 55, 0.18);
-      outline-offset: 4px;
-      box-shadow: inset 0 0 28px rgba(212, 175, 55, 0.035), 0 8px 30px rgba(0, 0, 0, 0.28);
+      background:
+        linear-gradient(#c6a052, #c6a052) 6px 6px / 4px 4px no-repeat,
+        linear-gradient(#c6a052, #c6a052) calc(100% - 6px) 6px / 4px 4px no-repeat,
+        linear-gradient(#c6a052, #c6a052) 6px calc(100% - 6px) / 4px 4px no-repeat,
+        linear-gradient(#c6a052, #c6a052) calc(100% - 6px) calc(100% - 6px) / 4px 4px no-repeat,
+        linear-gradient(180deg, rgba(110, 31, 37, 0.28), transparent 45%),
+        var(--screen-bg);
+      box-shadow: inset 0 0 0 4px rgba(24, 13, 14, 0.9), inset 0 0 0 5px rgba(198, 160, 82, 0.28), 0 14px 40px rgba(0, 0, 0, 0.45);
     }
 
-    .theme-ktb .theme-selector::before,
-    .theme-ktb .slot-card::before,
-    .theme-ktb .profile-editor::before,
-    .theme-ktb .theme-selector::after,
-    .theme-ktb .slot-card::after,
-    .theme-ktb .profile-editor::after {
+    .theme-ktb .profile-editor::before {
       content: "";
       position: absolute;
-      width: 44px;
-      height: 44px;
+      top: -6px;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      transform: translateX(-50%) rotate(45deg);
+      background: var(--bg);
+      border: 1px solid #c6a052;
       pointer-events: none;
-      background:
-        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 36px 2px no-repeat,
-        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 2px 36px no-repeat,
-        linear-gradient(#b8943f, #b8943f) 7px 7px / 25px 1px no-repeat,
-        linear-gradient(#b8943f, #b8943f) 7px 7px / 1px 25px no-repeat,
-        linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) 8px 8px / 18px 18px no-repeat;
     }
 
-    .theme-ktb .theme-selector::before,
-    .theme-ktb .slot-card::before,
-    .theme-ktb .profile-editor::before { top: -7px; left: -7px; }
+    /* IPS-N: морская навигация — кольца пеленга. */
+    body:not(.theme-green):not(.theme-ktb) .bg-grid {
+      background-image:
+        radial-gradient(circle at 85% 18%, transparent 0 120px, rgba(28, 154, 232, 0.08) 121px 122px, transparent 123px 200px, rgba(28, 154, 232, 0.06) 201px 202px, transparent 203px),
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 100% 100%, 64px 64px, 64px 64px;
+    }
 
-    .theme-ktb .theme-selector::after,
-    .theme-ktb .slot-card::after,
-    .theme-ktb .profile-editor::after { right: -7px; bottom: -7px; transform: rotate(180deg); }
+    /* GMS: инженерная сетка стандарта. */
+    .theme-green .bg-grid {
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+        linear-gradient(rgba(228, 230, 233, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(228, 230, 233, 0.02) 1px, transparent 1px);
+      background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+    }
+    .theme-green .scanlines { display: none; }
+    .theme-green .page-title,
+    .theme-green .editor-header { font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: 0.3em; }
 
     .code-overlay {
       position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; display: none;
@@ -159,7 +173,7 @@
     .theme-green .code-overlay { display: block; }
 
     .code-line {
-      font-family: 'Share Tech Mono', monospace; font-size: 14px; color: rgba(3, 251, 141, 0.15);
+      font-family: 'Share Tech Mono', monospace; font-size: 14px; color: rgba(228, 230, 233, 0.07);
       white-space: nowrap; position: absolute; animation: codeScroll 20s linear infinite;
     }
     @keyframes codeScroll {
@@ -168,8 +182,7 @@
       100% { transform: translateY(100vh); opacity: 0; }
     }
 
-    .theme-green .vignette { background: radial-gradient(ellipse at center, transparent 20%, rgba(5,5,8,0.7) 100%); }
-    .theme-green .scanlines { background: repeating-linear-gradient(0deg, transparent 2px, rgba(3, 251, 141, 0.03) 2px, rgba(3, 251, 141, 0.03) 4px); }
+    .theme-green .vignette { background: radial-gradient(ellipse at center, transparent 30%, rgba(5,5,6,0.85) 100%); }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -291,64 +304,73 @@
       text-align: center;
     }
 
-    .theme-selector {
-      display: flex;
-      justify-content: center;
-      gap: 1rem;
-      margin-bottom: 2rem;
-      padding: 1rem;
-      background: var(--screen-bg);
-      border: 1px solid var(--screen-border);
+    /* Тема терминала — своя у каждого пилота (выбор в редакторе досье). */
+    .pilot-theme-picker {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.6rem;
     }
 
     .theme-option {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
+      gap: 0.6rem;
+      padding: 0.55rem 0.75rem;
       border: 1px solid var(--screen-border);
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      text-align: left;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: border-color 0.2s, background 0.2s;
     }
 
-    .theme-option:hover {
+    .theme-option:hover,
+    .theme-option:focus-visible {
       border-color: var(--accent);
+      outline: none;
     }
 
-    .theme-option.active {
+    .theme-option[aria-checked="true"] {
       border-color: var(--accent);
-      background: rgba(255, 107, 53, 0.1);
+      background: var(--accent-soft);
+      box-shadow: inset 3px 0 0 var(--accent);
     }
 
-    .theme-option.active.green {
-      border-color: #03FB8D;
-      background: rgba(3, 251, 141, 0.1);
-    }
-
-    .theme-option.active.ktb {
-      border-color: #d4af37;
-      background: rgba(212, 175, 55, 0.12);
-      box-shadow: inset 0 0 14px rgba(212, 175, 55, 0.08);
-    }
+    .theme-option-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .theme-option-text b { font-size: 0.85rem; letter-spacing: 0.08em; }
+    .theme-option-text small { color: var(--text-dim); font-size: 0.68rem; line-height: 1.3; }
 
     .theme-color {
       width: 20px;
       height: 20px;
       border-radius: 3px;
+      flex-shrink: 0;
     }
 
+    .slot-theme {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 6px;
+      color: var(--text-dim);
+      font-size: 0.66rem;
+      letter-spacing: 0.12em;
+    }
+
+    .slot-theme .theme-color { width: 10px; height: 10px; border-radius: 2px; }
+
     .theme-color.yellow {
-      background: #ff6b35;
+      background: linear-gradient(135deg, #1c9ae8 0 55%, #0c4d99 55%);
     }
 
     .theme-color.green {
-      background: #03FB8D;
+      background: linear-gradient(135deg, #db1a2d 0 55%, #2a2c30 55%);
     }
 
     .theme-color.ktb {
-      background: linear-gradient(135deg, #f0dfaa 0%, #d4af37 45%, #8a6828 100%);
-      border: 1px solid #d4af37;
-      box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+      background: linear-gradient(135deg, #e9d7a5 0%, #c6a052 45%, #6e1f25 46%, #3a1014 100%);
+      border: 1px solid #c6a052;
     }
 
     .slots-container {
@@ -619,12 +641,12 @@
     }
 
     .btn-danger {
-      border-color: #ff375f;
-      color: #ff375f;
+      border-color: var(--danger);
+      color: var(--danger);
     }
 
     .btn-danger:hover {
-      background: #ff375f;
+      background: var(--danger);
       color: var(--bg);
     }
 
@@ -636,7 +658,7 @@
     .btn-success:hover {
       background: var(--success);
       color: var(--bg);
-      box-shadow: 0 0 20px rgba(0,245,160,0.3);
+      box-shadow: 0 0 20px var(--screen-glow);
     }
 
     .cavalier-block {
@@ -649,7 +671,7 @@
     }
 
     .cavalier-block.visible {
-      max-height: 420px;
+      max-height: 1600px;
       opacity: 1;
       transform: translateY(0);
       margin-bottom: 1.25rem;
@@ -664,6 +686,196 @@
 
     .cavalier-inner .form-group:last-of-type {
       margin-bottom: 0.5rem;
+    }
+
+    /* ---------- Выбор Дома ---------- */
+    .house-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 8px;
+    }
+
+    .house-tile {
+      display: grid;
+      justify-items: center;
+      gap: 6px;
+      padding: 10px 6px 8px;
+      border: 1px solid var(--screen-border);
+      background: rgba(0, 0, 0, 0.3);
+      color: var(--text-dim);
+      font: 0.72rem/1.2 'JetBrains Mono', monospace;
+      letter-spacing: 0.04em;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+    }
+
+    .house-tile svg { color: var(--hc, var(--accent)); }
+    .house-tile .bar { width: 70%; height: 3px; background: var(--hc, var(--accent)); }
+    .house-tile:hover { border-color: var(--accent); color: var(--text); }
+    .house-tile[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+    .house-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .house-tile .tag { color: var(--text-dim); font-size: 0.62rem; }
+
+    .custom-house {
+      display: grid;
+      gap: 14px;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px dashed var(--screen-border);
+    }
+
+    .custom-house-name { display: flex; align-items: stretch; }
+    .custom-house-name span {
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border: 1px solid var(--screen-border);
+      border-right: 0;
+      color: var(--text-dim);
+    }
+
+    .custom-house-row.two { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; }
+    .color-input { width: 64px; height: 44px; padding: 2px; border: 1px solid var(--screen-border); background: transparent; cursor: pointer; }
+
+    .sigil-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sigil-btn {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--screen-border);
+      background: rgba(0, 0, 0, 0.3);
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .sigil-btn[aria-checked="true"] { border-color: var(--accent); color: var(--hc, var(--accent)); background: var(--accent-soft); }
+    .sigil-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .standing-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .standing-option {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--screen-border);
+      background: rgba(0, 0, 0, 0.25);
+      cursor: pointer;
+    }
+    .standing-option input { grid-row: span 2; margin-top: 3px; accent-color: var(--accent); }
+    .standing-option b { color: var(--text); font-weight: 400; letter-spacing: 0.06em; }
+    .standing-option small { color: var(--text-dim); font-size: 0.72rem; line-height: 1.45; }
+    .standing-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+
+    .livery-preview {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border: 1px solid var(--screen-border);
+      background: rgba(0, 0, 0, 0.35);
+    }
+    .livery-pennant {
+      position: relative;
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 46px;
+      height: 58px;
+      color: #120c0a;
+      background: linear-gradient(180deg, var(--lv, #c6a052), color-mix(in srgb, var(--lv, #c6a052) 55%, #000));
+      clip-path: polygon(0 0, 100% 0, 100% 78%, 50% 100%, 0 78%);
+    }
+    .livery-preview[data-standing="exile"] .livery-pennant { filter: grayscale(0.85) brightness(0.7); }
+    .livery-preview[data-standing="exile"] .livery-pennant::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 46%, #c2414b 46% 54%, transparent 54%);
+    }
+    .livery-text { display: grid; gap: 2px; }
+    .livery-text b { color: var(--text); font-weight: 400; }
+    .livery-text small { color: var(--text-dim); font-size: 0.75rem; }
+
+    .slot-house { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px; color: var(--text-dim); font-size: 0.72rem; }
+    .slot-house svg { color: var(--hc, var(--accent)); }
+    .slot-house.exile { text-decoration: line-through; }
+
+    @media (max-width: 600px) {
+      .standing-switch, .custom-house-row.two { grid-template-columns: 1fr; }
+      /* Телефон: редактор в одну колонку, слоты друг под другом. */
+      .container { padding: 0 1rem; margin-top: 80px; }
+      .header { padding: 0 1rem; gap: 0.75rem; }
+      .header-title { font-size: 0.8rem; letter-spacing: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+      .header-user { flex: 0 0 auto; gap: 0.5rem; }
+      #usernameDisplay { display: none; }
+      .slots-container { flex-direction: column; gap: 0.75rem; }
+      .profile-editor { padding: 1.25rem 1rem; }
+      .editor-content { flex-direction: column; gap: 1.25rem; }
+      .avatar-section { display: flex; flex-direction: column; align-items: center; }
+      .form-actions { flex-wrap: wrap; }
+      .form-actions .btn { flex: 1 1 auto; padding: 0.75rem 1rem; }
+    }
+
+    /* Масштаб интерфейса (scripts/ui-scale.js): авто по разрешению × множитель пользователя. */
+    .header,
+    .container,
+    .back-link,
+    #music-float-btn,
+    #music-popup {
+      zoom: var(--ui-scale, 1);
+    }
+
+    .scale-menu { position: relative; }
+    .scale-menu > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 0.35rem 0.7rem;
+      border: 1px solid var(--screen-border);
+      color: var(--text-dim);
+      font-size: 0.72rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .scale-menu > summary::-webkit-details-marker { display: none; }
+    .scale-menu > summary:hover,
+    .scale-menu > summary:focus-visible,
+    .scale-menu[open] > summary { color: var(--accent); border-color: var(--accent); outline: none; }
+    .scale-pop {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: min(320px, calc(100vw - 2rem));
+      padding: 1rem;
+      background: linear-gradient(var(--screen-bg), var(--screen-bg)), var(--bg);
+      border: 1px solid var(--screen-border);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      z-index: 200;
+    }
+    .ui-scale-label { display: block; margin-bottom: 0.5rem; color: var(--accent); font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; }
+    .ui-scale-row { display: flex; align-items: center; gap: 0.6rem; }
+    .ui-scale-range { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+    .ui-scale-value { min-width: 4ch; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    .ui-scale-reset {
+      padding: 0.25rem 0.6rem;
+      border: 1px solid var(--screen-border);
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .ui-scale-reset:hover:not(:disabled), .ui-scale-reset:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+    .ui-scale-reset:disabled { opacity: 0.4; cursor: default; }
+    .ui-scale-note { display: block; margin-top: 0.5rem; color: var(--text-dim); font-size: 0.7rem; line-height: 1.4; }
+
+    /* Телефон: меню масштаба на всю ширину под шапкой (отсчёт от самой шапки), чтобы не уходило за край.
+       Стоит после базовых правил меню, иначе они перекрывают это. */
+    @media (max-width: 600px) {
+      .scale-menu { position: static; }
+      .scale-pop { position: absolute; top: 100%; left: 1rem; right: 1rem; width: auto; }
     }
 
     .hidden {
@@ -691,13 +903,12 @@
     .mandatory-banner {
       padding: 1rem 1.25rem;
       margin-bottom: 1.5rem;
-      background: rgba(255, 107, 53, 0.12);
+      background: var(--accent-soft);
       border: 1px solid var(--accent);
       color: var(--text);
       font-size: 0.85rem;
       line-height: 1.6;
       letter-spacing: 0.04em;
-      box-shadow: inset 0 0 18px rgba(255, 107, 53, 0.06);
     }
 
     .mandatory-banner b {
@@ -722,9 +933,10 @@
       color: var(--accent);
     }
   </style>
+  <script src="./scripts/ui-scale.js"></script>
 </head>
 <body>
-  <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
   <div class="bg-grid"></div>
   <div class="code-overlay" id="codeOverlay"></div>
   <div class="vignette"></div>
@@ -733,6 +945,10 @@
   <header class="header">
     <div class="header-title">◈ ДОСЬЕ ПИЛОТОВ ◈</div>
     <div class="header-user">
+      <details class="scale-menu" id="scaleMenu">
+        <summary>Масштаб</summary>
+        <div class="scale-pop" id="scalePop"></div>
+      </details>
       <span id="usernameDisplay"></span>
       <button class="btn-logout" onclick="logout()">Выйти</button>
     </div>
@@ -742,21 +958,6 @@
     <h1 class="page-title">Список досье</h1>
 
     <div id="mandatoryBanner" class="mandatory-banner hidden"></div>
-
-    <div class="theme-selector">
-      <div class="theme-option" data-theme="yellow" onclick="setTheme('yellow')">
-        <div class="theme-color yellow"></div>
-        <span>IPS-N</span>
-      </div>
-      <div class="theme-option" data-theme="green" onclick="setTheme('green')">
-        <div class="theme-color green"></div>
-        <span>GMS</span>
-      </div>
-      <div class="theme-option ktb" data-theme="ktb" onclick="setTheme('ktb')" role="button" tabindex="0" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setTheme('ktb'); }">
-        <div class="theme-color ktb"></div>
-        <span>KTB</span>
-      </div>
-    </div>
 
     <div class="slots-container" id="slotsContainer"></div>
 
@@ -787,11 +988,18 @@
           </div>
 
           <div class="form-group">
+            <span class="form-label" id="pilotThemeLabel">Тема терминала</span>
+            <div class="pilot-theme-picker" id="pilotThemePicker" role="radiogroup" aria-labelledby="pilotThemeLabel"></div>
+            <small class="form-hint">Своя у каждого пилота: терминал, досье, админка и плейлист переключаются вместе с активным пилотом.</small>
+          </div>
+
+          <div class="form-group">
             <label class="form-label" for="estateInput">Статус в Баронствах</label>
             <select class="form-input" id="estateInput" onchange="updateEstateFields()">
               <option value="lancer">Лансер — пилот без родословной</option>
               <option value="cavalier">Кавалер — благородный титул и печать Дома</option>
             </select>
+            <small class="form-hint" id="estateHint"></small>
           </div>
 
           <div class="cavalier-block" id="cavalierBlock">
@@ -802,11 +1010,51 @@
                 <small class="form-hint">Пример: «леди Кассия-Вейл» — титул подставит выбранная форма обращения, имя и младший дом пишете вы.</small>
               </div>
               <div class="form-group">
-                <label class="form-label" for="houseInput">Великий дом</label>
-                <input type="text" class="form-input" id="houseInput" placeholder="Стекла" maxlength="80">
-                <small class="form-hint">Пример: «Стекла» — система склонит: из Дома Стекла.</small>
+                <span class="form-label" id="houseLabel">Великий Дом</span>
+                <div class="house-grid" id="houseGrid" role="radiogroup" aria-labelledby="houseLabel"></div>
+                <div class="custom-house hidden" id="customHouse">
+                  <div class="custom-house-row">
+                    <label class="form-label" for="customHouseInput">Название своего Дома</label>
+                    <div class="custom-house-name">
+                      <span aria-hidden="true">Дом</span>
+                      <input type="text" class="form-input" id="customHouseInput" placeholder="Ветров" maxlength="60" autocomplete="off">
+                    </div>
+                    <small class="form-hint">В родительном падеже, как у Великих Домов: «Ветров» → «из Дома Ветров».</small>
+                  </div>
+                  <div class="custom-house-row two">
+                    <div>
+                      <label class="form-label" for="customHouseColor">Ливрея</label>
+                      <input type="color" class="color-input" id="customHouseColor" value="#b8a27a">
+                    </div>
+                    <div>
+                      <span class="form-label" id="sigilLabel">Знак Дома</span>
+                      <div class="sigil-row" id="sigilRow" role="radiogroup" aria-labelledby="sigilLabel"></div>
+                    </div>
+                  </div>
+                </div>
+                <small class="form-hint">Цвета ливрей и знаки — интерпретация проекта: в книгах они не описаны.</small>
               </div>
-              <small class="form-hint">Каноническое имя соберётся автоматически: «леди Кассия-Вейл из Дома Стекла».</small>
+
+              <div class="form-group">
+                <span class="form-label" id="standingLabel">Положение в Доме</span>
+                <div class="standing-switch" role="radiogroup" aria-labelledby="standingLabel">
+                  <label class="standing-option">
+                    <input type="radio" name="houseStanding" value="member" checked>
+                    <b>Состоит в Доме</b>
+                    <small>Тема КТБ: благородная — позолота, ливрея Дома, право вызова.</small>
+                  </label>
+                  <label class="standing-option">
+                    <input type="radio" name="houseStanding" value="exile">
+                    <b>Изгнанник</b>
+                    <small>Тема КТБ: неблагородная канцелярия, ливрея перечёркнута.</small>
+                  </label>
+                </div>
+              </div>
+
+              <div class="livery-preview" id="liveryPreview" aria-live="polite">
+                <span class="livery-pennant" id="liveryPennant"></span>
+                <span class="livery-text"><b id="liveryName">—</b><small id="liveryNote"></small></span>
+              </div>
             </div>
           </div>
 
@@ -848,6 +1096,7 @@
 
   <a href="index.html" class="back-link" id="backLink">← Вернуться в терминал</a>
 
+  <script src="./scripts/ktb-houses.js"></script>
   <script>
     let API_URL = 'https://' + window.location.hostname + ':3000/api';
     let currentProfiles = [];
@@ -875,19 +1124,6 @@
       }
     }
 
-    async function loadTheme() {
-      try {
-        const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
-        const data = await response.json();
-        if (data.theme === 'green') {
-          document.body.classList.add('theme-green');
-          initCodeOverlay();
-        }
-      } catch (e) {
-        console.warn('Failed to load theme:', e);
-      }
-    }
-
     function initCodeOverlay() {
       const overlay = document.getElementById('codeOverlay');
       if (!overlay || overlay.children.length > 0) return;
@@ -905,50 +1141,106 @@
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
+      if (window.UiScale) {
+        // Защита: кнопки шапки (масштаб, выход) не уходят за край экрана — важно на телефоне.
+        UiScale.init({ fit: { target: '.header-user' } });
+        UiScale.mountControl(document.getElementById('scalePop'));
+        // Меню масштаба закрывается кликом мимо и по Escape.
+        const scaleMenu = document.getElementById('scaleMenu');
+        document.addEventListener('click', event => { if (scaleMenu.open && !scaleMenu.contains(event.target)) scaleMenu.open = false; });
+        document.addEventListener('keydown', event => { if (event.key === 'Escape' && scaleMenu.open) { scaleMenu.open = false; scaleMenu.querySelector('summary').focus(); } });
+      } else {
+        document.getElementById('scaleMenu').hidden = true;
+      }
       await loadConfig();
       await checkAuth();
+      await loadAccountTheme();
       loadProfiles();
-      loadTheme();
     });
 
-    async function loadTheme() {
+    /* ---------------- Тема пилота ----------------
+       Тема принадлежит пилоту. Досье, как и терминал, показывает тему активного пилота;
+       пока в редакторе открыт активный пилот, выбор темы сразу виден как предпросмотр. */
+    const THEMES = {
+      yellow: { name: 'IPS-N', note: 'Конвои и фрахт, морская сталь' },
+      green: { name: 'GMS', note: 'Армейский стандарт Союза' },
+      ktb: { name: 'KTB', note: 'Баронства: ливрея Дома или неблагородная канцелярия' }
+    };
+    const THEME_ORDER = ['yellow', 'green', 'ktb'];
+    let accountTheme = null;   // тема из /user-settings — пока профили не загружены или пилота нет
+    let editorTheme = 'yellow';
+
+    async function loadAccountTheme() {
       try {
         const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
         const data = await response.json();
-        if (data.theme) applyTheme(data.theme);
+        if (THEMES[data.theme]) {
+          accountTheme = data.theme;
+          applyTheme(data.theme);
+        }
       } catch (e) {
         console.warn('Failed to load theme:', e);
       }
     }
 
-    async function setTheme(theme) {
-      if (!['yellow', 'green', 'ktb'].includes(theme)) return;
-      applyTheme(theme);
-      try {
-        const response = await fetch(`${API_URL}/user-settings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ theme: theme })
-        });
-        const data = await response.json();
-        if (data.theme) applyTheme(data.theme);
-      } catch (e) {
-        console.error('Failed to save theme:', e);
-      }
+    function activeProfile() {
+      return currentProfiles.find(p => p.callsign && Number(p.is_active) === 1) || null;
+    }
+
+    // Сохранённая тема активного пилота (то, что увидит терминал).
+    function savedPageTheme() {
+      const active = activeProfile();
+      return THEMES[active?.theme] ? active.theme : (accountTheme || 'yellow');
+    }
+
+    function isEditingActive() {
+      const active = activeProfile();
+      return !!active && selectedSlot === active.slot_number
+        && !document.getElementById('profileEditor').classList.contains('hidden');
     }
 
     function applyTheme(theme) {
-      try { localStorage.setItem('userTheme', theme); } catch (e) {}
-      document.body.classList.remove('theme-green', 'theme-ktb');
-      if (theme === 'green' || theme === 'ktb') {
-        document.body.classList.add(`theme-${theme}`);
-      }
+      document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
+      document.body.classList.add(`theme-${THEMES[theme] ? theme : 'yellow'}`);
       if (theme === 'green') initCodeOverlay();
+    }
 
-      document.querySelectorAll('.theme-option').forEach(el => {
-        el.classList.toggle('active', el.dataset.theme === theme);
+    // Оформление страницы + кэши для других страниц (тема и ливрея КТБ активного пилота).
+    function syncPageTheme() {
+      applyTheme(isEditingActive() ? editorTheme : savedPageTheme());
+
+      const saved = savedPageTheme();
+      let previous = null;
+      try { previous = localStorage.getItem('userTheme'); localStorage.setItem('userTheme', saved); } catch (e) {}
+      const active = activeProfile();
+      if (active && window.KtbHouses) KtbHouses.apply(active, document.createElement('div'));
+      // Плеер меняет плейлист; текущий трек доигрывает до конца.
+      if (previous !== saved) window.dispatchEvent(new CustomEvent('pilot-theme-change', { detail: { theme: saved } }));
+    }
+
+    function renderPilotThemePicker() {
+      const picker = document.getElementById('pilotThemePicker');
+      picker.textContent = '';
+      THEME_ORDER.forEach(id => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'theme-option';
+        btn.dataset.value = id;
+        makeRadio(btn, editorTheme === id);
+        btn.innerHTML = `<span class="theme-color ${id}"></span><span class="theme-option-text"><b></b><small></small></span>`;
+        btn.querySelector('b').textContent = THEMES[id].name;
+        btn.querySelector('small').textContent = THEMES[id].note;
+        btn.addEventListener('click', () => pickPilotTheme(id));
+        picker.appendChild(btn);
       });
+    }
+
+    function pickPilotTheme(theme, keepFocus) {
+      if (!THEMES[theme]) return;
+      editorTheme = theme;
+      renderPilotThemePicker();
+      if (!keepFocus) document.querySelector(`#pilotThemePicker [data-value="${theme}"]`)?.focus();
+      syncPageTheme();
     }
 
     async function checkAuth() {
@@ -976,6 +1268,7 @@
         currentProfiles = data.profiles;
         renderSlots();
         updateMandatoryState();
+        syncPageTheme();
       } catch (e) {
         console.error('Failed to load profiles:', e);
       }
@@ -1035,6 +1328,25 @@
             <div class="slot-callsign">${profile.callsign}</div>
             <div class="slot-mech">AC: ${profile.mech_name}</div>
           `;
+          // Тема пилота мини-образцом.
+          const themeId = THEMES[profile.theme] ? profile.theme : savedPageTheme();
+          const themeBadge = document.createElement('div');
+          themeBadge.className = 'slot-theme';
+          themeBadge.title = 'Тема терминала';
+          themeBadge.innerHTML = `<span class="theme-color ${themeId}" aria-hidden="true"></span>`;
+          themeBadge.append(THEMES[themeId].name);
+          slot.appendChild(themeBadge);
+          // Дом и положение Кавалера (значения пользователя вставляются только как текст).
+          const house = profile.estate === 'cavalier' ? KtbHouses.resolveHouse(profile) : null;
+          if (house) {
+            const line = document.createElement('div');
+            line.className = `slot-house${profile.house_standing === 'exile' ? ' exile' : ''}`;
+            line.style.setProperty('--hc', house.color);
+            line.innerHTML = KtbHouses.sigilSvg(house.sigil, { size: 14 });
+            line.append(house.name);
+            line.title = profile.house_standing === 'exile' ? 'Изгнанник' : 'Состоит в Доме';
+            slot.appendChild(line);
+          }
         }
         
         container.appendChild(slot);
@@ -1061,8 +1373,11 @@
       const fullName = profile?.full_name || '';
       const nameMatch = fullName.match(/^(.*?)(?:\s+из\s+(?:Дома?|дома?)\s+(.+))?$/);
       document.getElementById('titleInput').value = (nameMatch && nameMatch[1] ? nameMatch[1] : fullName).trim();
-      document.getElementById('houseInput').value = nameMatch && nameMatch[2] ? nameMatch[2].trim() : '';
+      loadHouseState(profile);
       updateEstateFields();
+      // Пустой слот получает тему, которая сейчас на экране.
+      editorTheme = THEMES[profile?.theme] ? profile.theme : savedPageTheme();
+      renderPilotThemePicker();
       
       uploadedAvatarPath = profile?.avatar_path || null;
       
@@ -1075,6 +1390,7 @@
       }
       
       renderSlots();
+      syncPageTheme();
     }
 
     function updateEstateFields() {
@@ -1082,7 +1398,151 @@
       const isCavalier = estate === 'cavalier';
       document.getElementById('cavalierBlock').classList.toggle('visible', isCavalier);
       document.getElementById('fullNameGroup').classList.toggle('hidden', isCavalier);
+      document.getElementById('estateHint').textContent = isCavalier
+        ? 'Вид темы КТБ зависит от положения в Доме: состоящий в Доме — благородный, изгнанник — неблагородный.'
+        : 'В теме КТБ Лансер всегда видит интерфейс неблагородных: приёмная общего доступа, без позолоты и ливреи.';
+      updateLiveryPreview();
     }
+
+    /* ---------------- Дом Кавалера ---------------- */
+    const houseState = { key: '', customColor: KtbHouses.DEFAULT_CUSTOM_COLOR, customSigil: 'crown' };
+
+    function makeRadio(el, checked) {
+      el.setAttribute('role', 'radio');
+      el.setAttribute('aria-checked', String(checked));
+      el.tabIndex = checked ? 0 : -1;
+    }
+
+    // Стрелки перемещают выбор внутри группы, как у нативных радиокнопок.
+    function bindRadioKeys(group, onPick) {
+      group.addEventListener('keydown', event => {
+        const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'];
+        if (!keys.includes(event.key)) return;
+        const items = [...group.querySelectorAll('[role="radio"]')];
+        const index = items.indexOf(document.activeElement);
+        if (index < 0) return;
+        event.preventDefault();
+        const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+        const next = items[(index + step + items.length) % items.length];
+        next.focus();
+        onPick(next.dataset.value);
+      });
+    }
+
+    function renderHousePicker() {
+      const grid = document.getElementById('houseGrid');
+      grid.textContent = '';
+      const options = KtbHouses.HOUSES.map(h => ({ value: h.id, name: h.name, color: h.color, sigil: h.sigil, tag: h.provisional ? 'временный' : '' }));
+      options.push({ value: 'custom', name: 'Свой Дом', color: houseState.customColor, sigil: houseState.customSigil, tag: 'название и знак' });
+      options.forEach(o => {
+        const tile = document.createElement('button');
+        tile.type = 'button';
+        tile.className = 'house-tile';
+        tile.dataset.value = o.value;
+        tile.style.setProperty('--hc', o.color);
+        makeRadio(tile, houseState.key === o.value);
+        tile.innerHTML = KtbHouses.sigilSvg(o.sigil, { size: 28 }) + '<span class="name"></span><span class="bar" aria-hidden="true"></span>';
+        tile.querySelector('.name').textContent = o.name;
+        if (o.tag) {
+          const tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.textContent = o.tag;
+          tile.appendChild(tag);
+        }
+        tile.addEventListener('click', () => pickHouse(o.value));
+        grid.appendChild(tile);
+      });
+      if (!houseState.key && grid.firstChild) grid.firstChild.tabIndex = 0;
+      document.getElementById('customHouse').classList.toggle('hidden', houseState.key !== 'custom');
+
+      const sigils = document.getElementById('sigilRow');
+      sigils.textContent = '';
+      sigils.style.setProperty('--hc', houseState.customColor);
+      KtbHouses.SIGIL_IDS.forEach(id => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sigil-btn';
+        btn.dataset.value = id;
+        btn.setAttribute('aria-label', `Знак ${id}`);
+        makeRadio(btn, houseState.customSigil === id);
+        btn.innerHTML = KtbHouses.sigilSvg(id, { size: 24 });
+        btn.addEventListener('click', () => pickSigil(id));
+        sigils.appendChild(btn);
+      });
+    }
+
+    function pickHouse(value, keepFocus) {
+      houseState.key = value;
+      renderHousePicker();
+      if (!keepFocus) document.querySelector(`#houseGrid [data-value="${value}"]`)?.focus();
+      updateLiveryPreview();
+    }
+
+    function pickSigil(id) {
+      houseState.customSigil = id;
+      renderHousePicker();
+      document.querySelector(`#sigilRow [data-value="${id}"]`)?.focus();
+      updateLiveryPreview();
+    }
+
+    function loadHouseState(profile) {
+      const p = profile || {};
+      const resolved = KtbHouses.resolveHouse(p);
+      houseState.key = resolved ? resolved.id : '';
+      houseState.customColor = /^#[0-9a-f]{6}$/i.test(p.house_color || '') ? p.house_color : (resolved?.custom ? resolved.color : KtbHouses.DEFAULT_CUSTOM_COLOR);
+      houseState.customSigil = KtbHouses.SIGIL_IDS.includes(p.house_sigil) ? p.house_sigil : (resolved?.custom ? resolved.sigil : 'crown');
+      document.getElementById('customHouseInput').value = resolved?.custom ? resolved.word : (p.house_custom || '');
+      document.getElementById('customHouseColor').value = houseState.customColor;
+      const standing = p.house_standing === 'exile' ? 'exile' : 'member';
+      document.querySelectorAll('input[name="houseStanding"]').forEach(r => { r.checked = r.value === standing; });
+      renderHousePicker();
+    }
+
+    // Поля Дома в формате API (совпадает с колонками pilot_profiles).
+    function collectHouseFields() {
+      const standing = document.querySelector('input[name="houseStanding"]:checked')?.value === 'exile' ? 'exile' : 'member';
+      return {
+        house_key: houseState.key,
+        house_custom: houseState.key === 'custom' ? document.getElementById('customHouseInput').value.trim() : '',
+        house_color: houseState.key === 'custom' ? houseState.customColor : '',
+        house_sigil: houseState.key === 'custom' ? houseState.customSigil : '',
+        house_standing: standing
+      };
+    }
+
+    function updateLiveryPreview() {
+      const preview = document.getElementById('liveryPreview');
+      if (!preview) return;
+      const estate = document.getElementById('estateInput').value;
+      const fields = Object.assign({ estate, gender: document.getElementById('genderInput').value }, collectHouseFields());
+      const info = KtbHouses.describe(fields);
+      const house = KtbHouses.resolveHouse(fields);
+      preview.dataset.standing = info.standing;
+      const pennant = document.getElementById('liveryPennant');
+      pennant.style.setProperty('--lv', house ? house.color : '#8f8a80');
+      pennant.innerHTML = house ? KtbHouses.sigilSvg(house.sigil, { size: 26, strokeWidth: 2.2 }) : '';
+      const title = document.getElementById('titleInput').value.trim();
+      document.getElementById('liveryName').textContent = house ? `${title || 'Имя'} из ${house.genitive}` : 'Дом не выбран';
+      document.getElementById('liveryNote').textContent = info.standing === 'noble'
+        ? 'Тема КТБ: благородная, ливрея Дома над пультом связи.'
+        : 'Тема КТБ: неблагородная — герб Дома перечёркнут.';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      bindRadioKeys(document.getElementById('houseGrid'), value => pickHouse(value, true));
+      bindRadioKeys(document.getElementById('pilotThemePicker'), value => pickPilotTheme(value, true));
+      renderPilotThemePicker();
+      bindRadioKeys(document.getElementById('sigilRow'), id => { houseState.customSigil = id; renderHousePicker(); document.querySelector(`#sigilRow [data-value="${id}"]`)?.focus(); updateLiveryPreview(); });
+      document.getElementById('customHouseColor').addEventListener('input', event => {
+        houseState.customColor = event.target.value;
+        document.querySelector('#houseGrid [data-value="custom"]')?.style.setProperty('--hc', houseState.customColor);
+        document.getElementById('sigilRow').style.setProperty('--hc', houseState.customColor);
+        updateLiveryPreview();
+      });
+      ['customHouseInput', 'titleInput', 'genderInput'].forEach(id => document.getElementById(id).addEventListener('input', updateLiveryPreview));
+      document.querySelectorAll('input[name="houseStanding"]').forEach(r => r.addEventListener('change', updateLiveryPreview));
+      renderHousePicker();
+    });
 
     async function saveProfile() {
       const callsign = document.getElementById('callsignInput').value.trim();
@@ -1092,10 +1552,15 @@
       const gender = document.getElementById('genderInput').value;
       const isNhp = document.getElementById('isNhpInput')?.checked || false;
 
+      const houseFields = collectHouseFields();
       if (estate === 'cavalier') {
+        if (houseState.key === 'custom' && !houseFields.house_custom) {
+          showMessage('Укажите название своего Дома', 'error');
+          return;
+        }
         const title = document.getElementById('titleInput').value.trim();
-        const house = document.getElementById('houseInput').value.trim();
-        fullName = house ? `${title} из Дома ${house}` : title;
+        const house = KtbHouses.resolveHouse(houseFields);
+        fullName = house ? `${title} из ${house.genitive}` : title;
       }
       
       if (!callsign) {
@@ -1121,6 +1586,8 @@
             avatar_path: uploadedAvatarPath,
             gender: gender,
             estate: estate,
+            theme: editorTheme,
+            ...houseFields,
             is_nhp: isNhp
           })
         });

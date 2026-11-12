@@ -13,83 +13,118 @@
     }
     @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
+    /* IPS-N (по умолчанию): глубокий морской синий, фирменный #1C9AE8 (COMP/CON). */
     :root {
-      --bg: #050508;
-      --screen-bg: rgba(18, 18, 28, 0.85);
-      --screen-border: rgba(255, 107, 53, 0.35);
-      --screen-glow: rgba(255, 107, 53, 0.15);
-      --text: #d8d8f0;
-      --text-dim: #787895;
-      --accent: #ff6b35;
-      --danger: #ff375f;
-      --success: #00f5a0;
-      --grid-line: rgba(100, 100, 130, 0.12);
+      --bg: #040a12;
+      --screen-bg: rgba(8, 20, 34, 0.88);
+      --screen-border: rgba(28, 154, 232, 0.38);
+      --screen-glow: rgba(28, 154, 232, 0.16);
+      --text: #d6e6f4;
+      --text-dim: #6f8aa3;
+      --accent: #1c9ae8;
+      --accent-rgb: 28, 154, 232;
+      --danger: #ff5a4e;
+      --success: #4fd1c5;
+      --grid-line: rgba(28, 154, 232, 0.07);
     }
 
-    /* Green Theme */
+    /* GMS: графит и фирменный красный #DB1A2D (COMP/CON). */
     .theme-green {
-      --screen-border: rgba(3, 251, 141, 0.35);
-      --screen-glow: rgba(3, 251, 141, 0.15);
-      --accent: #03FB8D;
-      --success: #00f5a0;
+      --bg: #08090b;
+      --screen-bg: rgba(18, 19, 22, 0.92);
+      --screen-border: rgba(219, 26, 45, 0.42);
+      --screen-glow: rgba(219, 26, 45, 0.16);
+      --text: #e4e6e9;
+      --text-dim: #8a8f97;
+      --accent: #db1a2d;
+      --accent-rgb: 219, 26, 45;
+      --danger: #f5a623;  /* янтарь опасности: не путается с акцентным красным GMS */
+      --success: #e4e6e9;
+      --grid-line: rgba(228, 230, 233, 0.045);
     }
 
-    .theme-green .bg-grid { display: none; }
-
-    /* КТБ — старое золото и благородный тёмный фон */
+    /* КТБ: чёрный лак, карракинский маронский (Royal Prime), тусклая позолота, пергамент. */
     .theme-ktb {
-      --bg: #090806;
-      --screen-bg: rgba(24, 19, 11, 0.9);
-      --screen-border: rgba(197, 160, 73, 0.52);
-      --screen-glow: rgba(212, 175, 55, 0.2);
-      --text: #f0e5c8;
-      --text-dim: #b5a47a;
-      --accent: #d4af37;
-      --success: #e5c96a;
-      --grid-line: rgba(197, 160, 73, 0.09);
+      --bg: #0c0908;
+      --screen-bg: rgba(24, 13, 14, 0.92);
+      --screen-border: rgba(198, 160, 82, 0.45);
+      --screen-glow: rgba(110, 31, 37, 0.35);
+      --text: #ece2cb;
+      --text-dim: #b3a588;
+      --accent: #c6a052;
+      --accent-rgb: 198, 160, 82;
+      --danger: #c2414b;
+      --success: #e9d7a5;
+      --grid-line: rgba(198, 160, 82, 0.05);
+    }
+
+    /* КТБ для Лансера и изгнанника: неблагородная канцелярия. */
+    .theme-ktb.ktb-ignoble {
+      --bg: #0b0c0d;
+      --screen-bg: rgba(18, 19, 21, 0.95);
+      --screen-border: rgba(156, 150, 138, 0.4);
+      --screen-glow: rgba(0, 0, 0, 0);
+      --text: #d9d5cb;
+      --text-dim: #8f8a80;
+      --accent: #9c968a;
+      --accent-rgb: 156, 150, 138;
+      --success: #d8d3c6;
+      --grid-line: rgba(156, 150, 138, 0.04);
     }
 
     .theme-ktb .bg-grid {
       background-image:
+        radial-gradient(ellipse 80% 45% at 50% -5%, rgba(110, 31, 37, 0.45), transparent 70%),
         linear-gradient(var(--grid-line) 1px, transparent 1px),
-        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
-        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.08), transparent 55%);
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 100% 100%, 96px 96px, 96px 96px;
+    }
+    .theme-ktb.ktb-ignoble .bg-grid {
+      background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 32px 32px;
     }
 
-    .theme-ktb .vignette {
-      background: radial-gradient(ellipse at center, transparent 25%, rgba(5, 4, 2, 0.9) 100%);
-    }
+    .theme-ktb .vignette { background: radial-gradient(ellipse at center, transparent 30%, rgba(8, 4, 4, 0.92) 100%); }
+    .theme-ktb .scanlines,
+    .theme-green .scanlines { display: none; }
 
-    .theme-ktb .scanlines {
-      background: repeating-linear-gradient(0deg, transparent 3px, rgba(212, 175, 55, 0.018) 3px, rgba(212, 175, 55, 0.018) 4px);
-    }
-
-    .theme-ktb .screen {
+    /* Гравированная табличка КТБ: двойной кант, угловые заклёпки, ромб по центру. */
+    .theme-ktb:not(.ktb-ignoble) .screen {
       position: relative;
       border-radius: 0;
-      outline: 1px solid rgba(212, 175, 55, 0.18);
-      outline-offset: 4px;
-      box-shadow: inset 0 0 35px rgba(212, 175, 55, 0.045), 0 0 24px rgba(212, 175, 55, 0.08);
+      box-shadow: inset 0 0 0 4px rgba(24, 13, 14, 0.9), inset 0 0 0 5px rgba(198, 160, 82, 0.28), 0 14px 40px rgba(0, 0, 0, 0.45);
     }
-
-    .theme-ktb .screen::before,
-    .theme-ktb .screen::after {
+    .theme-ktb:not(.ktb-ignoble) .screen::before {
       content: "";
       position: absolute;
-      width: 52px;
-      height: 52px;
-      pointer-events: none;
+      top: -6px;
+      left: 50%;
       z-index: 4;
-      background:
-        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 42px 2px no-repeat,
-        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 2px 42px no-repeat,
-        linear-gradient(#b8943f, #b8943f) 7px 7px / 30px 1px no-repeat,
-        linear-gradient(#b8943f, #b8943f) 7px 7px / 1px 30px no-repeat,
-        linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) 8px 8px / 20px 20px no-repeat;
+      width: 10px;
+      height: 10px;
+      transform: translateX(-50%) rotate(45deg);
+      background: var(--bg);
+      border: 1px solid #c6a052;
+      pointer-events: none;
     }
 
-    .theme-ktb .screen::before { top: -7px; left: -7px; }
-    .theme-ktb .screen::after { right: -7px; bottom: -7px; transform: rotate(180deg); }
+    /* IPS-N: кольца пеленга. GMS: инженерная сетка стандарта. */
+    body:not(.theme-green):not(.theme-ktb) .bg-grid {
+      background-image:
+        radial-gradient(circle at 85% 18%, transparent 0 120px, rgba(28, 154, 232, 0.08) 121px 122px, transparent 123px 200px, rgba(28, 154, 232, 0.06) 201px 202px, transparent 203px),
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 100% 100%, 64px 64px, 64px 64px;
+    }
+    .theme-green .bg-grid {
+      display: block;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+        linear-gradient(rgba(228, 230, 233, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(228, 230, 233, 0.02) 1px, transparent 1px);
+      background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+    }
 
     .code-overlay {
       position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; display: none;
@@ -97,7 +132,7 @@
     .theme-green .code-overlay { display: block; }
 
     .code-line {
-      font-family: 'Share Tech Mono', monospace; font-size: 14px; color: rgba(3, 251, 141, 0.15);
+      font-family: 'Share Tech Mono', monospace; font-size: 14px; color: rgba(228, 230, 233, 0.07);
       white-space: nowrap; position: absolute; animation: codeScroll 20s linear infinite;
     }
     @keyframes codeScroll {
@@ -106,8 +141,7 @@
       100% { transform: translateY(100vh); opacity: 0; }
     }
 
-    .theme-green .vignette { background: radial-gradient(ellipse at center, transparent 20%, rgba(5,5,8,0.7) 100%); }
-    .theme-green .scanlines { background: repeating-linear-gradient(0deg, transparent 2px, rgba(3, 251, 141, 0.03) 2px, rgba(3, 251, 141, 0.03) 4px); }
+    .theme-green .vignette { background: radial-gradient(ellipse at center, transparent 30%, rgba(5,5,6,0.85) 100%); }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -231,10 +265,10 @@
       inset: 0;
       background: linear-gradient(
         180deg,
-        rgba(255,107,53,0.03) 0%,
+        rgba(var(--accent-rgb), 0.03) 0%,
         transparent 10%,
         transparent 90%,
-        rgba(255,107,53,0.03) 100%
+        rgba(var(--accent-rgb), 0.03) 100%
       );
       pointer-events: none;
     }
@@ -480,7 +514,7 @@
       width: 6px; /* 🔧 Было 4px → 6px (×1.5) */
     }
     .participant-list::-webkit-scrollbar-track {
-      background: rgba(255,107,53,0.1);
+      background: rgba(var(--accent-rgb), 0.1);
     }
     .participant-list::-webkit-scrollbar-thumb {
       background: var(--accent);
@@ -501,7 +535,7 @@
     .participant-item.active {
       opacity: 1;
       border-left-color: var(--accent);
-      background: rgba(255,107,53,0.08);
+      background: rgba(var(--accent-rgb), 0.08);
     }
 
     .participant-item.speaking {
@@ -509,8 +543,8 @@
     }
 
     @keyframes speakPulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0.3); }
-      50% { box-shadow: 0 0 0 15px rgba(255,107,53,0); } /* 🔧 Было 10px → 15px (×1.5) */
+      0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.3); }
+      50% { box-shadow: 0 0 0 15px rgba(var(--accent-rgb), 0); } /* 🔧 Было 10px → 15px (×1.5) */
     }
 
     .participant-avatar {
@@ -580,7 +614,7 @@
 
     .target-item {
       padding: 0.45rem 0.75rem; /* 🔧 Было 0.3rem 0.5rem → 0.45rem 0.75rem (×1.5) */
-      background: rgba(255,107,53,0.05);
+      background: rgba(var(--accent-rgb), 0.05);
       border-left: 3px solid var(--accent); /* 🔧 Было 2px → 3px (×1.5) */
     }
 
@@ -674,7 +708,7 @@
     .btn-primary::before { background: var(--success); }
 
     .btn-primary:hover {
-      box-shadow: 0 0 37.5px rgba(0,245,160,0.3); /* 🔧 Было 25px → 37.5px (×1.5) */
+      box-shadow: 0 0 37.5px var(--screen-glow); /* 🔧 Было 25px → 37.5px (×1.5) */
     }
 
     /* === СИСТЕМНЫЕ МОДУЛИ (плавающие) === */
@@ -818,7 +852,8 @@
   </style>
 </head>
 <body>
-  <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
+  <script src="./scripts/ktb-houses.js"></script>
+  <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='green'||t==='ktb')document.body.classList.add('theme-'+t);if(t==='ktb'&&window.KtbHouses)KtbHouses.applyCached(document.body);}catch(e){}})();</script>
   <!-- ФОН -->
   <div class="bg-grid"></div>
   <div class="code-overlay" id="codeOverlay"></div>

@@ -1,551 +1,212 @@
+// Панель администратора: Обзор · Игроки · Музыка.
+// Шапка, права, тема и выход — admin-shell.js; запросы — admin-api.js.
+import { relationColor, formatRelation } from '../relation-colors.js';
 import AppConfig from '../config.js';
-import AdminAPI from './admin-api.js';
+import api from './admin-api.js';
 import ChartManager from './admin-charts.js';
 import AdminUtils from './admin-utils.js';
 import { escapeHtml, escapeAttr } from '../escape-utils.js';
-import { applyAdminTheme } from '../admin-theme.js';
+import { initShell, toast } from './admin-shell.js';
 
 const { ITEMS_PER_PAGE } = AppConfig;
+const TABS = ['overview', 'players', 'music'];
+// Старые адреса вкладок ведут в новые разделы.
+const LEGACY_TABS = { statistics: 'overview', choices: 'overview', progress: 'overview', users: 'players', relations: 'players' };
 
 class AdminApp {
     constructor() {
         this.state = {
             users: [],
+            filteredUsers: null,
             currentUserPage: 1,
             totalUserPages: 1,
             choiceStats: [],
             currentFrequency: 'all',
             progressData: [],
-            frequencies: []
+            frequencies: [],
+            selectedUserId: null
         };
-        
+        this.relationsData = null;
+        this.loaded = new Set();
         this.chartManager = new ChartManager();
-        this.api = AdminAPI;
         this.utils = AdminUtils;
     }
-    
+
     async init() {
-        try {
-            const authData = await this.api.checkAuth();
-            
-            if (!authData.isAdmin) {
-                this.showError('У вас нет прав администратора');
-                setTimeout(() => window.location.href = 'index.html', 2000);
-                return;
-            }
-            
-            this.initTabs();
-            applyAdminTheme();
-            await this.updateFrequencyTabs();
-            this.loadStatisticsData();
-            this.initEventListeners();
-            this.utils.generateBackgroundCode();
-            
-        } catch (error) {
-            console.error('Init error:', error);
-            this.showError('Ошибка подключения к серверу. Проверьте, что сервер запущен на порту 3000');
-        }
-    }
-    
-    showError(message) {
-        const container = document.querySelector('.container');
-        if (container) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'admin-card';
-            errorDiv.innerHTML = `
-                <div class="admin-card-title" style="color: #ff3333;">Ошибка</div>
-                <p>${message}</p>
-                <button class="btn" onclick="location.reload()">Повторить</button>
-                <button class="btn" onclick="window.location.href='index.html'">На главную</button>
-            `;
-            container.innerHTML = '';
-            container.appendChild(errorDiv);
-        }
-    }
-    
-    initEventListeners() {
-        document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
+        const auth = await initShell({ page: 'panel', title: 'ПАНЕЛЬ' });
+        if (!auth) return;
+
+        this.initTabs();
         this.initModals();
         this.initMusicTab();
+        this.initUserSearch();
+        this.openTab(this.tabFromHash(), { replace: true });
+        window.addEventListener('hashchange', () => this.openTab(this.tabFromHash(), { replace: true }));
     }
-    
+
+    tabFromHash() {
+        const raw = location.hash.replace('#', '');
+        const tab = LEGACY_TABS[raw] || raw;
+        return TABS.includes(tab) ? tab : 'overview';
+    }
+
     initTabs() {
-        const tabs = document.querySelectorAll('.admin-tab');
-        const contents = document.querySelectorAll('.tab-content');
-        
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                const tabName = tab.dataset.tab;
-                
-                tabs.forEach(t => t.classList.remove('active'));
-                contents.forEach(c => c.classList.remove('active'));
-                
-                tab.classList.add('active');
-                document.getElementById(tabName)?.classList.add('active');
-                
-                this.loadTabData(tabName);
-            });
+        document.querySelectorAll('.admin-tabs .admin-tab').forEach(tab => {
+            tab.addEventListener('click', () => this.openTab(tab.dataset.tab));
         });
     }
-    
+
+    openTab(tabName, { replace = false } = {}) {
+        document.querySelectorAll('.admin-tabs .admin-tab').forEach(t => {
+            const active = t.dataset.tab === tabName;
+            t.classList.toggle('active', active);
+            t.setAttribute('aria-selected', String(active));
+        });
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === tabName));
+        if (!replace || location.hash.replace('#', '') !== tabName) {
+            history.replaceState(null, '', `#${tabName}`);
+        }
+        this.loadTabData(tabName);
+    }
+
     async loadTabData(tabName) {
         const loaders = {
-            statistics: () => this.loadStatisticsData(),
-            users: () => this.loadUsersData(),
-            choices: async () => {
+            overview: async () => {
+                this.loadStatisticsData();
                 await this.updateFrequencyTabs();
                 this.loadChoicesData();
+                this.loadProgressData();
             },
-            progress: () => this.loadProgressData(),
-            relations: () => this.loadRelationsData(),
+            players: async () => {
+                await this.loadUsersData();
+                if (!this.state.progressData.length) await this.loadProgressData();
+            },
             music: () => this.loadMusicData()
         };
-        
         await loaders[tabName]?.();
     }
-    
+
     initModals() {
-        const passwordModal = document.getElementById('password-modal');
-        const detailsModal = document.getElementById('choice-details-modal');
-        const deleteModal = document.getElementById('delete-user-modal');
-        const clearModal = document.getElementById('clear-progress-modal');
-        
-        document.getElementById('cancel-password')?.addEventListener('click', () => {
-            passwordModal.style.display = 'none';
-        });
-        
+        const modals = ['password-modal', 'choice-details-modal', 'delete-user-modal', 'clear-progress-modal']
+            .map(id => document.getElementById(id));
+        const close = id => { document.getElementById(id).style.display = 'none'; };
+
+        document.getElementById('cancel-password')?.addEventListener('click', () => close('password-modal'));
         document.getElementById('save-password')?.addEventListener('click', () => this.changePassword());
-        document.getElementById('close-details')?.addEventListener('click', () => {
-            detailsModal.style.display = 'none';
-        });
-        
-        document.getElementById('cancel-delete')?.addEventListener('click', () => {
-            deleteModal.style.display = 'none';
-        });
-        
+        document.getElementById('close-details')?.addEventListener('click', () => close('choice-details-modal'));
+        document.getElementById('cancel-delete')?.addEventListener('click', () => close('delete-user-modal'));
         document.getElementById('confirm-delete')?.addEventListener('click', () => this.deleteUser());
-        
-        document.getElementById('cancel-clear')?.addEventListener('click', () => {
-            clearModal.style.display = 'none';
-        });
-        
+        document.getElementById('cancel-clear')?.addEventListener('click', () => close('clear-progress-modal'));
         document.getElementById('confirm-clear')?.addEventListener('click', () => this.clearProgress());
-        
-        window.addEventListener('click', (e) => {
-            if (e.target === passwordModal) passwordModal.style.display = 'none';
-            if (e.target === detailsModal) detailsModal.style.display = 'none';
-            if (e.target === deleteModal) deleteModal.style.display = 'none';
-            if (e.target === clearModal) clearModal.style.display = 'none';
+
+        window.addEventListener('click', e => {
+            modals.forEach(m => { if (e.target === m) m.style.display = 'none'; });
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') modals.forEach(m => { m.style.display = 'none'; });
         });
     }
-    
+
+    // ===================== ОБЗОР =====================
+
     async updateFrequencyTabs() {
         const container = document.querySelector('.sub-tabs');
         if (!container) return;
-        
+
         let frequencies = [];
-        
         try {
-            const data = await this.api.getFrequencies();
-            if (data?.frequencies) {
-                frequencies = data.frequencies.map(f => f.frequency);
-            }
+            const data = await api.getFrequencies();
+            frequencies = (data?.frequencies || []).map(f => f.frequency);
         } catch (error) {
             console.error('Error loading frequencies:', error);
         }
-        
         this.state.frequencies = frequencies;
-        
-        container.innerHTML = '';
-        
-        const allTab = document.createElement('button');
-        allTab.className = 'sub-tab active';
-        allTab.dataset.freq = 'all';
-        allTab.textContent = 'Все частоты';
-        container.appendChild(allTab);
-        
-        frequencies.forEach(freq => {
+
+        container.textContent = '';
+        ['all', ...frequencies].forEach(freq => {
             const tab = document.createElement('button');
-            tab.className = 'sub-tab';
+            tab.className = `sub-tab${freq === this.state.currentFrequency ? ' active' : ''}`;
             tab.dataset.freq = freq;
-            tab.textContent = freq;
+            tab.textContent = freq === 'all' ? 'Все частоты' : freq;
+            tab.addEventListener('click', () => {
+                container.querySelectorAll('.sub-tab').forEach(t => t.classList.toggle('active', t === tab));
+                this.state.currentFrequency = freq;
+                this.renderChoicesList();
+            });
             container.appendChild(tab);
         });
-        
-        this.initSubTabs();
     }
-    
-    initSubTabs() {
-        const subTabs = document.querySelectorAll('.sub-tab');
-        
-        subTabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                subTabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                this.state.currentFrequency = tab.dataset.freq;
-                this.loadChoicesData();
-            });
-        });
-    }
-    
+
     async loadStatisticsData() {
         this.utils.showLoading('statistics');
-        
         try {
             const [usersData, dialoguesData, choicesData] = await Promise.all([
-                this.api.getUsers().catch(() => null),
-                this.api.getDialoguesCount().catch(() => null),
-                this.api.getChoiceStatistics().catch(() => null)
+                api.getUsers().catch(() => null),
+                api.getDialoguesCount().catch(() => null),
+                api.getChoiceStatistics().catch(() => null)
             ]);
-            
-            if (usersData?.users) {
-                document.getElementById('total-users').textContent = usersData.users.length;
-            }
-            
-            if (dialoguesData?.count !== undefined) {
-                document.getElementById('total-dialogues').textContent = dialoguesData.count;
-            }
-            
+
+            if (usersData?.users) document.getElementById('total-users').textContent = usersData.users.length;
+            if (dialoguesData?.count !== undefined) document.getElementById('total-dialogues').textContent = dialoguesData.count;
             if (choicesData?.statistics) {
                 const totalChoices = choicesData.statistics.reduce((sum, s) => sum + (parseInt(s.count) || 0), 0);
                 document.getElementById('total-choices').textContent = totalChoices;
                 this.chartManager.createFrequencyChart(choicesData.statistics);
                 this.chartManager.createChoicesChart(choicesData.statistics);
             }
-            
-            this.utils.hideLoading('statistics');
-            
         } catch (error) {
             console.error('Statistics error:', error);
-            this.utils.hideLoading('statistics');
             this.utils.showError('statistics-content', `Ошибка: ${error.message}`);
         }
+        this.utils.hideLoading('statistics');
     }
-    
-    async loadUsersData() {
-        this.utils.showLoading('users');
-        
-        try {
-            const data = await this.api.getUsers();
-            
-            if (!data?.users) throw new Error('Invalid data');
-            
-            this.state.users = data.users;
-            this.state.totalUserPages = Math.ceil(this.state.users.length / ITEMS_PER_PAGE) || 1;
-            
-            this.renderUsersTable();
-            this.renderUsersPagination();
-            this.initUserSearch();
-            
-            document.getElementById('users-loading').style.display = 'none';
-            document.getElementById('users-table').style.display = 'table';
-            
-        } catch (error) {
-            console.error('Users error:', error);
-            document.getElementById('users-loading').style.display = 'none';
-            document.getElementById('users-table').style.display = 'table';
-            document.getElementById('users-table-body').innerHTML = 
-                '<tr><td colspan="4" class="text-center">Ошибка загрузки данных</td></tr>';
-        }
-    }
-    
-    renderUsersTable(users = null) {
-        const tbody = document.getElementById('users-table-body');
-        const data = users || this.state.users;
-        
-        const start = (this.state.currentUserPage - 1) * ITEMS_PER_PAGE;
-        const end = Math.min(start + ITEMS_PER_PAGE, data.length);
-        const pageUsers = data.slice(start, end);
-        
-        tbody.innerHTML = pageUsers.length === 0
-            ? '<tr><td colspan="4" class="text-center">Пользователи не найдены</td></tr>'
-            : pageUsers.map(user => `
-                <tr>
-                    <td>${escapeHtml(user.id)}</td>
-                    <td>${escapeHtml(user.username)}</td>
-                    <td>${escapeHtml(this.utils.formatDate(user.created_at))}</td>
-                    <td>
-                        <button class="btn change-password-btn"
-                                data-id="${escapeAttr(user.id)}"
-                                data-username="${escapeAttr(user.username)}">
-                            Сменить пароль
-                        </button>
-                        <button class="btn clear-progress-btn"
-                                data-id="${escapeAttr(user.id)}"
-                                data-username="${escapeAttr(user.username)}">
-                            Очистить прохождение
-                        </button>
-                        <button class="btn btn-danger delete-user-btn"
-                                data-id="${escapeAttr(user.id)}"
-                                data-username="${escapeAttr(user.username)}">
-                            Удалить
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
-        
-        tbody.querySelectorAll('.change-password-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.openPasswordModal(btn.dataset.id, btn.dataset.username);
-            });
-        });
-        
-        tbody.querySelectorAll('.delete-user-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.openDeleteUserModal(btn.dataset.id, btn.dataset.username);
-            });
-        });
-        
-        tbody.querySelectorAll('.clear-progress-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.openClearProgressModal(btn.dataset.id, btn.dataset.username);
-            });
-        });
-    }
-    
-    renderUsersPagination() {
-        const container = document.getElementById('users-pagination');
-        container.innerHTML = '';
-        
-        if (this.state.totalUserPages <= 1) return;
-        
-        const createButton = (text, isDisabled, onClick) => {
-            const btn = document.createElement('button');
-            btn.className = `pagination-button${isDisabled ? ' disabled' : ''}`;
-            btn.innerHTML = text;
-            if (!isDisabled && onClick) btn.addEventListener('click', onClick);
-            return btn;
-        };
-        
-        container.appendChild(createButton('«', this.state.currentUserPage === 1, () => {
-            if (this.state.currentUserPage > 1) {
-                this.state.currentUserPage--;
-                this.renderUsersTable();
-                this.renderUsersPagination();
-            }
-        }));
-        
-        const maxVisible = 5;
-        let start = Math.max(1, this.state.currentUserPage - Math.floor(maxVisible / 2));
-        let end = Math.min(this.state.totalUserPages, start + maxVisible - 1);
-        start = Math.max(1, end - maxVisible + 1);
-        
-        for (let i = start; i <= end; i++) {
-            const btn = createButton(i, false, () => {
-                this.state.currentUserPage = i;
-                this.renderUsersTable();
-                this.renderUsersPagination();
-            });
-            if (i === this.state.currentUserPage) btn.classList.add('active');
-            container.appendChild(btn);
-        }
-        
-        container.appendChild(createButton('»', this.state.currentUserPage === this.state.totalUserPages, () => {
-            if (this.state.currentUserPage < this.state.totalUserPages) {
-                this.state.currentUserPage++;
-                this.renderUsersTable();
-                this.renderUsersPagination();
-            }
-        }));
-    }
-    
-    initUserSearch() {
-        const input = document.getElementById('user-search');
-        if (!input) return;
-        
-        input.addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const filtered = term
-                ? this.state.users.filter(u => u.username.toLowerCase().includes(term))
-                : null;
-            this.renderUsersTable(filtered);
-        });
-    }
-    
-    openPasswordModal(userId, username) {
-        document.getElementById('user-id-input').value = userId;
-        document.getElementById('modal-username').textContent = username;
-        document.getElementById('new-password').value = '';
-        document.getElementById('confirm-password').value = '';
-        document.getElementById('password-error').style.display = 'none';
-        document.getElementById('password-modal').style.display = 'flex';
-    }
-    
-    async changePassword() {
-        const userId = document.getElementById('user-id-input').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
-        const errorEl = document.getElementById('password-error');
-        
-        if (newPassword.length < 6) {
-            errorEl.textContent = 'Пароль должен содержать минимум 6 символов';
-            errorEl.style.display = 'block';
-            return;
-        }
-        
-        if (newPassword !== confirmPassword) {
-            errorEl.textContent = 'Пароли не совпадают';
-            errorEl.style.display = 'block';
-            return;
-        }
-        
-        try {
-            await this.api.changePassword(userId, newPassword);
-            document.getElementById('password-modal').style.display = 'none';
-            this.utils.showSuccess('users-table', 'Пароль успешно изменен');
-        } catch (error) {
-            errorEl.textContent = error.message;
-            errorEl.style.display = 'block';
-        }
-    }
-    
-    openDeleteUserModal(userId, username) {
-        document.getElementById('delete-user-id').value = userId;
-        document.getElementById('delete-username').textContent = username;
-        document.getElementById('delete-error').style.display = 'none';
-        document.getElementById('delete-user-modal').style.display = 'flex';
-    }
-    
-    async deleteUser() {
-        const userId = document.getElementById('delete-user-id').value;
-        const errorEl = document.getElementById('delete-error');
-        
-        try {
-            await this.api.deleteUser(userId);
-            document.getElementById('delete-user-modal').style.display = 'none';
-            this.utils.showSuccess('users-table', 'Пользователь удален');
-            await this.loadUsersData();
-        } catch (error) {
-            errorEl.textContent = error.message;
-            errorEl.style.display = 'block';
-        }
-    }
-    
-    async openClearProgressModal(userId, username) {
-        document.getElementById('clear-progress-user-id').value = userId;
-        document.getElementById('clear-progress-username').textContent = username;
-        document.getElementById('clear-progress-error').style.display = 'none';
-        
-        const select = document.getElementById('clear-frequency');
-        select.innerHTML = '<option value="">Загрузка...</option>';
-        document.getElementById('clear-progress-modal').style.display = 'flex';
-        
-        try {
-            const data = await this.api.getFrequencies();
-            if (data?.frequencies?.length) {
-                select.innerHTML = '<option value="all">Очистить все</option>' +
-                    data.frequencies.map(f =>
-                    `<option value="${escapeAttr(f.frequency)}">${escapeHtml(f.frequency)}${f.title ? ' - ' + escapeHtml(f.title) : ''}</option>`
-                ).join('');
-            } else {
-                select.innerHTML = '<option value="">Нет диалогов</option>';
-            }
-        } catch (error) {
-            select.innerHTML = '<option value="">Ошибка загрузки</option>';
-        }
-    }
-    
-    async clearProgress() {
-        const userId = document.getElementById('clear-progress-user-id').value;
-        const frequency = document.getElementById('clear-frequency').value;
-        const errorEl = document.getElementById('clear-progress-error');
-        
-        if (!frequency) {
-            errorEl.textContent = 'Выберите диалог';
-            errorEl.style.display = 'block';
-            return;
-        }
-        
-        try {
-            await this.api.clearProgress(userId, frequency);
-            document.getElementById('clear-progress-modal').style.display = 'none';
-            this.utils.showSuccess('users-table', 'Прохождение очищено');
-        } catch (error) {
-            errorEl.textContent = error.message;
-            errorEl.style.display = 'block';
-        }
-    }
-    
+
     async loadChoicesData() {
         this.utils.showLoading('choices');
-        
         try {
-            const data = await this.api.getChoiceStatistics();
-            
-            if (!data?.statistics) throw new Error('Invalid data');
-            
-            this.state.choiceStats = data.statistics;
+            const data = await api.getChoiceStatistics();
+            this.state.choiceStats = data?.statistics || [];
             this.renderChoicesList();
-            
-            this.utils.hideLoading('choices');
-            
         } catch (error) {
             console.error('Choices error:', error);
             this.state.choiceStats = [];
-            this.utils.hideLoading('choices');
-            document.getElementById('choice-list').innerHTML = 
-                '<li class="choice-item">Ошибка загрузки данных</li>';
+            document.getElementById('choice-list').innerHTML = '<li class="choice-item">Ошибка загрузки данных</li>';
         }
+        this.utils.hideLoading('choices');
     }
-    
+
     renderChoicesList() {
         const list = document.getElementById('choice-list');
-        
         if (!this.state.choiceStats?.length) {
             list.innerHTML = '<li class="choice-item">Нет данных о выборах</li>';
             return;
         }
-        
+
         const groups = {};
-        
         this.state.choiceStats.forEach(stat => {
-            if (this.state.currentFrequency !== 'all' && stat.frequency !== this.state.currentFrequency) {
-                return;
-            }
-            
+            if (this.state.currentFrequency !== 'all' && stat.frequency !== this.state.currentFrequency) return;
             const key = `${stat.frequency}-${stat.choice_id}`;
-            
-            if (!groups[key]) {
-                groups[key] = {
-                    frequency: stat.frequency,
-                    choiceId: stat.choice_id,
-                    total: 0,
-                    options: []
-                };
-            }
-            
+            if (!groups[key]) groups[key] = { frequency: stat.frequency, choiceId: stat.choice_id, total: 0, options: [] };
             const count = parseInt(stat.count) || 0;
             groups[key].total += count;
-            groups[key].options.push({
-                optionId: stat.option_id,
-                text: stat.choice_text || 'Нет текста',
-                count,
-                users: stat.users?.split(',') || []
-            });
+            groups[key].options.push({ optionId: stat.option_id, text: stat.choice_text || 'Нет текста', count });
         });
-        
-        const sorted = Object.values(groups).sort((a, b) => {
-            if (a.frequency !== b.frequency) return a.frequency.localeCompare(b.frequency);
-            return a.choiceId.localeCompare(b.choiceId);
-        });
-        
-        const frequencyIndices = {};
+
+        const sorted = Object.values(groups).sort((a, b) =>
+            a.frequency !== b.frequency ? a.frequency.localeCompare(b.frequency) : a.choiceId.localeCompare(b.choiceId));
+        const perFrequency = {};
         sorted.forEach(choice => {
-            if (!frequencyIndices[choice.frequency]) {
-                frequencyIndices[choice.frequency] = 0;
-            }
-            frequencyIndices[choice.frequency]++;
-            choice.indexInFrequency = frequencyIndices[choice.frequency];
+            perFrequency[choice.frequency] = (perFrequency[choice.frequency] || 0) + 1;
+            choice.indexInFrequency = perFrequency[choice.frequency];
         });
-        
+
         if (!sorted.length) {
             list.innerHTML = '<li class="choice-item">Нет данных для выбранной частоты</li>';
             return;
         }
-        
+
         list.innerHTML = sorted.map(choice => {
             choice.options.sort((a, b) => b.count - a.count);
-            
             return `
                 <li class="choice-item" data-frequency="${escapeAttr(choice.frequency)}" data-choice="${escapeAttr(choice.choiceId)}">
                     <div class="choice-header">
@@ -560,48 +221,35 @@ class AdminApp {
                                     <div class="choice-option-text">${escapeHtml(opt.text)}</div>
                                     <div class="choice-option-count">${opt.count}</div>
                                     <div class="choice-option-percent">${percent}%</div>
-                                    <div class="progress-bar">
-                                        <div class="progress-value" style="width: ${percent}%"></div>
-                                    </div>
-                                </div>
-                            `;
+                                    <div class="progress-bar"><div class="progress-value" style="width: ${percent}%"></div></div>
+                                </div>`;
                         }).join('')}
                     </div>
                     <button class="btn detail-btn">Детализация</button>
-                </li>
-            `;
+                </li>`;
         }).join('');
-        
+
         list.querySelectorAll('.choice-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                if (!e.target.classList.contains('detail-btn')) {
-                    item.classList.toggle('expanded');
-                }
+            item.addEventListener('click', e => {
+                if (!e.target.classList.contains('detail-btn')) item.classList.toggle('expanded');
             });
-            
-            item.querySelector('.detail-btn')?.addEventListener('click', (e) => {
+            item.querySelector('.detail-btn')?.addEventListener('click', e => {
                 e.stopPropagation();
                 this.openChoiceDetails(item.dataset.frequency, item.dataset.choice);
             });
         });
     }
-    
+
     async openChoiceDetails(frequency, choiceId) {
-        const modal = document.getElementById('choice-details-modal');
-        modal.style.display = 'flex';
-        
+        document.getElementById('choice-details-modal').style.display = 'flex';
         document.getElementById('detail-frequency').textContent = frequency;
-        
         document.getElementById('choice-details-loading').style.display = 'flex';
         document.getElementById('choice-details-content').style.display = 'none';
-        
+
         try {
-            const data = await this.api.getChoiceDetails(frequency, choiceId);
-            
-            if (!data?.details) throw new Error('Invalid data');
-            
+            const data = await api.getChoiceDetails(frequency, choiceId);
+            if (!data?.details) throw new Error('Некорректный ответ сервера');
             this.renderChoiceDetails(data.details);
-            
         } catch (error) {
             console.error('Details error:', error);
             document.getElementById('detail-options').textContent = `Ошибка: ${error.message}`;
@@ -609,317 +257,433 @@ class AdminApp {
             document.getElementById('choice-details-content').style.display = 'block';
         }
     }
-    
+
     renderChoiceDetails(details) {
         const optionsContainer = document.getElementById('detail-options');
         const tableBody = document.getElementById('detail-users-table');
-        
-        optionsContainer.innerHTML = '';
-        tableBody.innerHTML = '';
-        
-        const optionGroups = {};
-        
-        details.forEach(detail => {
-            if (!optionGroups[detail.option_id]) {
-                optionGroups[detail.option_id] = {
-                    optionId: detail.option_id,
-                    text: detail.choice_text,
-                    users: [],
-                    count: 0
-                };
-            }
-            
-            optionGroups[detail.option_id].users.push({
-                username: detail.username,
-                createdAt: detail.created_at
-            });
-            optionGroups[detail.option_id].count++;
+        optionsContainer.textContent = '';
+
+        const groups = {};
+        details.forEach(d => {
+            if (!groups[d.option_id]) groups[d.option_id] = { optionId: d.option_id, text: d.choice_text, users: [], count: 0 };
+            groups[d.option_id].users.push({ username: d.username, createdAt: d.created_at });
+            groups[d.option_id].count++;
         });
-        
-        const sorted = Object.values(optionGroups).sort((a, b) => b.count - a.count);
-        
+        const sorted = Object.values(groups).sort((a, b) => b.count - a.count);
         sorted.forEach(option => {
             const div = document.createElement('div');
             div.innerHTML = `<strong>${escapeHtml(option.text)} (${escapeHtml(option.count)} выборов)</strong>`;
             optionsContainer.appendChild(div);
         });
-
         this.chartManager.createDetailChart(sorted);
 
-        tableBody.innerHTML = details.map(detail => `
+        tableBody.innerHTML = details.map(d => `
             <tr>
-                <td>${escapeHtml(detail.username)}</td>
-                <td>${escapeHtml(detail.choice_text)}</td>
-                <td>${escapeHtml(this.utils.formatDate(detail.created_at))}</td>
-            </tr>
-        `).join('');
-        
+                <td>${escapeHtml(d.username)}</td>
+                <td>${escapeHtml(d.choice_text)}</td>
+                <td>${escapeHtml(this.utils.formatDate(d.created_at))}</td>
+            </tr>`).join('');
+
         document.getElementById('choice-details-loading').style.display = 'none';
         document.getElementById('choice-details-content').style.display = 'block';
     }
-    
+
     async loadProgressData() {
         this.utils.showLoading('progress');
-        
         try {
-            const data = await this.api.getUserProgress();
-            
-            if (!data?.progress) throw new Error('Invalid data');
-            
-            this.state.progressData = data.progress;
+            const data = await api.getUserProgress();
+            this.state.progressData = data?.progress || [];
             this.renderProgressData();
-            
-            this.utils.hideLoading('progress');
-            
         } catch (error) {
             console.error('Progress error:', error);
             this.state.progressData = [];
-            this.utils.hideLoading('progress');
-            document.getElementById('progress-table-body').innerHTML = 
+            document.getElementById('progress-table-body').innerHTML =
                 '<tr><td colspan="4" class="text-center">Ошибка загрузки данных</td></tr>';
         }
+        this.utils.hideLoading('progress');
+        if (this.state.selectedUserId !== null) this.renderPlayerProgress();
     }
-    
+
+    statusClass(status) {
+        return {
+            'Не начато': 'status-not-started',
+            'В процессе': 'status-in-progress',
+            'Да': 'status-completed',
+            'Да (перепрохождение)': 'status-replay'
+        }[status] || '';
+    }
+
     renderProgressData() {
         const tbody = document.getElementById('progress-table-body');
-        
         if (!this.state.progressData?.length) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center">Нет данных о прогрессе</td></tr>';
             return;
         }
-        
-        const sorted = [...this.state.progressData].sort((a, b) => {
-            if (a.username !== b.username) return a.username.localeCompare(b.username);
-            return a.frequency.localeCompare(b.frequency);
-        });
-        
-        tbody.innerHTML = sorted.map(progress => {
-            const maxRepeats = progress.max_repeats || 1;
-            const repeatCount = progress.repeat_count || 0;
-            
-            let statusClass = '';
-            if (progress.status === 'Не начато') statusClass = 'status-not-started';
-            else if (progress.status === 'В процессе') statusClass = 'status-in-progress';
-            else if (progress.status === 'Да') statusClass = 'status-completed';
-            else if (progress.status === 'Да (перепрохождение)') statusClass = 'status-replay';
-            
-            return `
-                <tr>
-                    <td>${escapeHtml(progress.username)}</td>
-                    <td>${escapeHtml(progress.frequency)}</td>
-                    <td>${escapeHtml(repeatCount)} / ${escapeHtml(maxRepeats)}</td>
-                    <td><span class="status-badge ${statusClass}">${escapeHtml(progress.status)}</span></td>
-                </tr>
-            `;
-        }).join('');
-        
+        const sorted = [...this.state.progressData].sort((a, b) =>
+            a.username !== b.username ? a.username.localeCompare(b.username) : a.frequency.localeCompare(b.frequency));
+        tbody.innerHTML = sorted.map(p => `
+            <tr>
+                <td>${escapeHtml(p.username)}</td>
+                <td>${escapeHtml(p.frequency)}</td>
+                <td>${escapeHtml(p.repeat_count || 0)} / ${escapeHtml(p.max_repeats || 1)}</td>
+                <td><span class="status-badge ${this.statusClass(p.status)}">${escapeHtml(p.status)}</span></td>
+            </tr>`).join('');
         this.chartManager.createProgressChart(this.state.progressData);
     }
-    
-    async logout() {
+
+    // ===================== ИГРОКИ =====================
+
+    async loadUsersData() {
+        document.getElementById('users-loading').style.display = 'flex';
         try {
-            await this.api.logout();
-            window.location.href = 'index.html';
+            const data = await api.getUsers();
+            this.state.users = data?.users || [];
+            this.applyUserFilter();
         } catch (error) {
-            console.error('Logout error:', error);
-            alert('Ошибка при выходе');
+            console.error('Users error:', error);
+            document.getElementById('users-table-body').innerHTML =
+                '<tr><td colspan="4" class="text-center">Ошибка загрузки данных</td></tr>';
         }
+        document.getElementById('users-loading').style.display = 'none';
+        document.getElementById('users-table').style.display = 'table';
     }
 
-    // Подсветка несохранённых изменений (жёлтый) и снятие её после сохранения.
-    markRelDirty(input) {
-        input.style.borderColor = '#ffcc00';
-        input.style.boxShadow = '0 0 5px rgba(255, 204, 0, 0.6)';
+    applyUserFilter() {
+        const term = (document.getElementById('user-search')?.value || '').trim().toLowerCase();
+        this.state.filteredUsers = term ? this.state.users.filter(u => u.username.toLowerCase().includes(term)) : null;
+        const list = this.state.filteredUsers || this.state.users;
+        this.state.totalUserPages = Math.ceil(list.length / ITEMS_PER_PAGE) || 1;
+        this.state.currentUserPage = Math.min(this.state.currentUserPage, this.state.totalUserPages);
+        this.renderUsersTable();
+        this.renderUsersPagination();
     }
 
-    markRelClean(input) {
-        input.style.borderColor = '';
-        input.style.boxShadow = '';
+    initUserSearch() {
+        document.getElementById('user-search')?.addEventListener('input', () => {
+            this.state.currentUserPage = 1;
+            this.applyUserFilter();
+        });
     }
 
-    async loadRelationsData() {
+    renderUsersTable() {
+        const tbody = document.getElementById('users-table-body');
+        const data = this.state.filteredUsers || this.state.users;
+        const start = (this.state.currentUserPage - 1) * ITEMS_PER_PAGE;
+        const pageUsers = data.slice(start, start + ITEMS_PER_PAGE);
+
+        tbody.innerHTML = pageUsers.length === 0
+            ? '<tr><td colspan="4" class="text-center">Пользователи не найдены</td></tr>'
+            : pageUsers.map(user => `
+                <tr class="player-row${String(user.id) === String(this.state.selectedUserId) ? ' selected' : ''}" data-id="${escapeAttr(user.id)}" tabindex="0" aria-label="Открыть игрока ${escapeAttr(user.username)}">
+                    <td>${escapeHtml(user.id)}</td>
+                    <td class="player-name">${escapeHtml(user.username)}</td>
+                    <td>${escapeHtml(this.utils.formatDate(user.created_at))}</td>
+                    <td class="row-actions">
+                        <button class="btn btn-small change-password-btn" data-id="${escapeAttr(user.id)}" data-username="${escapeAttr(user.username)}">Пароль</button>
+                        <button class="btn btn-small clear-progress-btn" data-id="${escapeAttr(user.id)}" data-username="${escapeAttr(user.username)}">Сброс</button>
+                        <button class="btn btn-small btn-danger delete-user-btn" data-id="${escapeAttr(user.id)}" data-username="${escapeAttr(user.username)}">Удалить</button>
+                    </td>
+                </tr>`).join('');
+
+        tbody.querySelectorAll('.change-password-btn').forEach(btn =>
+            btn.addEventListener('click', () => this.openPasswordModal(btn.dataset.id, btn.dataset.username)));
+        tbody.querySelectorAll('.delete-user-btn').forEach(btn =>
+            btn.addEventListener('click', () => this.openDeleteUserModal(btn.dataset.id, btn.dataset.username)));
+        tbody.querySelectorAll('.clear-progress-btn').forEach(btn =>
+            btn.addEventListener('click', () => this.openClearProgressModal(btn.dataset.id, btn.dataset.username)));
+
+        tbody.querySelectorAll('.player-row').forEach(row => {
+            const open = e => {
+                if (e.target.closest('button')) return;
+                this.selectPlayer(parseInt(row.dataset.id));
+            };
+            row.addEventListener('click', open);
+            row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); } });
+        });
+    }
+
+    renderUsersPagination() {
+        const container = document.getElementById('users-pagination');
+        container.textContent = '';
+        if (this.state.totalUserPages <= 1) return;
+
+        const go = page => {
+            this.state.currentUserPage = page;
+            this.renderUsersTable();
+            this.renderUsersPagination();
+        };
+        const button = (text, disabled, onClick, active = false) => {
+            const btn = document.createElement('button');
+            btn.className = `pagination-button${disabled ? ' disabled' : ''}${active ? ' active' : ''}`;
+            btn.textContent = text;
+            if (!disabled) btn.addEventListener('click', onClick);
+            return btn;
+        };
+        const { currentUserPage: page, totalUserPages: total } = this.state;
+        container.appendChild(button('«', page === 1, () => go(page - 1)));
+        let start = Math.max(1, page - 2);
+        const end = Math.min(total, start + 4);
+        start = Math.max(1, end - 4);
+        for (let i = start; i <= end; i++) container.appendChild(button(String(i), false, () => go(i), i === page));
+        container.appendChild(button('»', page === total, () => go(page + 1)));
+    }
+
+    async selectPlayer(userId) {
+        this.state.selectedUserId = userId;
+        document.querySelectorAll('#users-table-body .player-row').forEach(row =>
+            row.classList.toggle('selected', parseInt(row.dataset.id) === userId));
+
+        const user = this.state.users.find(u => u.id === userId);
+        document.getElementById('player-detail-title').textContent = user ? `Игрок: ${user.username}` : 'Игрок';
+        document.getElementById('player-placeholder').hidden = true;
+        document.getElementById('player-placeholder').style.display = 'none';
+        document.getElementById('player-content').hidden = false;
+
         const loading = document.getElementById('relations-loading');
-        const userList = document.getElementById('relations-user-list');
-        if (loading) loading.style.display = 'flex';
-        if (userList) userList.innerHTML = '';
-
-        try {
-            const response = await fetch(`${AppConfig.API_URL}/editor/global-characters/relations`, {
-                credentials: 'include',
-                headers: AppConfig.CACHE_HEADERS
-            });
-            const data = await response.json();
-            this._relationsData = data;
-
-            const users = data?.users || [];
-            const empty = document.getElementById('relations-user-empty');
-            if (!users.length) {
-                if (empty) empty.style.display = 'block';
-            } else if (userList) {
-                userList.innerHTML = users.map(u => `
-                    <button class="btn relations-user-btn" data-user-id="${escapeAttr(u.id)}"
-                            style="display:block;width:100%;text-align:left;margin:0 0 4px 0;border:none;border-bottom:1px solid var(--primary-border);padding:7px 10px;font-size:12px;">
-                        ${escapeHtml(u.username)}
-                    </button>
-                `).join('');
-                userList.querySelectorAll('.relations-user-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        userList.querySelectorAll('.relations-user-btn').forEach(b => {
-                            b.style.backgroundColor = '';
-                            b.style.color = '';
-                        });
-                        btn.style.backgroundColor = 'var(--primary-bg)';
-                        btn.style.color = 'var(--primary-color)';
-                        this.renderRelationsForUser(parseInt(btn.dataset.userId));
-                    });
-                });
+        if (!this.relationsData) {
+            loading.style.display = 'flex';
+            try {
+                this.relationsData = await api.relations.all();
+            } catch (error) {
+                console.error('Relations error:', error);
+                this.relationsData = { relations: [], users: [] };
+                toast(`Отношения не загрузились: ${error.message}`, 'error');
             }
-        } catch (error) {
-            console.error('Relations error:', error);
-            if (userList) userList.innerHTML = '<div style="color:#ff3333;font-size:12px;">Ошибка загрузки</div>';
+            loading.style.display = 'none';
         }
-        if (loading) loading.style.display = 'none';
+        this.renderRelationsForUser(userId);
+        this.renderPlayerProgress();
     }
 
-    // Отношения выбранного пользователя с NPC: строка на NPC, клик раскрывает пилотов.
+    renderPlayerProgress() {
+        const tbody = document.getElementById('player-progress-body');
+        const user = this.state.users.find(u => u.id === this.state.selectedUserId);
+        if (!tbody || !user) return;
+        const rows = this.state.progressData.filter(p => p.username === user.username)
+            .sort((a, b) => a.frequency.localeCompare(b.frequency));
+        tbody.innerHTML = rows.length === 0
+            ? '<tr><td colspan="3" class="text-center">Игрок ещё не проходил диалоги</td></tr>'
+            : rows.map(p => `
+                <tr>
+                    <td>${escapeHtml(p.frequency)}</td>
+                    <td>${escapeHtml(p.repeat_count || 0)} / ${escapeHtml(p.max_repeats || 1)}</td>
+                    <td><span class="status-badge ${this.statusClass(p.status)}">${escapeHtml(p.status)}</span></td>
+                </tr>`).join('');
+    }
+
+    openPasswordModal(userId, username) {
+        document.getElementById('user-id-input').value = userId;
+        document.getElementById('modal-username').textContent = username;
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-password').value = '';
+        document.getElementById('password-error').style.display = 'none';
+        document.getElementById('password-modal').style.display = 'flex';
+        document.getElementById('new-password').focus();
+    }
+
+    async changePassword() {
+        const userId = document.getElementById('user-id-input').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        const errorEl = document.getElementById('password-error');
+        const fail = message => { errorEl.textContent = message; errorEl.style.display = 'block'; };
+
+        if (newPassword.length < 6) return fail('Пароль должен содержать минимум 6 символов');
+        if (newPassword !== confirmPassword) return fail('Пароли не совпадают');
+
+        try {
+            await api.changePassword(userId, newPassword);
+            document.getElementById('password-modal').style.display = 'none';
+            toast('Пароль изменён', 'success');
+        } catch (error) {
+            fail(error.message);
+        }
+    }
+
+    openDeleteUserModal(userId, username) {
+        document.getElementById('delete-user-id').value = userId;
+        document.getElementById('delete-username').textContent = username;
+        document.getElementById('delete-error').style.display = 'none';
+        document.getElementById('delete-user-modal').style.display = 'flex';
+    }
+
+    async deleteUser() {
+        const userId = document.getElementById('delete-user-id').value;
+        const errorEl = document.getElementById('delete-error');
+        try {
+            await api.deleteUser(userId);
+            document.getElementById('delete-user-modal').style.display = 'none';
+            toast('Пользователь удалён', 'success');
+            if (String(this.state.selectedUserId) === String(userId)) this.resetPlayerDetail();
+            this.relationsData = null;
+            await this.loadUsersData();
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
+    }
+
+    resetPlayerDetail() {
+        this.state.selectedUserId = null;
+        document.getElementById('player-detail-title').textContent = 'Игрок';
+        document.getElementById('player-placeholder').hidden = false;
+        document.getElementById('player-placeholder').style.display = '';
+        document.getElementById('player-content').hidden = true;
+    }
+
+    async openClearProgressModal(userId, username) {
+        document.getElementById('clear-progress-user-id').value = userId;
+        document.getElementById('clear-progress-username').textContent = username;
+        document.getElementById('clear-progress-error').style.display = 'none';
+
+        const select = document.getElementById('clear-frequency');
+        select.innerHTML = '<option value="">Загрузка...</option>';
+        document.getElementById('clear-progress-modal').style.display = 'flex';
+
+        try {
+            const data = await api.getFrequencies();
+            select.innerHTML = data?.frequencies?.length
+                ? '<option value="all">Очистить все</option>' + data.frequencies.map(f =>
+                    `<option value="${escapeAttr(f.frequency)}">${escapeHtml(f.frequency)}${f.title ? ' - ' + escapeHtml(f.title) : ''}</option>`).join('')
+                : '<option value="">Нет диалогов</option>';
+        } catch (error) {
+            select.innerHTML = '<option value="">Ошибка загрузки</option>';
+        }
+    }
+
+    async clearProgress() {
+        const userId = document.getElementById('clear-progress-user-id').value;
+        const frequency = document.getElementById('clear-frequency').value;
+        const errorEl = document.getElementById('clear-progress-error');
+        if (!frequency) {
+            errorEl.textContent = 'Выберите диалог';
+            errorEl.style.display = 'block';
+            return;
+        }
+        try {
+            await api.clearProgress(userId, frequency);
+            document.getElementById('clear-progress-modal').style.display = 'none';
+            toast('Прохождение очищено', 'success');
+            await this.loadProgressData();
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
+    }
+
+    // Несохранённое значение — пунктирная рамка в цвете темы (admin-themes.css, .is-dirty).
+    markRelDirty(input) { input.classList.add('is-dirty'); }
+    markRelClean(input) { input.classList.remove('is-dirty'); }
+
+    // Отношения игрока с персонажами: строка на персонажа, клик раскрывает пилотов.
     renderRelationsForUser(userId) {
-        const data = this._relationsData || { relations: [] };
+        const data = this.relationsData || { relations: [] };
         const tbody = document.getElementById('relations-table-body');
-        const table = document.getElementById('relations-table');
-        const placeholder = document.getElementById('relations-placeholder');
         if (!tbody) return;
 
-        // Группируем отношения пользователя по персонажу; стартовое значение — строка пилота 0
+        // Стартовое значение — строка пилота 0; если её нет, берём любую строку персонажа.
         const byChar = {};
         data.relations.filter(r => r.user_id === userId).forEach(r => {
-            if (!byChar[r.global_character_id] || r.pilot_profile_id === 0) {
-                byChar[r.global_character_id] = r;
-            }
+            if (!byChar[r.global_character_id] || r.pilot_profile_id === 0) byChar[r.global_character_id] = r;
         });
         const rows = Object.values(byChar);
 
-        if (placeholder) placeholder.style.display = 'none';
-        if (table) table.style.display = 'table';
-
         if (rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">У игрока пока нет записей об отношениях (задайте их через каталог персонажей).</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center">У игрока пока нет записей об отношениях (их создаёт «Инициализировать отношения» в студии, раздел «Персонажи»).</td></tr>';
             return;
         }
 
         tbody.innerHTML = rows.map(r => {
             const val = r.relation_value;
-            const color = val < -30 ? '#ff4444' : val < 0 ? '#ff9500' : 'var(--primary-color)';
+            const color = relationColor(val);
             const barPercent = ((val + 100) / 200) * 100;
             const barStyle = val >= 0
                 ? `left:50%;width:${barPercent - 50}%;background-color:${color};`
                 : `left:${barPercent}%;width:${50 - barPercent}%;background-color:${color};`;
-
-            return `<tr class="rel-char-row" data-user-id="${escapeAttr(userId)}" data-gc-id="${escapeAttr(r.global_character_id)}" style="cursor:pointer;">
+            return `<tr class="rel-char-row" data-user-id="${escapeAttr(userId)}" data-gc-id="${escapeAttr(r.global_character_id)}">
                 <td>
-                    <span class="rel-toggle" style="display:inline-block;width:14px;color:var(--primary-color);">▸</span>
+                    <button type="button" class="rel-toggle" aria-expanded="false" aria-label="Пилоты">▸</button>
                     ${escapeHtml(r.character_name)}
                 </td>
                 <td>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <input type="number" class="form-input rel-edit-input" value="${val}" min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;">
-                        <div style="flex:1;height:6px;background:#333;border-radius:3px;position:relative;overflow:hidden;min-width:60px;">
-                            <div style="height:100%;position:absolute;top:0;${barStyle}"></div>
-                        </div>
-                        <span style="font-size:11px;min-width:30px;text-align:right;color:${color};">${val > 0 ? '+' : ''}${val}</span>
+                    <div class="rel-value-row">
+                        <input type="number" class="form-input rel-edit-input" value="${val}" min="-100" max="100" step="5" style="--rel-color:${color};" aria-label="Отношение">
+                        <div class="rel-bar"><div style="${barStyle}"></div></div>
+                        <span class="rel-sign" style="color:${color};">${formatRelation(val)}</span>
                     </div>
-                    <div style="font-size:10px;color:#888;margin-top:3px;">Применяется ко всем пилотам аккаунта</div>
+                    <div class="form-help">Применяется ко всем пилотам аккаунта</div>
                 </td>
-                <td>
-                    <button class="btn rel-save-btn" style="font-size:11px;padding:3px 8px;">Сохранить</button>
-                </td>
+                <td><button class="btn btn-small rel-save-btn">Сохранить</button></td>
             </tr>
             <tr class="rel-pilots-row" data-user-id="${escapeAttr(userId)}" style="display:none;">
-                <td colspan="3" class="rel-pilots-cell" style="padding:4px 10px;background:rgba(128,128,128,0.06);"></td>
+                <td colspan="3" class="rel-pilots-cell"></td>
             </tr>`;
         }).join('');
 
-        // Сохранение стартового / глобального значения
         tbody.querySelectorAll('.rel-save-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', async e => {
                 e.stopPropagation();
                 const row = btn.closest('tr');
-                const uid = row.dataset.userId;
-                const gcId = row.dataset.gcId;
                 const input = row.querySelector('.rel-edit-input');
                 const val = Math.max(-100, Math.min(100, parseInt(input.value) || 0));
                 input.value = val;
                 try {
-                    await fetch(`${AppConfig.API_URL}/editor/global-characters/${gcId}/user/${uid}/relation`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ relationValue: val, global: true })
-                    });
+                    await api.relations.set(row.dataset.gcId, row.dataset.userId, { relationValue: val, global: true });
                     this.markRelClean(input);
-                    btn.textContent = 'OK';
-                    setTimeout(() => { btn.textContent = 'Сохранить'; }, 1000);
+                    this.updateCachedRelation(parseInt(row.dataset.userId), row.dataset.gcId, 0, val);
+                    toast('Отношение сохранено', 'success');
                 } catch (err) {
-                    alert('Ошибка сохранения');
+                    toast(`Ошибка сохранения: ${err.message}`, 'error');
                 }
             });
         });
 
-        // Жёлтая подсветка несохранённых изменений
         tbody.querySelectorAll('.rel-edit-input').forEach(input => {
-            input.addEventListener('input', () => this.markRelDirty(input));
+            input.addEventListener('input', () => {
+                input.style.setProperty('--rel-color', relationColor(parseInt(input.value) || 0));
+                this.markRelDirty(input);
+            });
         });
 
-        // Раскрытие пилотов по клику на строку NPC
         tbody.querySelectorAll('.rel-char-row').forEach(row => {
-            row.addEventListener('click', (e) => {
-                if (e.target.closest('input, button, label')) return;
-                this.toggleAdminRelationsPilots(row);
-            });
-            row.querySelector('.rel-toggle')?.addEventListener('click', (e) => {
-                e.stopPropagation();
+            row.addEventListener('click', e => {
+                if (e.target.closest('input, label') || (e.target.closest('button') && !e.target.closest('.rel-toggle'))) return;
                 this.toggleAdminRelationsPilots(row);
             });
         });
     }
 
-    // Раскрыть/свернуть список пилотов для строки NPC во вкладке «Отношения».
+    updateCachedRelation(userId, gcId, pilotId, value) {
+        const list = this.relationsData?.relations;
+        if (!list) return;
+        const hit = list.find(r => r.user_id === userId && String(r.global_character_id) === String(gcId) && r.pilot_profile_id === pilotId);
+        if (hit) hit.relation_value = value;
+    }
+
     async toggleAdminRelationsPilots(charRow) {
         const userId = parseInt(charRow.dataset.userId);
         const gcId = charRow.dataset.gcId;
         const pilotsRow = charRow.nextElementSibling;
-        if (!pilotsRow || !pilotsRow.classList.contains('rel-pilots-row')) return;
+        if (!pilotsRow?.classList.contains('rel-pilots-row')) return;
         const cell = pilotsRow.querySelector('.rel-pilots-cell');
         const toggle = charRow.querySelector('.rel-toggle');
+        const setOpen = open => {
+            pilotsRow.style.display = open ? 'table-row' : 'none';
+            if (toggle) { toggle.textContent = open ? '▾' : '▸'; toggle.setAttribute('aria-expanded', String(open)); }
+        };
 
-        if (pilotsRow.style.display !== 'none') {
-            pilotsRow.style.display = 'none';
-            if (toggle) toggle.textContent = '▸';
-            return;
-        }
-        if (cell.dataset.loaded === '1') {
-            pilotsRow.style.display = 'table-row';
-            if (toggle) toggle.textContent = '▾';
-            return;
-        }
+        if (pilotsRow.style.display !== 'none') return setOpen(false);
+        setOpen(true);
+        if (cell.dataset.loaded === '1') return;
 
-        cell.innerHTML = '<span style="font-size:11px;color:#888;">Загрузка пилотов...</span>';
-        pilotsRow.style.display = 'table-row';
-        if (toggle) toggle.textContent = '▾';
-
+        cell.innerHTML = '<span class="form-help">Загрузка пилотов...</span>';
         try {
-            const [pilotsRes] = await Promise.all([
-                fetch(`${AppConfig.API_URL}/editor/users/${userId}/pilots`, {
-                    credentials: 'include',
-                    headers: AppConfig.CACHE_HEADERS
-                })
-            ]);
-            const pilotsData = await pilotsRes.json();
-            const pilots = pilotsData.pilots || [];
-            const rels = (this._relationsData?.relations || []).filter(r =>
-                r.user_id === userId && r.global_character_id === gcId);
+            const pilots = (await api.getUserPilots(userId)).pilots || [];
+            const rels = (this.relationsData?.relations || []).filter(r =>
+                r.user_id === userId && String(r.global_character_id) === String(gcId));
 
             if (pilots.length === 0) {
-                cell.innerHTML = '<span style="font-size:11px;color:#888;">У игрока нет пилотов.</span>';
+                cell.innerHTML = '<span class="form-help">У игрока нет пилотов.</span>';
                 cell.dataset.loaded = '1';
                 return;
             }
@@ -928,21 +692,21 @@ class AdminApp {
             cell.innerHTML = pilots.map(p => {
                 const rel = rels.find(r => r.pilot_profile_id === p.id);
                 const value = rel ? rel.relation_value : baseVal;
-                const color = value > 0 ? 'var(--primary-color)' : value < 0 ? '#ff3333' : 'inherit';
-                const activeMark = p.is_active ? ' <span style="color:var(--primary-color);font-size:10px;">● активен</span>' : '';
+                const color = relationColor(value);
+                const activeMark = p.is_active ? ' <span class="pilot-active-mark">● активен</span>' : '';
                 return `
-                    <div class="rel-pilot-item" data-user-id="${escapeAttr(userId)}" data-gc-id="${escapeAttr(gcId)}"
-                         data-pilot-id="${escapeAttr(p.id)}" style="display:flex;align-items:center;gap:8px;padding:4px 0 4px 16px;border-bottom:1px dashed var(--primary-border);">
-                        <span style="min-width:150px;font-size:12px;">${escapeHtml(p.callsign || ('Пилот ' + p.slot_number))}${activeMark}</span>
-                        <input type="number" class="form-input rel-pilot-value-input" value="${escapeAttr(value)}"
-                               min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;color:${color};text-align:center;">
-                        <button class="btn btn-small rel-pilot-save-btn" style="font-size:11px;padding:3px 8px;">✓</button>
-                    </div>
-                `;
+                    <div class="rel-pilot-item" data-user-id="${escapeAttr(userId)}" data-gc-id="${escapeAttr(gcId)}" data-pilot-id="${escapeAttr(p.id)}">
+                        <span class="rel-pilot-name">${escapeHtml(p.callsign || ('Пилот ' + p.slot_number))}${activeMark}</span>
+                        <input type="number" class="form-input rel-pilot-value-input" value="${escapeAttr(value)}" min="-100" max="100" step="5" style="--rel-color:${color};" aria-label="Отношение пилота">
+                        <button class="btn btn-small rel-pilot-save-btn" aria-label="Сохранить">✓</button>
+                    </div>`;
             }).join('');
 
             cell.querySelectorAll('.rel-pilot-value-input').forEach(input => {
-                input.addEventListener('input', () => this.markRelDirty(input));
+                input.addEventListener('input', () => {
+                    input.style.setProperty('--rel-color', relationColor(parseInt(input.value) || 0));
+                    this.markRelDirty(input);
+                });
             });
             cell.querySelectorAll('.rel-pilot-save-btn').forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -951,29 +715,23 @@ class AdminApp {
                     const val = Math.max(-100, Math.min(100, parseInt(input.value) || 0));
                     input.value = val;
                     try {
-                        await fetch(`${AppConfig.API_URL}/editor/global-characters/${item.dataset.gcId}/user/${item.dataset.userId}/relation`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ relationValue: val, pilotProfileId: parseInt(item.dataset.pilotId) })
-                        });
+                        await api.relations.set(item.dataset.gcId, item.dataset.userId, { relationValue: val, pilotProfileId: parseInt(item.dataset.pilotId) });
                         this.markRelClean(input);
-                        btn.textContent = '✓';
-                        btn.style.color = 'var(--primary-color)';
-                        setTimeout(() => { btn.textContent = '✓'; btn.style.color = ''; }, 1000);
+                        toast('Отношение пилота сохранено', 'success');
                     } catch (err) {
-                        alert('Ошибка сохранения');
+                        toast(`Ошибка сохранения: ${err.message}`, 'error');
                     }
                 });
             });
             cell.dataset.loaded = '1';
         } catch (err) {
             console.error('Error loading pilots:', err);
-            cell.innerHTML = '<span style="font-size:11px;color:#ff3333;">Ошибка загрузки пилотов</span>';
+            cell.innerHTML = '<span class="form-help text-danger">Ошибка загрузки пилотов</span>';
         }
     }
 
-    // ===== Вкладка «Музыка» =====
+    // ===================== МУЗЫКА =====================
+
     get musicTheme() {
         return document.getElementById('music-theme-select')?.value || 'yellow';
     }
@@ -988,22 +746,17 @@ class AdminApp {
         const empty = document.getElementById('music-empty');
         if (!tbody) return;
         if (loading) loading.style.display = 'flex';
-        tbody.innerHTML = '';
+        tbody.textContent = '';
 
         try {
-            const response = await fetch(`${AppConfig.API_URL}/admin/music`, {
-                credentials: 'include',
-                headers: AppConfig.CACHE_HEADERS
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            const data = await api.music.list();
             const tracks = (data?.tracks || []).filter(t => t.theme === this.musicTheme);
-            this._musicTracks = tracks;
+            this.musicTracks = tracks;
             if (empty) empty.style.display = tracks.length ? 'none' : 'block';
             this.renderMusicTable(tracks);
         } catch (error) {
             console.error('Music error:', error);
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Ошибка загрузки</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">Ошибка загрузки</td></tr>';
         }
         if (loading) loading.style.display = 'none';
     }
@@ -1016,136 +769,102 @@ class AdminApp {
             <tr data-track-id="${escapeAttr(t.id)}">
                 <td>${escapeHtml(t.title)}</td>
                 <td>
-                    <input type="number" class="form-input music-vol-input" value="${Number(t.volume)}" min="0" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;">
-                    <span style="font-size:11px;color:#888;">%</span>
+                    <input type="number" class="form-input music-vol-input" value="${Number(t.volume)}" min="0" max="100" step="5" aria-label="Громкость, %">
+                    <span class="form-help">%</span>
                 </td>
-                <td>
-                    <button class="btn music-preview-btn" style="font-size:11px;padding:3px 8px;">▶</button>
-                </td>
-                <td>
-                    <button class="btn music-del-btn" style="font-size:11px;padding:3px 8px;">Удалить</button>
-                </td>
-            </tr>
-        `).join('');
+                <td><button class="btn btn-small music-preview-btn" aria-label="Прослушать">▶</button></td>
+                <td><button class="btn btn-small btn-danger music-del-btn">Удалить</button></td>
+            </tr>`).join('');
 
-        // Автосохранение громкости
         tbody.querySelectorAll('.music-vol-input').forEach(input => {
             input.addEventListener('change', async () => {
-                const row = input.closest('tr');
-                const id = row.dataset.trackId;
-                let vol = Math.max(0, Math.min(100, parseInt(input.value) || 0));
+                const id = input.closest('tr').dataset.trackId;
+                const vol = Math.max(0, Math.min(100, parseInt(input.value) || 0));
                 input.value = vol;
                 try {
-                    await fetch(`${AppConfig.API_URL}/admin/music/${id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ volume: vol })
-                    });
-                    input.style.borderColor = '#03FB8D';
-                    setTimeout(() => { input.style.borderColor = ''; }, 800);
+                    await api.music.update(id, { volume: vol });
+                    toast('Громкость сохранена', 'success');
                 } catch (e) {
-                    alert('Ошибка сохранения громкости');
+                    toast(`Ошибка сохранения громкости: ${e.message}`, 'error');
                 }
             });
         });
 
-        // Прослушка / остановка (один общий аудио-объект)
-        if (!this._previewAudio) this._previewAudio = new Audio();
+        if (!this.previewAudio) {
+            this.previewAudio = new Audio();
+            this.previewAudio.addEventListener('ended', () => {
+                document.querySelectorAll('.music-preview-btn').forEach(b => { b.textContent = '▶'; });
+            });
+        }
         tbody.querySelectorAll('.music-preview-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const row = btn.closest('tr');
-                const id = row.dataset.trackId;
-                const track = (this._musicTracks || []).find(t => String(t.id) === String(id));
+                const id = btn.closest('tr').dataset.trackId;
+                const track = (this.musicTracks || []).find(t => String(t.id) === String(id));
                 if (!track) return;
-                const url = /^https?:/.test(track.file_path)
-                    ? track.file_path
-                    : this.musicServerOrigin + track.file_path;
+                const url = /^https?:/.test(track.file_path) ? track.file_path : this.musicServerOrigin + track.file_path;
+                const resetIcons = () => tbody.querySelectorAll('.music-preview-btn').forEach(b => { b.textContent = '▶'; });
 
-                // Обновляем иконки всех кнопок
-                const resetIcons = () => {
-                    tbody.querySelectorAll('.music-preview-btn').forEach(b => { b.textContent = '▶'; });
-                };
-
-                if (this._previewAudio.src === url && !this._previewAudio.paused) {
-                    this._previewAudio.pause();
-                    this._previewAudio.currentTime = 0;
+                if (this.previewAudio.src === url && !this.previewAudio.paused) {
+                    this.previewAudio.pause();
+                    this.previewAudio.currentTime = 0;
                     resetIcons();
                     return;
                 }
-
-                this._previewAudio.pause();
-                this._previewAudio.src = url;
-                this._previewAudio.volume = Math.max(0, Math.min(100, Number(track.volume) || 100)) / 100;
-                this._previewAudio.play().catch(e => alert('Не удалось воспроизвести: ' + e.message));
+                this.previewAudio.pause();
+                this.previewAudio.src = url;
+                this.previewAudio.volume = Math.max(0, Math.min(100, Number(track.volume) || 100)) / 100;
+                this.previewAudio.play().catch(e => toast(`Не удалось воспроизвести: ${e.message}`, 'error'));
                 resetIcons();
                 btn.textContent = '⏹';
             });
         });
-        this._previewAudio?.addEventListener('ended', () => {
-            tbody.querySelectorAll('.music-preview-btn').forEach(b => { b.textContent = '▶'; });
-        });
 
-        // Удаление трека
         tbody.querySelectorAll('.music-del-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const row = btn.closest('tr');
-                const id = row.dataset.trackId;
-                if (!confirm('Удалить трек из плейлиста?')) return;
+                if (row.dataset.confirm !== '1') {
+                    row.dataset.confirm = '1';
+                    btn.textContent = 'Точно удалить?';
+                    setTimeout(() => { row.dataset.confirm = ''; btn.textContent = 'Удалить'; }, 3000);
+                    return;
+                }
                 try {
-                    await fetch(`${AppConfig.API_URL}/admin/music/${id}`, {
-                        method: 'DELETE',
-                        credentials: 'include'
-                    });
+                    await api.music.remove(row.dataset.trackId);
+                    toast('Трек удалён', 'success');
                     this.loadMusicData();
                 } catch (e) {
-                    alert('Ошибка удаления');
+                    toast(`Ошибка удаления: ${e.message}`, 'error');
                 }
             });
         });
     }
 
     initMusicTab() {
-        const themeSelect = document.getElementById('music-theme-select');
         const fileInput = document.getElementById('music-file-input');
-        const uploadBtn = document.getElementById('music-upload-btn');
         const status = document.getElementById('music-upload-status');
 
-        themeSelect?.addEventListener('change', () => this.loadMusicData());
-
-        uploadBtn?.addEventListener('click', () => fileInput?.click());
+        document.getElementById('music-theme-select')?.addEventListener('change', () => this.loadMusicData());
+        document.getElementById('music-upload-btn')?.addEventListener('click', () => fileInput?.click());
 
         fileInput?.addEventListener('change', async () => {
             const file = fileInput.files[0];
             if (!file) return;
             if (status) status.textContent = 'Загрузка...';
             try {
-                const title = file.name.replace(/\.[^.]+$/, '');
-                const formData = new FormData();
-                formData.append('music', file);
-                formData.append('theme', this.musicTheme);
-                formData.append('title', title);
-                const response = await fetch(`${AppConfig.API_URL}/admin/music/upload`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: formData
-                });
-                if (!response.ok) {
-                    const err = await response.json().catch(() => ({}));
-                    throw new Error(err.message || err.error || `HTTP ${response.status}`);
-                }
+                const form = new FormData();
+                form.append('music', file);
+                form.append('theme', this.musicTheme);
+                form.append('title', file.name.replace(/\.[^.]+$/, ''));
+                await api.music.upload(form);
                 if (status) status.textContent = 'Трек загружен.';
                 fileInput.value = '';
                 this.loadMusicData();
             } catch (e) {
-                if (status) status.textContent = 'Ошибка: ' + e.message;
+                if (status) status.textContent = `Ошибка: ${e.message}`;
             }
             setTimeout(() => { if (status) status.textContent = ''; }, 5000);
         });
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const app = new AdminApp();
-    app.init();
-});
+new AdminApp().init();

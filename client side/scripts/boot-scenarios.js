@@ -23,40 +23,45 @@
         return scenario;
     }
 
+    // GMS: «гарантированное качество, универсальное лицензирование, полное покрытие».
     const GREEN_LINES = [
-        '> ИНИЦИАЦИЯ ХОЛОДНОГО ЗАПУСКА СИСТЕМЫ',
-        '> BIOS v3.14.159 -- GMS GEN5 ARCHITECTURE',
-        '> ПРОВЕРКА ПАМЯТИ... 64TB O.RAM -- [OK]',
-        '> НЕЙРОСОПРОЦЕССОР .................. ОНЛАЙН',
-        '> КРИПТО-СУБСТРАТНОЕ «РУКОПОЖАТИЕ»... ПОДТВЕРЖДЕНО',
-        '> СВЯЗЬ КВАНТОВОЙ ЗАПУТАННОСТИ....... СТАБИЛЬНО',
-        '> ЗАГРУЗКА ЯДРА: gms-os/7.2.1-xeno',
-        '> МОНТАЖ /dev/cortex0 ............... УСПЕШНО',
+        '> ХОЛОДНЫЙ ЗАПУСК · GMS-OS 7.2 · СТАНДАРТНАЯ СБОРКА',
+        '> ПРОВЕРКА ЦЕЛОСТНОСТИ ОБОРУДОВАНИЯ ........... [OK]',
+        '> ЛИЦЕНЗИЯ GMS: УНИВЕРСАЛЬНАЯ · УРОВЕНЬ 0 ..... ДЕЙСТВИТЕЛЬНА',
+        '> ШАБЛОН РАМЫ: EVEREST · ГАЛАКТИЧЕСКИЙ СТАНДАРТ',
+        '> ОМНИСЕТЬ: УЗЕЛ СОЮЗА ........................ СИНХРОНИЗИРОВАН',
+        '> ШИФРОВАНИЕ КАНАЛА: СТАНДАРТ СОЮЗА ........... АКТИВНО',
         '> СКАНИРОВАНИЕ ЧАСТОТ В ШИРОКОМ ДИАПАЗОНЕ...',
-        '> СИГНАЛ ЗАХВАЧЕН -- ЧАСТОТА 140.15',
-        '> АВТОРИЗАЦИЯ: БИОМЕТРИЧЕСКИЙ + НЕЙРОННЫЙ ХЭШ [OK]',
-        '> МЕЖСЕТЕВОЙ ЭКРАН: АКТИВЕН — 0 ПРОРЫВОВ',
-        '> СЕАНС ТЕРМИНАЛА ​​[0x4521] ГОТОВ'
+        '> СИГНАЛ ЗАХВАЧЕН · ЧАСТОТА 140.15',
+        '> ИДЕНТИФИКАЦИЯ ПИЛОТА: ЛИЦЕНЗИЯ + БИОМЕТРИЯ ... [OK]',
+        '> ГАРАНТИРОВАННОЕ КАЧЕСТВО · ПОЛНОЕ ПОКРЫТИЕ',
+        '> СЕАНС ТЕРМИНАЛА [0x4521] ГОТОВ'
     ];
 
+    // IPS-N: грузоперевозки, конвои и «Альбатрос»; девиз — «Твой друг в недружелюбном море».
     const YELLOW_LINES = [
-        'IPS-N // ПОЛЕВОЙ ТЕРМИНАЛ ДАЛЬНИХ РУБЕЖЕЙ',
-        'ревизия ядра 7.4.2 • режим: автономный',
+        'IPS-NORTHSTAR // ТЕРМИНАЛ КОНВОЙНОЙ СВЯЗИ',
+        'ревизия 7.4.2 • «Твой друг в недружелюбном море»',
         '',
-        '> Ближайший узел ............................. ОНЛАЙН',
-        '> Состояние маяка связи ...................... В ПОРЯДКЕ',
-        '> Сквозное шифрование через омнисеть ......... СТАБИЛЬНО',
-        '> Навигация: составление маршрута ............ ЗАВЕРШЕНО',
-        '> Омнисвязь: узел ближайшего маяка ........... ЗАХВАЧЕН',
-        '> Проверка зашифрованного канала ............. ОТКРЫТ',
-        '> Идентификация пилота ....................... ВАЛИДНЫЙ',
-        '> Статус доступа по лицензии ................. ПОЛНЫЙ',
-        '> Протокол IPS-N 10.1 ........................ ГОТОВ',
-        '> Терминал IPS-N ............................. ОЖИДАНИЕ ОТВЕТА'
+        '> Маяк ближайшего узла ........................ ОНЛАЙН',
+        '> Торговый тракт: навигационные данные ........ ПРИНЯТЫ',
+        '> Конвойный реестр IPS-N ...................... СИНХРОНИЗИРОВАН',
+        '> Сводка «Альбатроса»: пиратская активность .... НИЗКАЯ',
+        '> Омнисвязь: канал через маяк ................. ЗАХВАЧЕН',
+        '> Сквозное шифрование канала .................. СТАБИЛЬНО',
+        '> Идентификация пилота ........................ ПОДТВЕРЖДЕНА',
+        '> Протокол IPS-N 10.1 ......................... ГОТОВ',
+        '> Терминал IPS-N .............................. ОЖИДАНИЕ ОТВЕТА'
     ];
+
+    const STANDINGS = ['member', 'exile'];
+    const HEX = /^#[0-9a-f]{6}$/i;
+    const PASSIONS = ['Брокера', 'Строителя', 'Шута', 'Арлекина', 'Мага', 'Следопыта', 'Титана', 'Волка'];
+    const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
     function normalizeProfile(profile) {
         const source = profile && typeof profile === 'object' ? profile : {};
+        const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
         return {
             slot_number: Number.isInteger(Number(source.slot_number)) ? Number(source.slot_number) : 1,
             callsign: typeof source.callsign === 'string' ? source.callsign.trim() : '',
@@ -64,6 +69,11 @@
             mech_name: typeof source.mech_name === 'string' ? source.mech_name.trim() : '',
             gender: GENDERS.includes(source.gender) ? source.gender : 'neutral',
             estate: ESTATES.includes(source.estate) ? source.estate : 'lancer',
+            house_key: text(source.house_key, 20),
+            house_custom: text(source.house_custom, 60),
+            house_color: HEX.test(source.house_color || '') ? source.house_color : '',
+            house_sigil: text(source.house_sigil, 20),
+            house_standing: STANDINGS.includes(source.house_standing) ? source.house_standing : 'member',
             is_nhp: source.is_nhp === 1 || source.is_nhp === '1' || source.is_nhp === true
         };
     }
@@ -74,10 +84,32 @@
             .replace(/^(?:леди|лорд)\s+/i, '');
     }
 
+    // Имя без «из Дома …»: Дом подставляется отдельно из выбранной ливреи.
+    function getPersonalName(profile) {
+        return getCanonicalName(profile).replace(/\s+из\s+дома?\s+.+$/i, '').trim() || 'Безымянный проситель';
+    }
+
+    function houses() {
+        return typeof globalThis !== 'undefined' && globalThis.KtbHouses ? globalThis.KtbHouses : null;
+    }
+
+    function resolveHouse(profile) {
+        const api = houses();
+        if (api) return api.resolveHouse(normalizeProfile(profile));
+        const match = getCanonicalName(profile).match(/(?:^|\s)из\s+дома?\s+([^,;]+)/i);
+        return match ? { name: `Дом ${match[1].trim()}`, genitive: `Дома ${match[1].trim()}` } : null;
+    }
+
     function getHouse(profile) {
-        const match = getCanonicalName(profile).match(/(?:^|\s)из\s+((?:Дома?|дома?)\s+[^,;]+)/i);
-        if (!match) return '';
-        return match[1].replace(/^дома?\s+/i, 'Дом ');
+        const house = resolveHouse(profile);
+        return house ? house.name : '';
+    }
+
+    // noble — Кавалер в Доме; exile — Кавалер-изгнанник; ignoble — Лансер.
+    function getStanding(profile) {
+        const normalized = normalizeProfile(profile);
+        if (normalized.estate !== 'cavalier') return 'ignoble';
+        return normalized.house_standing === 'exile' ? 'exile' : 'noble';
     }
 
     function getTitle(gender) {
@@ -86,75 +118,112 @@
         return '';
     }
 
-    function petitionFor(profile) {
+    function hashOf(profile) {
         const normalized = normalizeProfile(profile);
         const source = `${normalized.callsign}|${normalized.full_name}`;
         let hash = 0;
         for (let i = 0; i < source.length; i++) hash = ((hash << 5) - hash + source.charCodeAt(i)) | 0;
-        const number = source ? 100 + (Math.abs(hash) % 900) : 214;
+        return { source, hash: Math.abs(hash) };
+    }
+
+    function petitionFor(profile) {
+        const { source, hash } = hashOf(profile);
+        const number = source ? 100 + (hash % 900) : 214;
         const letters = ['А', 'Б', 'В', 'Г', 'Д'];
-        return `${number}-${letters[Math.abs(hash) % letters.length]}`;
+        return `${number}-${letters[hash % letters.length]}`;
+    }
+
+    // Выравнивает строку журнала точками до колонки статуса.
+    function logLine(label, status) {
+        const dots = Math.max(3, 50 - label.length);
+        return `> ${label} ${'.'.repeat(dots)} ${status}`;
+    }
+
+    function buildPetitionScenario(normalized, name, extraLines, greeting, standing) {
+        const petition = petitionFor(normalized);
+        const queueNumber = petition.split('-')[0];
+        return applyReadableTiming({
+            theme: 'ktb',
+            estate: normalized.estate,
+            standing,
+            system: 'ORACULUM-5.5.0',
+            bannerTitle: 'PURSUIVANT',
+            bannerSubtitle: 'ORACULUM-5.5.0 • ПРИЁМНАЯ ОБЩЕГО ДОСТУПА',
+            progressLabel: 'РЕГИСТРАЦИЯ ПРОШЕНИЯ',
+            confirmLabel: 'Подтвердить прошение',
+            typingSpeed: 12,
+            lines: [
+                'ПУРСИВАНТ // приёмная общего доступа',
+                'ORACULUM-5.5.0 • реестр внешних обращений',
+                '',
+                ...extraLines,
+                logLine('Прошение зарегистрировано', `№ ${petition}`),
+                `> Очередь: ${queueNumber}. Дома рассматривают обращения в порядке прецедента.`,
+                '> Терпение есть добродетель. Ожидайте.'
+            ],
+            greeting: greeting || `Прошение от ${name} заполнено. Подтвердите прошение и ожидайте принятия к рассмотрению.`
+        });
     }
 
     function buildKtbScenario(profile) {
         const normalized = normalizeProfile(profile);
-        const name = getCanonicalName(normalized);
-        const house = getHouse(normalized);
-        const title = normalized.estate === 'cavalier' ? getTitle(normalized.gender) : '';
-        const addressedName = `${title ? `${title} ` : ''}${name}`;
+        const standing = getStanding(normalized);
+        const house = resolveHouse(normalized);
 
-        if (normalized.estate === 'lancer') {
-            const petition = petitionFor(normalized);
-            const queueNumber = petition.split('-')[0];
-            return applyReadableTiming({
-                theme: 'ktb',
-                estate: 'lancer',
-                system: 'ORACULUM-5.5.0',
-                bannerTitle: 'PURSUIVANT',
-                bannerSubtitle: 'ORACULUM-5.5.0 • ПРИЁМНАЯ ОБЩЕГО ДОСТУПА',
-                progressLabel: 'РЕГИСТРАЦИЯ ПРОШЕНИЯ',
-                confirmLabel: 'Подтвердить прошение',
-                typingSpeed: 12,
-                lines: [
-                    'ПУРСИВАНТ // приёмная общего доступа',
-                    'ORACULUM-5.5.0 • реестр внешних обращений',
-                    '',
-                    '> Печать: отсутствует → сословие: НЕБЛАГОРОДНЫЙ/ОТОЗВАННЫЙ',
-                    `> Прошение зарегистрировано: № ${petition}`,
-                    `> Очередь: ${queueNumber}. Дома рассматривают обращения в порядке прецедента.`,
-                    '> Терпение есть добродетель. Ожидайте.'
-                ],
-                greeting: `Прошение от ${name} заполнено. Подтвердите прошение и ожидайте принятия к рассмотрению.`
-            });
+        if (standing === 'ignoble') {
+            return buildPetitionScenario(normalized, getCanonicalName(normalized), [
+                logLine('Печать: отсутствует → сословие', 'НЕБЛАГОРОДНОЕ')
+            ], '', standing);
         }
+
+        const name = getPersonalName(normalized);
+
+        // Изгнанник: печать отозвана, обращение — на общих основаниях, без титула.
+        if (standing === 'exile') {
+            const houseLabel = house ? house.genitive : 'Дома';
+            return buildPetitionScenario(normalized, name, [
+                logLine('Печать Дома: оттиск сверен', 'ОТОЗВАНА'),
+                logLine(`Реестр ${houseLabel}: запись`, 'ВЫЧЕРКНУТА'),
+                logLine('Сословие', 'БЕЗ ДОМА')
+            ], `Прошение от ${name} принято. Обращение лица, лишённого печати ${houseLabel}, рассматривается на общих основаниях.`, standing);
+        }
+
+        const title = getTitle(normalized.gender);
+        const addressedName = `${title ? `${title} ` : ''}${name}${house ? ` из ${house.genitive}` : ''}`;
+        const { hash } = hashOf(normalized);
+        const lines = [
+            'СЕНЕШАЛЬ // церемониал аудиенций • ред. IX, оттиск 3',
+            `год 5027u • календарь Страстей: день ${PASSIONS[hash % PASSIONS.length]}`,
+            '',
+            logLine('Пробуждение ядра', 'ОК'),
+            logLine('Печать Дома: оттиск сверен', 'ПОДЛИННО'),
+            logLine('Баронский совет: реестр титулов', 'НАЙДЕН'),
+            `>   ${addressedName}`,
+            logLine('Солнечные узы: прочтение', 'БЛАГОПРИЯТНЫ')
+        ];
+        if (house) lines.push(logLine(`Ливрея ${house.genitive}`, 'ПРИНЯТА'));
+        lines.push(
+            logLine('Омнисеть: узел Трона Карракиса', 'РУКОПОЖАТИЕ'),
+            logLine('Протоколы Союза: совместимость', 'ВКЛ (по уступкам)'),
+            logLine('Этикет: 12 408 форм обращения', 'ЗАГРУЖЕНО'),
+            logLine('Прецедент: место в очереди', `${ROMAN[hash % ROMAN.length]} из XII`),
+            '> Ассистент: комп/кон • оковы: не требуются',
+            '> Клятва: «Слово моё — печать моя».',
+            '> Свеча зажжена. Аудиенция открыта.'
+        );
 
         return applyReadableTiming({
             theme: 'ktb',
             estate: 'cavalier',
+            standing,
             system: 'ORACULUM-5.5.0',
             bannerTitle: 'SENESCHAL',
             bannerSubtitle: 'ORACULUM-5.5.0 • ЦЕРЕМОНИАЛ АУДИЕНЦИЙ',
             progressLabel: 'ПРИГОТОВЛЕНИЕ АУДИЕНЦИИ',
             confirmLabel: 'Торжественно подтверждаю свой запрос на аудиенцию',
             typingSpeed: 10,
-            lines: [
-                'СЕНЕШАЛЬ // церемониал аудиенций • ред. IX, оттиск 3',
-                'год 5027u • летопись Дома: 823 от Возведения',
-                '',
-                '> Пробуждение ядра ................................. ОК',
-                '> Печать дома: структура цела, оттиск сверен ....... ПОДЛИННО',
-                '> Бюро баронов: поиск титула ....................... НАЙДЕН',
-                `>   ${addressedName}`,
-                '> Узы: прочтение завершено ......................... РОДОСЛОВНАЯ НАЙДЕНА',
-                '> Лицензия кавалера ................................ ДЕЙСТВИТЕЛЬНА',
-                '> Омнисеть: узел Карракиса ......................... РУКОПОЖАТИЕ',
-                '> Протоколы Союза: совместимость ................... ВКЛ (по уступкам)',
-                '> Этикет: 96 домов • 12 408 форм обращения ......... ЗАГРУЖЕНО',
-                '> Ассистент: комп/кон • оковы: не требуются',
-                '> Клятва: Слово моё - печать моя',
-                '> Свеча зажжена. Аудиенция открыта.'
-            ],
-            greeting: `С возвращением, ${addressedName}. ${house || 'Церемониал Дома'} свидетельствует ваше прибытие. Подтвердите ваш запрос на аудиенцию.`
+            lines,
+            greeting: `С возвращением, ${title ? `${title} ` : ''}${name}. ${house ? house.name : 'Церемониал Дома'} свидетельствует ваше прибытие. Подтвердите ваш запрос на аудиенцию.`
         });
     }
 
@@ -228,6 +297,7 @@
         buildScenario,
         getCanonicalName,
         getHouse,
+        getStanding,
         loadContext,
         normalizeProfile,
         petitionFor

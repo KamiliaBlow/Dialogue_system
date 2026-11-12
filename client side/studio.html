@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Студия — Терминал GMS-4521</title>
+    <link href="https://fonts.googleapis.com/css?family=Orbitron:700" rel="stylesheet">
+    <link rel="stylesheet" href="styles/admin-styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+    <script src="./scripts/ktb-houses.js"></script>
+    <!-- Темы GMS / IPS-N / КТБ в языке терминала: подключается последней. -->
+    <link rel="stylesheet" href="styles/admin-themes.css">
+</head>
+<body class="studio-page">
+    <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
+    <div class="background-code" id="bgCode"></div>
+
+    <div class="container">
+        <!-- Шапка, навигация и выход — scripts/admin/admin-shell.js -->
+        <header id="admin-shell" class="admin-header"></header>
+
+        <div class="studio" id="studio" data-mode="dialogues">
+            <!-- ===================== Слева: список ===================== -->
+            <aside class="studio-col studio-list sidebar">
+                <div class="studio-modes" role="tablist" aria-label="Раздел студии">
+                    <button class="sub-tab active" role="tab" data-mode="dialogues" aria-selected="true">Диалоги</button>
+                    <button class="sub-tab" role="tab" data-mode="characters" aria-selected="false">Персонажи</button>
+                </div>
+
+                <div data-for="dialogues" class="studio-pane">
+                    <div class="sidebar-header">
+                        <h3>ДИАЛОГИ</h3>
+                        <button id="new-dialogue-btn" class="btn btn-small">+ Новый</button>
+                    </div>
+                    <div class="dialogue-list" id="dialogue-list">
+                        <div class="loading"><div class="loading-spinner"></div></div>
+                    </div>
+                </div>
+
+                <div data-for="characters" class="studio-pane" hidden>
+                    <div class="sidebar-header">
+                        <h3>ПЕРСОНАЖИ</h3>
+                        <button id="gc-new-btn" class="btn btn-small">+ Новый</button>
+                    </div>
+                    <div class="studio-search">
+                        <input type="search" id="gc-search" class="search-input" placeholder="Поиск по имени..." aria-label="Поиск персонажа">
+                    </div>
+                    <div class="dialogue-list" id="gc-list">
+                        <div class="loading"><div class="loading-spinner"></div></div>
+                    </div>
+                    <div class="sidebar-footer">
+                        <button id="gc-init-relations-btn" class="btn btn-small btn-secondary" title="Создать записи отношений для всех персонажей и всех пользователей">Инициализировать отношения</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- ===================== Центр ===================== -->
+            <main class="studio-col studio-center editor-main">
+                <!-- Диалог: сведения, персонажи, дерево -->
+                <div data-for="dialogues" class="studio-pane">
+                    <div id="editor-placeholder" class="editor-placeholder">
+                        <div class="placeholder-icon" aria-hidden="true">▤</div>
+                        <p>Выберите диалог для редактирования</p>
+                        <p>или создайте новый</p>
+                    </div>
+
+                    <div id="editor-content" class="editor-content hidden">
+                        <details class="editor-section dialogue-info">
+                            <summary class="section-title">ИНФОРМАЦИЯ О ДИАЛОГЕ <span class="section-summary" id="dialogue-summary"></span></summary>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="dialogue-frequency">Частота:</label>
+                                    <input type="text" id="dialogue-frequency" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label for="dialogue-title">Название:</label>
+                                    <input type="text" id="dialogue-title" class="form-input">
+                                </div>
+                                <div class="form-group">
+                                    <label for="dialogue-access">Доступ:</label>
+                                    <select id="dialogue-access" class="form-input">
+                                        <option value="all">Все пользователи</option>
+                                        <option value="custom">Выбранные</option>
+                                    </select>
+                                    <div id="users-selector" class="users-selector hidden">
+                                        <div class="users-selector-header">Выберите пользователей:</div>
+                                        <div id="users-list" class="users-list"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="dialogue-active" checked>
+                                        Диалог активен
+                                    </label>
+                                    <div class="form-help">Неактивные диалоги не видны пользователям</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="dialogue-max-repeats">Количество повторений:</label>
+                                    <input type="number" id="dialogue-max-repeats" class="form-input" value="1" min="-1" step="1">
+                                    <div class="form-help">Сколько раз можно переслушать диалог. -1 = бесконечно</div>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button id="save-dialogue-btn" class="btn">Сохранить</button>
+                                <button id="delete-dialogue-btn" class="btn btn-danger">Удалить диалог</button>
+                            </div>
+                        </details>
+
+                        <section class="editor-section">
+                            <h3 class="section-title">ПЕРСОНАЖИ ДИАЛОГА</h3>
+                            <div class="characters-container" id="characters-container"></div>
+                            <button id="add-character-btn" class="btn btn-small">+ Добавить персонажа</button>
+                        </section>
+
+                        <section class="editor-section tree-section">
+                            <h3 class="section-title">ДЕРЕВО ДИАЛОГА</h3>
+                            <div class="tree-controls">
+                                <button id="add-conversation-btn" class="btn btn-small">+ Добавить реплику</button>
+                                <button id="auto-layout-btn" class="btn btn-small btn-secondary">⟳ Авто-компоновка</button>
+                                <button id="zoom-fit-btn" class="btn btn-small btn-secondary">⌖ По размеру</button>
+                                <div class="tree-zoom">
+                                    <button id="zoom-in-btn" class="btn btn-small" aria-label="Приблизить">+</button>
+                                    <span id="zoom-level">100%</span>
+                                    <button id="zoom-out-btn" class="btn btn-small" aria-label="Отдалить">−</button>
+                                </div>
+                            </div>
+                            <div class="dialogue-tree-container" id="dialogue-tree-container">
+                                <svg id="dialogue-tree-svg" class="dialogue-tree-svg">
+                                    <defs>
+                                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                            <polygon points="0 0, 10 3.5, 0 7" style="fill: var(--primary-color)"/>
+                                        </marker>
+                                        <marker id="arrowhead-choice" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                            <polygon points="0 0, 10 3.5, 0 7" fill="#f39c12"/>
+                                        </marker>
+                                    </defs>
+                                    <g id="tree-edges"></g>
+                                    <g id="tree-nodes"></g>
+                                </svg>
+                                <div id="dialogue-tree-nodes-container" class="tree-nodes-container"></div>
+                            </div>
+                            <div class="tree-legend">
+                                <span class="legend-item"><span class="legend-color legend-normal"></span> Реплика</span>
+                                <span class="legend-item"><span class="legend-color legend-choice"></span> С выбором</span>
+                                <span class="legend-item"><span class="legend-color legend-branch"></span> Начало ветки</span>
+                                <span class="legend-item legend-hint">Двойной клик по реплике — открыть справа</span>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- Персонаж каталога: карточка и отношения с игроками -->
+                <div data-for="characters" class="studio-pane" hidden>
+                    <div id="gc-placeholder" class="editor-placeholder">
+                        <div class="placeholder-icon" aria-hidden="true">◈</div>
+                        <p>Выберите персонажа слева</p>
+                        <p>или создайте нового</p>
+                    </div>
+
+                    <div id="gc-editor" class="editor-content hidden">
+                        <section class="editor-section">
+                            <h3 class="section-title"><span id="gc-title">НОВЫЙ ПЕРСОНАЖ</span> <span class="dirty-mark" id="gc-dirty" hidden>● не сохранено</span></h3>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="gc-name">Имя персонажа:</label>
+                                    <input type="text" id="gc-name" class="form-input" placeholder="Введите имя" maxlength="100">
+                                </div>
+                                <div class="form-group">
+                                    <label for="gc-default-relation">Базовое отношение:</label>
+                                    <input type="number" id="gc-default-relation" class="form-input relation-value-input" value="0" min="-100" max="100" step="5">
+                                    <div class="form-help">Значение для новых игроков (−100 до +100)</div>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="gc-portrait-select">Портрет:</label>
+                                    <div class="file-selector-with-preview">
+                                        <select id="gc-portrait-select" class="form-input">
+                                            <option value="">Без портрета</option>
+                                        </select>
+                                        <input type="file" id="gc-upload-portrait" accept="image/*" class="hidden">
+                                        <button id="gc-upload-portrait-btn" class="btn btn-small" type="button">Загрузить новый</button>
+                                    </div>
+                                    <div class="form-help">Положение и масштаб — в превью справа: так портрет будет выглядеть в терминале.</div>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button id="gc-save-btn" class="btn">Сохранить</button>
+                                <button id="gc-delete-btn" class="btn btn-danger">Удалить персонажа</button>
+                            </div>
+                        </section>
+
+                        <section class="editor-section" id="gc-relations-section">
+                            <h3 class="section-title">ОТНОШЕНИЯ С ИГРОКАМИ</h3>
+                            <div id="gc-relations-loading" class="loading" style="display:none;"><div class="loading-spinner"></div></div>
+                            <div class="table-scroll">
+                                <table class="user-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Игрок</th>
+                                            <th style="width:140px;">Значение</th>
+                                            <th style="width:70px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="gc-relations-tbody"></tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </main>
+
+            <!-- ===================== Справа: свойства ===================== -->
+            <aside class="studio-col studio-props editor-main" aria-label="Свойства">
+                <!-- Диалоги: реплика -->
+                <div data-for="dialogues" class="studio-pane">
+                    <div id="conv-placeholder" class="props-placeholder">
+                        <h3 class="section-title">РЕПЛИКА</h3>
+                        <p>Выберите реплику в дереве (двойной клик или «Редактировать»), чтобы изменить её здесь.</p>
+                        <div id="conv-speaker-card"></div>
+                    </div>
+
+                    <section id="conversation-panel" class="props-panel" hidden>
+                        <h3 class="section-title"><span id="conversation-panel-title">РЕПЛИКА</span></h3>
+                        <input type="hidden" id="conversation-id">
+                        <input type="hidden" id="conversation-forced-sort">
+                        <div class="form-group">
+                            <label for="conversation-character">Персонаж:</label>
+                            <div class="file-selector-with-preview">
+                                <select id="conversation-character" class="form-input">
+                                    <option value="">Выберите персонажа</option>
+                                </select>
+                                <button id="conversation-open-character" class="btn btn-small" type="button" title="Открыть персонажа в каталоге">В каталог</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="conversation-branch-select">Ветка:</label>
+                            <select id="conversation-branch-select" class="form-input">
+                                <option value="main">Главная ветка</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="conversation-text">Текст реплики:</label>
+                            <div class="token-bar" role="toolbar" aria-label="Вставить данные пилота">
+                                <span class="token-bar-label">Пилот:</span>
+                                <button type="button" class="btn btn-small token-btn" data-token="Name" title="Позывной пилота">&lt;Name&gt;</button>
+                                <button type="button" class="btn btn-small token-btn" data-token="FullName" title="Имя без титула и Дома">&lt;FullName&gt;</button>
+                                <button type="button" class="btn btn-small token-btn" data-token="Title" title="«леди» / «лорд» у Кавалера в Доме, иначе пусто">&lt;Title&gt;</button>
+                                <button type="button" class="btn btn-small token-btn" data-token="House" title="Дом в родительном падеже: «Дома Стекла»">&lt;House&gt;</button>
+                            </div>
+                            <textarea id="conversation-text" class="form-textarea" rows="5" placeholder="Текст диалога. Используйте [2s] для паузы, [Shake] для тряски, [Color:Red] для цвета, [S:1.2] для размера."></textarea>
+                            <div class="textarea-help">[1s] — пауза · [Shake]текст[ShakeE] — тряска · [Color:Red]текст[ColorE] — цвет · [S:1.2]текст[SE] — размер (0.8–1.3)</div>
+                            <div class="token-warning" id="conversation-token-warning" role="status" hidden></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="conversation-custom-image">Кастомный портрет (опционально):</label>
+                            <select id="conversation-custom-image" class="form-input">
+                                <option value="">По умолчанию</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="conversation-fake-name">Фейковое имя (опционально):</label>
+                            <input type="text" id="conversation-fake-name" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="conversation-voiceline">Озвучка реплики (опционально):</label>
+                            <div class="voiceline-selector">
+                                <select id="conversation-voiceline" class="form-input">
+                                    <option value="">Без озвучки (звук персонажа)</option>
+                                </select>
+                                <button id="preview-conversation-voiceline-btn" class="btn btn-small preview-btn" type="button" aria-label="Прослушать">▶</button>
+                            </div>
+                            <div class="upload-section">
+                                <input type="file" id="upload-conversation-voiceline" accept="audio/*" class="hidden">
+                                <button id="upload-conversation-voiceline-btn" class="btn btn-small" type="button">Загрузить новый</button>
+                            </div>
+                            <div class="form-help voice-token-hint" id="conversation-voice-hint" hidden>В реплике есть данные пилота, а запись их не произнесёт: озвучка должна обходиться без имени.</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="conversation-typing-speed">Скорость печати (мс/символ):</label>
+                            <div class="typing-speed-section">
+                                <input type="number" id="conversation-typing-speed" class="form-input" min="0" max="500" step="5" placeholder="0 = авто">
+                                <button id="auto-calc-speed-btn" class="btn btn-small" type="button">Авто</button>
+                            </div>
+                            <div class="typing-speed-help">0 = стандартная скорость. Укажите значение для синхронизации с озвучкой.</div>
+                        </div>
+
+                        <!-- Вариант реплики для другого сословия (scripts/pilot-tokens.js) -->
+                        <div class="variant-section">
+                            <label class="variant-toggle"><input type="checkbox" id="has-variant"> Альтернативная реплика для сословия</label>
+                            <div id="variant-fields" class="variant-fields" hidden>
+                                <div class="form-group">
+                                    <label for="variant-audience">Кому звучит вариант:</label>
+                                    <select id="variant-audience" class="form-input">
+                                        <option value="lancer">Лансеру и Кавалеру-изгнаннику</option>
+                                        <option value="cavalier">Кавалеру в Доме</option>
+                                    </select>
+                                    <div class="form-help" id="variant-audience-help">Основной текст выше услышат все остальные.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="variant-text">Текст варианта:</label>
+                                    <textarea id="variant-text" class="form-textarea" rows="4"></textarea>
+                                    <div class="token-warning" id="variant-token-warning" role="status" hidden></div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="variant-voiceline">Озвучка варианта:</label>
+                                    <div class="voiceline-selector">
+                                        <select id="variant-voiceline" class="form-input">
+                                            <option value="">Без озвучки (звук персонажа)</option>
+                                        </select>
+                                        <button id="preview-variant-voiceline-btn" class="btn btn-small preview-btn" type="button" aria-label="Прослушать">▶</button>
+                                    </div>
+                                    <div class="upload-section">
+                                        <input type="file" id="upload-variant-voiceline" accept="audio/*" class="hidden">
+                                        <button id="upload-variant-voiceline-btn" class="btn btn-small" type="button">Загрузить новый</button>
+                                    </div>
+                                    <div class="form-help">Своя запись под свой текст: озвучка основной реплики для варианта не играет.</div>
+                                    <div class="form-help voice-token-hint" id="variant-voice-hint" hidden>В варианте есть данные пилота — запись должна обходиться без имени.</div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="variant-fake-name">Фейковое имя (если другое):</label>
+                                    <input type="text" id="variant-fake-name" class="form-input" maxlength="100" placeholder="как у основной реплики">
+                                </div>
+                                <div class="form-group">
+                                    <label for="variant-custom-image">Портрет (если другой):</label>
+                                    <select id="variant-custom-image" class="form-input">
+                                        <option value="">Как у основной реплики</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="variant-typing-speed">Скорость печати варианта (мс/символ):</label>
+                                    <div class="typing-speed-section">
+                                        <input type="number" id="variant-typing-speed" class="form-input" min="0" max="500" step="5" placeholder="0 = авто">
+                                        <button id="variant-auto-speed-btn" class="btn btn-small" type="button">Авто</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Как реплику увидят пилоты разных сословий -->
+                        <div class="conversation-preview" aria-live="polite">
+                            <div class="conversation-preview-title">Предпросмотр</div>
+                            <div class="preview-line" data-audience="cavalier"><span class="preview-who">Кавалер · RAVEN</span><span class="preview-text"></span></div>
+                            <div class="preview-line" data-audience="lancer"><span class="preview-who">Лансер · HAMMER</span><span class="preview-text"></span></div>
+                        </div>
+
+                        <div class="choice-section">
+                            <div class="choice-header">
+                                <label><input type="checkbox" id="has-choice"> Добавить выбор</label>
+                            </div>
+                            <div id="choice-options-container" class="choice-options-container hidden">
+                                <input type="hidden" id="choice-id">
+                                <div id="choice-options-list"></div>
+                                <button id="add-choice-option-btn" class="btn btn-small" type="button">+ Добавить вариант</button>
+                            </div>
+                        </div>
+
+                        <div class="form-actions sticky-actions">
+                            <button id="cancel-conversation" class="btn" type="button">Закрыть</button>
+                            <button id="save-conversation-btn" class="btn" type="button">Сохранить</button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Персонажи: портрет как в терминале -->
+                <div data-for="characters" class="studio-pane" hidden>
+                    <section class="props-panel portrait-studio" id="portrait-panel">
+                        <h3 class="section-title">ПОРТРЕТ В КАНАЛЕ</h3>
+                        <div class="pf-side" role="radiogroup" aria-label="Окно канала">
+                            <button type="button" class="sub-tab active" data-side="1" role="radio" aria-checked="true">Левое окно</button>
+                            <button type="button" class="sub-tab" data-side="2" role="radio" aria-checked="false">Правое окно</button>
+                        </div>
+
+                        <!-- Тот же размер рамки, что у терминала при 1920×1080: 258×319 -->
+                        <div class="pf-stage" id="pf-stage"></div>
+
+                        <div class="pf-controls">
+                            <div class="pf-row">
+                                <label for="pf-scale">Масштаб</label>
+                                <input type="range" id="pf-scale-range" min="20" max="400" step="1" value="100" aria-label="Масштаб портрета">
+                                <input type="number" id="pf-scale" class="form-input" min="20" max="400" step="1" value="100">
+                                <span>%</span>
+                            </div>
+                            <div class="pf-row">
+                                <label for="pf-x">Сдвиг X</label>
+                                <input type="number" id="pf-x" class="form-input" step="0.5" value="0">
+                                <label for="pf-y">Y</label>
+                                <input type="number" id="pf-y" class="form-input" step="0.5" value="0">
+                                <span title="в процентах ширины рамки">% ширины</span>
+                            </div>
+                            <div class="pf-row pf-buttons">
+                                <button type="button" id="pf-mirror" class="btn btn-small" aria-pressed="false">↔ Зеркально</button>
+                                <button type="button" id="pf-center" class="btn btn-small">⊕ По центру</button>
+                                <button type="button" id="pf-reset" class="btn btn-small">↺ Сброс</button>
+                            </div>
+                            <div class="form-help">Перетащите портрет мышью, колесо — масштаб. Стрелки двигают, +/− масштабируют, когда рамка в фокусе.</div>
+                        </div>
+
+                        <button type="button" id="pf-compare-btn" class="btn btn-small btn-secondary" aria-expanded="false">Показать в других темах</button>
+                        <div class="pf-compare" id="pf-compare" hidden></div>
+                    </section>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Новый диалог -->
+    <div id="new-dialogue-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Создать новый диалог</div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="new-dialogue-frequency">Частота (идентификатор):</label>
+                    <input type="text" id="new-dialogue-frequency" class="form-input" placeholder="Например: DIALOG_001">
+                </div>
+                <div class="form-group">
+                    <label for="new-dialogue-title">Название:</label>
+                    <input type="text" id="new-dialogue-title" class="form-input" placeholder="Название диалога">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-new-dialogue" class="btn">Отмена</button>
+                <button id="create-dialogue-btn" class="btn">Создать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Персонаж в диалоге -->
+    <div id="character-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Персонаж в диалоге</div>
+            <div class="modal-body">
+                <input type="hidden" id="character-id">
+                <div class="form-group">
+                    <label for="character-global-select">Персонаж из каталога:</label>
+                    <select id="character-global-select" class="form-input">
+                        <option value="">Выберите персонажа...</option>
+                    </select>
+                    <div class="form-help">Имя и портрет настраиваются в разделе «Персонажи».</div>
+                </div>
+                <div class="form-group">
+                    <label for="character-window">Окно отображения:</label>
+                    <select id="character-window" class="form-input">
+                        <option value="1">Окно 1 (слева)</option>
+                        <option value="2">Окно 2 (справа)</option>
+                    </select>
+                </div>
+                <div class="form-group voice-section">
+                    <label for="character-voice-mode">Звук персонажа:</label>
+                    <select id="character-voice-mode" class="form-input voice-mode-select">
+                        <option value="none">Без звука</option>
+                        <option value="typing">Звук печати</option>
+                    </select>
+                    <div id="voice-typing-section" class="voice-subsection hidden">
+                        <label for="character-voice">Файл звука:</label>
+                        <div class="file-selector-with-preview">
+                            <select id="character-voice" class="form-input">
+                                <option value="">Выберите файл...</option>
+                            </select>
+                            <button id="preview-typing-btn" class="btn btn-small preview-btn" type="button" aria-label="Прослушать">▶</button>
+                        </div>
+                        <div class="upload-section">
+                            <input type="file" id="upload-voice" accept="audio/*" class="hidden">
+                            <button id="upload-voice-btn" class="btn btn-small" type="button">Загрузить новый</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-character" class="btn">Отмена</button>
+                <button id="save-character-btn" class="btn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Шаблон варианта выбора -->
+    <template id="choice-option-template">
+        <div class="choice-option" data-option-id="">
+            <div class="choice-option-main">
+                <input type="text" class="option-text form-input" placeholder="Текст варианта" aria-label="Текст варианта">
+                <select class="option-target form-input" aria-label="Куда ведёт">
+                    <option value="">Новая ветка</option>
+                </select>
+                <select class="option-character form-input hidden" title="Персонаж для новой ветки" aria-label="Персонаж новой ветки">
+                    <option value="">Выберите персонажа</option>
+                </select>
+                <button class="btn btn-small btn-danger remove-option-btn" type="button" aria-label="Удалить вариант">×</button>
+            </div>
+            <div class="choice-option-relation">
+                <button type="button" class="relation-header" title="Настройки отношения">
+                    <span class="relation-toggle-icon">▶</span> Отношения (нажмите для настройки)
+                </button>
+                <div class="relation-fields">
+                    <div class="relation-npc-name form-help">Персонаж: определяется спикером реплики</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Мин. порог:</label>
+                            <input type="number" class="relation-min form-input" value="-100" min="-100" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Макс. порог:</label>
+                            <input type="number" class="relation-max form-input" value="100" min="-100" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Эффект выбора:</label>
+                            <input type="number" class="relation-effect form-input" value="0" min="-100" max="100" step="5">
+                            <div class="form-help">+ улучшает, − ухудшает</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script type="module" src="scripts/studio/studio-main.js"></script>
+    <script type="module" src="scripts/music-player.js"></script>
+</body>
+</html>

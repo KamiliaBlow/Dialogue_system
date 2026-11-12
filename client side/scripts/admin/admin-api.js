@@ -1,96 +1,144 @@
+// Единый API-клиент админки: панель (admin.html) и студия (studio.html).
+// Все запросы — с cookie сессии и без кэша; ошибка сервера превращается в ApiError
+// с текстом из ответа ({ message }), чтобы показать его пользователю как есть.
 import AppConfig from '../config.js';
 
 const { API_URL, CACHE_HEADERS } = AppConfig;
 
-class AdminAPI {
-    static async checkAuth() {
-        const response = await fetch(`${API_URL}/admin/check`, {
-            credentials: 'include',
-            headers: CACHE_HEADERS
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Auth check failed: ${response.status}`);
-        }
-        
-        return response.json();
-    }
-    
-    static async getUsers() {
-        return this.safeFetch(`${API_URL}/admin/users`);
-    }
-    
-    static async changePassword(userId, newPassword) {
-        return this.safeFetch(`${API_URL}/admin/change-password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, newPassword })
-        });
-    }
-    
-    static async deleteUser(userId) {
-        return this.safeFetch(`${API_URL}/admin/delete-user/${userId}`, {
-            method: 'DELETE'
-        });
-    }
-    
-    static async getFrequencies() {
-        return this.safeFetch(`${API_URL}/admin/frequencies`);
-    }
-    
-    static async clearProgress(userId, frequency) {
-        return this.safeFetch(`${API_URL}/admin/clear-progress`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, frequency })
-        });
-    }
-    
-    static async getChoiceStatistics() {
-        return this.safeFetch(`${API_URL}/admin/choice-statistics`);
-    }
-    
-    static async getDialoguesCount() {
-        return this.safeFetch(`${API_URL}/admin/dialogues-count`);
-    }
-    
-    static async getChoiceDetails(frequency, choiceId) {
-        return this.safeFetch(`${API_URL}/admin/choice-details/${frequency}/${choiceId}`);
-    }
-    
-    static async getUserProgress() {
-        return this.safeFetch(`${API_URL}/admin/user-progress`);
-    }
-    
-    static async logout() {
-        return this.safeFetch(`${API_URL}/auth/logout`, { method: 'POST' });
-    }
-    
-    static async safeFetch(url, options = {}) {
-        const defaultOptions = {
-            credentials: 'include',
-            headers: {
-                ...CACHE_HEADERS,
-                ...(options.headers || {})
-            }
-        };
-        
-        const mergedOptions = { ...defaultOptions, ...options };
-        
-        try {
-            const response = await fetch(url, mergedOptions);
-            
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => 'Unknown error');
-                throw new Error(`Server error: ${response.status} - ${errorText}`);
-            }
-            
-            return response.json();
-        } catch (error) {
-            console.error(`API Error [${url}]:`, error);
-            throw error;
-        }
+export class ApiError extends Error {
+    constructor(message, status, data) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.data = data;
     }
 }
 
-export default AdminAPI;
+async function request(path, { method = 'GET', body, form } = {}) {
+    const options = { method, credentials: 'include', headers: { ...CACHE_HEADERS } };
+    if (form) {
+        options.body = form;
+    } else if (body !== undefined) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(body);
+    }
+
+    let response;
+    try {
+        response = await fetch(`${API_URL}${path}`, options);
+    } catch (error) {
+        throw new ApiError('Нет связи с сервером', 0, null);
+    }
+
+    const text = await response.text().catch(() => '');
+    let data = null;
+    if (text) {
+        try { data = JSON.parse(text); } catch { data = { message: text }; }
+    }
+    if (!response.ok) {
+        throw new ApiError(data?.message || data?.error || `Ошибка сервера: ${response.status}`, response.status, data);
+    }
+    return data ?? {};
+}
+
+const get = path => request(path);
+const post = (path, body) => request(path, { method: 'POST', body });
+const put = (path, body) => request(path, { method: 'PUT', body });
+const del = path => request(path, { method: 'DELETE' });
+const upload = (path, form, method = 'POST') => request(path, { method, form });
+const enc = encodeURIComponent;
+
+const api = {
+    request, get, post, put, del, upload,
+
+    // ---- доступ ----
+    checkAuth: () => get('/admin/check'),
+    logout: () => post('/logout'),
+
+    // ---- игроки ----
+    getUsers: () => get('/admin/users'),
+    changePassword: (userId, newPassword) => post('/admin/change-password', { userId, newPassword }),
+    deleteUser: userId => del(`/admin/delete-user/${enc(userId)}`),
+    clearProgress: (userId, frequency) => post('/admin/clear-progress', { userId, frequency }),
+    getUserPilots: userId => get(`/editor/users/${enc(userId)}/pilots`),
+
+    // ---- статистика ----
+    getFrequencies: () => get('/admin/frequencies'),
+    getChoiceStatistics: () => get('/admin/choice-statistics'),
+    getDialoguesCount: () => get('/admin/dialogues-count'),
+    getChoiceDetails: (frequency, choiceId) => get(`/admin/choice-details/${enc(frequency)}/${enc(choiceId)}`),
+    getUserProgress: () => get('/admin/user-progress'),
+
+    // ---- музыка ----
+    music: {
+        list: () => get('/admin/music'),
+        update: (id, data) => put(`/admin/music/${enc(id)}`, data),
+        remove: id => del(`/admin/music/${enc(id)}`),
+        upload: form => upload('/admin/music/upload', form)
+    },
+
+    // ---- отношения игроков с персонажами каталога ----
+    relations: {
+        all: () => get('/editor/global-characters/relations'),
+        forCharacter: characterId => get(`/editor/global-characters/${enc(characterId)}/relations`),
+        // global: true — стартовое значение для всех пилотов аккаунта; pilotProfileId — для одного пилота.
+        set: (characterId, userId, payload) => put(`/editor/global-characters/${enc(characterId)}/user/${enc(userId)}/relation`, payload),
+        init: () => post('/editor/global-characters/init-relations')
+    },
+
+    // ---- каталог персонажей ----
+    characters: {
+        list: () => get('/editor/global-characters'),
+        create: form => upload('/editor/global-characters', form),
+        update: (id, form) => upload(`/editor/global-characters/${enc(id)}`, form, 'PUT'),
+        remove: id => del(`/editor/global-characters/${enc(id)}`)
+    },
+
+    // ---- диалоги ----
+    dialogues: {
+        list: () => get('/editor/dialogues'),
+        get: id => get(`/editor/dialogues/${enc(id)}`),
+        create: data => post('/editor/dialogues', data),
+        update: (id, data) => put(`/editor/dialogues/${enc(id)}`, data),
+        remove: id => del(`/editor/dialogues/${enc(id)}`),
+        users: () => get('/editor/users')
+    },
+    dialogueCharacters: {
+        create: data => post('/editor/characters', data),
+        update: (id, data) => put(`/editor/characters/${enc(id)}`, data),
+        remove: id => del(`/editor/characters/${enc(id)}`)
+    },
+    conversations: {
+        create: data => post('/editor/conversations', data),
+        update: (id, data) => put(`/editor/conversations/${enc(id)}`, data),
+        remove: id => del(`/editor/conversations/${enc(id)}`),
+        shift: data => post('/editor/conversations/shift', data),
+        link: data => post('/editor/conversations/link', data),
+        unlink: data => post('/editor/conversations/unlink', data),
+        // Вариант реплики для сословия: audience — cavalier | lancer.
+        saveVariant: (id, audience, data) => put(`/editor/conversations/${enc(id)}/variants/${enc(audience)}`, data),
+        removeVariant: (id, audience) => del(`/editor/conversations/${enc(id)}/variants/${enc(audience)}`)
+    },
+    branches: {
+        create: data => post('/editor/branches', data),
+        createWithConversation: data => post('/editor/branches/with-conversation', data),
+        remove: (dialogueId, branchId) => del(`/editor/branches/${enc(dialogueId)}/${enc(branchId)}`)
+    },
+    choices: {
+        create: data => post('/editor/choices', data),
+        update: (id, data) => put(`/editor/choices/${enc(id)}`, data),
+        remove: id => del(`/editor/choices/${enc(id)}`)
+    },
+
+    // ---- медиафайлы ----
+    files: {
+        list: kind => get(`/editor/files/${enc(kind)}`),            // portraits | sounds | voicelines
+        upload: (kind, file) => {                                     // portrait | sound | voiceline
+            const form = new FormData();
+            form.append(kind, file);
+            return upload(`/editor/files/upload-${kind}`, form);
+        }
+    }
+};
+
+export default api;

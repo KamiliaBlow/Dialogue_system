@@ -30,19 +30,6 @@ const AdminUtils = {
         setTimeout(() => errorDiv.style.display = 'none', 5000);
     },
     
-    showSuccess(elementId, message) {
-        const element = document.getElementById(elementId);
-        if (!element) return;
-        
-        const successDiv = document.createElement('div');
-        successDiv.className = 'alert alert-success';
-        successDiv.textContent = message;
-        
-        element.parentNode.insertBefore(successDiv, element);
-        
-        setTimeout(() => successDiv.remove(), 5000);
-    },
-    
     formatDate(dateString) {
         const date = new Date(dateString);
         return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
@@ -94,24 +81,6 @@ const AdminUtils = {
             line.style.animationDuration = `${10 + Math.random() * 20}s`;
             line.style.animationDelay = `${Math.random() * 10}s`;
             bgElement.appendChild(line);
-        }
-    },
-    
-    async loadFrequenciesFromConfig() {
-        try {
-            const response = await fetch('Config.js');
-            if (!response.ok) return ['145.55', 'PRIV', '???'];
-            
-            const content = await response.text();
-            const match = content.match(/'frequencies':\s*\[(.*?)\]/s);
-            
-            if (!match || !match[1]) return ['145.55', 'PRIV', '???'];
-            
-            return match[1].split(',')
-                .map(item => item.trim().replace(/['"]/g, ''))
-                .filter(item => item);
-        } catch {
-            return ['145.55', 'PRIV', '???'];
         }
     }
 };

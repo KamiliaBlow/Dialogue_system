@@ -532,34 +532,26 @@ body.theme-green {
 			0 0 15px rgba(3, 251, 141, 0.5);
 	}
 
+	/* Кнопка админ-панели: создаётся скриптом в index.html только для админа.
+	   Каркас здесь, цвета и подпись — в styles/themes.css. */
 	#admin-float-btn {
 		position: fixed;
-		bottom: 30px;
-		right: 80px;
-		width: 50px;
-		height: 50px;
-		background-color: black;
-		border: 2px solid #03FB8D;
+		bottom: 20px;
+		right: 70px;
+		height: 40px;
+		min-width: 40px;
+		padding: 0 12px;
+		box-sizing: border-box;
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		cursor: pointer;
-		font-family: 'Courier New', monospace;
-		font-size: 20px;
-		color: #03FB8D;
-		box-shadow: 
-			inset 0 0 5px #03FB8D,
-			0 0 10px rgba(3, 251, 141, 0.3);
+		font-size: 12px;
+		letter-spacing: 0.14em;
 		text-transform: uppercase;
 		text-decoration: none;
-		transition: all 0.3s ease;
-		z-index: 99999;
-	}
-
-	#admin-float-btn:hover {
-		box-shadow: 
-			inset 0 0 10px #03FB8D,
-			0 0 15px rgba(3, 251, 141, 0.5);
+		transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+		z-index: 9999;
 	}
 
 	#music-popup {
@@ -613,15 +605,15 @@ body.theme-green {
 	
 	
 	
+    /* Сообщения пилотов идут в потоке сразу под #text-con: так рамка не наезжает
+       на диалоговое окно ни при каком соотношении сторон и разрешении. */
     #terminal-background {
-		position: absolute;
-		left: 50%;
-		bottom: -160px;
-		transform: translateX(-50%);
+		position: relative;
 		width: 100%;
-		max-width: 1100px;
+		max-width: 1080px;
 		height: 150px;
-		z-index: 1000;
+		margin: 12px auto 0;
+		z-index: 10;
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
@@ -636,20 +628,17 @@ body.theme-green {
 		backdrop-filter: blur(5px);
 	}
 	
-	/* Медиа-запросы для адаптивности */
-	@media screen and (max-width: 1200px) {
+	/* Медиа-запросы для адаптивности: меняется только высота, позиция всегда под диалогом. */
+	@media screen and (max-width: 1200px), screen and (max-height: 900px) {
 		#terminal-background {
-			width: 95%;
-			height: 120px;
-			bottom: 8vh;
+			height: 110px;
 		}
 	}
 
-	@media screen and (max-width: 768px) {
+	@media screen and (max-width: 768px), screen and (max-height: 760px) {
 		#terminal-background {
-			width: 98%;
-			height: 100px;
-			bottom: 5vh;
+			height: 84px;
+			margin-top: 8px;
 			padding: 5px;
 		}
 
@@ -658,10 +647,9 @@ body.theme-green {
 		}
 	}
 
-	@media screen and (max-width: 480px) {
+	@media screen and (max-width: 480px), screen and (max-height: 620px) {
 		#terminal-background {
-			height: 80px;
-			bottom: 3vh;
+			height: 64px;
 		}
 
 		.terminal-message {
@@ -669,14 +657,53 @@ body.theme-green {
 		}
 	}
 
+    /* Кнопки «Прослушать / Повторить передачу» привязаны к диалоговому окну,
+       а не к краю экрана: так они не уезжают на рамку сообщений пилотов. */
+    #text-con {
+		position: relative;
+	}
+
+	#start-transmission,
+	#repeat-transmission {
+		position: absolute;
+		top: auto;
+		bottom: 24px;
+		left: 0;
+		right: 0;
+		margin: 0 auto;
+		transform: none;
+		width: max-content;
+		min-width: 150px;
+		max-width: calc(100% - 32px);
+		box-sizing: border-box;
+	}
+
+    /* Пульт целиком (связь + диалог + сообщения пилотов) центрируется по вертикали,
+       а на невысоких экранах диалоговое окно ужимается, чтобы всё помещалось. */
+    #mCodec {
+		top: 50%;
+	}
+
+	@media screen and (max-height: 900px) {
+		#text-con { height: 240px; }
+	}
+
+	@media screen and (max-height: 760px) {
+		#text-con { height: 190px; }
+	}
+
+    /* Строки журнала не сжимаются флексом (иначе наезжают друг на друга) и переносятся,
+       а не обрезаются; лишние старые строки убирает скрипт в index.html. */
     .terminal-message {
 		font-family: 'TeletactileRus', monospace;
+        flex: 0 0 auto;
         width: 100%;
         color: #03FB8D;
         font-size: 12px;
-        margin-bottom: 5px;
-        white-space: nowrap;
-        overflow: hidden;
+        margin-bottom: 4px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-align: left;
         position: relative;
     }
 
@@ -1186,325 +1213,6 @@ body.theme-green {
     transform: translateX(0) translateY(0) scale(1);
     filter: none;
   }
-}
-
-/* Yellow Theme - Complete Override */
-body.theme-yellow #contact_1,
-body.theme-yellow #contact_2 {
-  border-color: #ff6b35 !important;
-  background: transparent !important;
-}
-
-body.theme-yellow .char-box,
-body.theme-yellow #char-1,
-body.theme-yellow #char-2 {
-  border: 2px solid #ff6b35 !important;
-  box-shadow: 0 0 15px rgba(255,107,53,0.5) !important;
-}
-
-body.theme-yellow .char-box .overlay,
-body.theme-yellow #char-1 .overlay,
-body.theme-yellow #char-2 .overlay {
-  background: linear-gradient(180deg, rgba(255,107,53,0.4) 0%, rgba(255,107,53,0.15) 50%, transparent 100%) !important;
-}
-
-body.theme-yellow #text-con {
-  border: 2px solid #ff6b35 !important;
-  box-shadow: 0 0 15px rgba(255,107,53,0.4) !important;
-  background: transparent !important;
-}
-
-body.theme-yellow #r_box {
-  border: 2px solid #ff6b35 !important;
-  box-shadow: 0 0 15px rgba(255,107,53,0.4) !important;
-  background: transparent !important;
-}
-
-body.theme-yellow #left,
-body.theme-yellow #right,
-body.theme-yellow #left_2,
-body.theme-yellow #right_2 {
-  color: #ff6b35 !important;
-  border-color: #ff6b35 !important;
-  background: transparent !important;
-}
-
-body.theme-yellow #terminal-background {
-  border: 2px solid #ff6b35 !important;
-  box-shadow: 0 0 15px rgba(255,107,53,0.4) !important;
-  background: transparent !important;
-}
-
-body.theme-yellow .terminal-line,
-body.theme-yellow .terminal-text {
-  color: #ff6b35 !important;
-  background: transparent !important;
-}
-
-body.theme-yellow #music-float-btn {
-  color: #ff6b35 !important;
-  border-color: #ff6b35 !important;
-  background: #000 !important;
-  box-shadow:
-    inset 0 0 5px #ff6b35,
-    0 0 10px rgba(255, 107, 53, 0.3) !important;
-}
-
-body.theme-yellow #music-float-btn:hover {
-  box-shadow:
-    inset 0 0 10px #ff6b35,
-    0 0 15px rgba(255, 107, 53, 0.5) !important;
-}
-
-body.theme-yellow #music-popup {
-  border-color: #ff6b35 !important;
-  background: rgba(0,0,0,0.9) !important;
-  box-shadow: 0 0 10px rgba(255, 107, 53, 0.3) !important;
-}
-
-body.theme-yellow #music-popup button {
-  border-color: #ff6b35 !important;
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #music-popup button:hover {
-  box-shadow: 0 0 5px #ff6b35 !important;
-}
-
-body.theme-yellow #volume-control {
-  accent-color: #ff6b35 !important;
-}
-
-body.theme-yellow #logout-btn,
-body.theme-yellow #settings-btn,
-body.theme-yellow #dossier-btn {
-  border-color: #ff6b35 !important;
-  color: #ff6b35 !important;
-  box-shadow: 0 0 10px rgba(255,107,53,0.5) !important;
-  background: #000 !important;
-}
-
-body.theme-yellow #logout-btn:hover,
-body.theme-yellow #settings-btn:hover,
-body.theme-yellow #dossier-btn:hover {
-  background-color: #ff6b35 !important;
-  color: #000 !important;
-}
-
-body.theme-yellow #codec_banner h2 {
-  border-bottom-color: #ff6b35 !important;
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #c-char,
-body.theme-yellow .freq,
-body.theme-yellow #freq_2 {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .start-link,
-body.theme-yellow .repeat-link {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #assembly-code-overlay {
-  display: none !important;
-}
-
-body.theme-yellow input,
-body.theme-yellow select,
-body.theme-yellow textarea {
-  border-color: #ff6b35 !important;
-  color: #ff6b35 !important;
-  background: rgba(255,107,53,0.1) !important;
-}
-
-body.theme-yellow #text-con {
-  border-color: #ff6b35 !important;
-}
-
-/* More comprehensive yellow theme overrides */
-body.theme-yellow #terminal-background,
-body.theme-yellow .terminal-background {
-  background: transparent !important;
-}
-
-body.theme-yellow .char-box .overlay,
-body.theme-yellow #char-1 .overlay,
-body.theme-yellow #char-2 .overlay {
-  background: linear-gradient(180deg, rgba(255,107,53,0.3) 0%, rgba(255,107,53,0.1) 50%, transparent 100%) !important;
-  box-shadow: inset 0 0 20px rgba(255,107,53,0.3) !important;
-}
-
-body.theme-yellow #r_box,
-body.theme-yellow .receiver-box {
-  border-color: #ff6b35 !important;
-  box-shadow: 0 0 15px rgba(255,107,53,0.3) !important;
-}
-
-body.theme-yellow #music-popup,
-body.theme-yellow .music-popup {
-  border-color: #ff6b35 !important;
-  background: rgba(0,0,0,0.9) !important;
-  box-shadow: 0 0 10px rgba(255, 107, 53, 0.3) !important;
-}
-
-body.theme-yellow #settings-modal,
-body.theme-yellow .modal-content {
-  border-color: #ff6b35 !important;
-  background-color: rgba(0,0,0,0.95) !important;
-  box-shadow: 0 0 30px rgba(255, 107, 53, 0.5) !important;
-}
-
-body.theme-yellow input,
-body.theme-yellow select,
-body.theme-yellow textarea {
-  background-color: rgba(255,107,53,0.1) !important;
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .terminal-line,
-body.theme-yellow .terminal-text {
-  color: #ff6b35 !important;
-  text-shadow: 0 0 5px rgba(255,107,53,0.5) !important;
-}
-
-body.theme-yellow .assembly-code-container {
-  border-color: #ff6b35 !important;
-}
-
-body.theme-yellow .assembly-code-line {
-  color: rgba(255,107,53,0.3) !important;
-}
-
-/* More comprehensive yellow theme overrides */
-body.theme-yellow #volume-control {
-  accent-color: #ff6b35 !important;
-}
-
-body.theme-yellow #text-con {
-  border-color: #ff6b35 !important;
-}
-
-body.theme-yellow #codec_banner h2 {
-  border-bottom-color: #ff6b35 !important;
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #c-char,
-body.theme-yellow .freq,
-body.theme-yellow #freq_2 {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .start-link,
-body.theme-yellow .repeat-link {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #assembly-code-overlay {
-  display: none !important;
-}
-
-body.theme-yellow input,
-body.theme-yellow select,
-body.theme-yellow textarea {
-  border-color: #ff6b35 !important;
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .caret {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #receiver-box {
-  background-color: rgba(255, 107, 53, 0.15) !important;
-  border: none !important;
-  box-shadow: 0 0 10px rgba(255, 107, 53, 0.3) !important;
-}
-
-body.theme-yellow .terminal-message,
-body.theme-yellow .terminal-message-text {
-  color: #ff6b35 !important;
-}
-
-/* Banner styles for yellow theme */
-body.theme-yellow .banner {
-  background-color: #1a0f0a !important;
-  border-color: #1a0f0a !important;
-}
-
-body.theme-yellow .banner h2 {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #memory_banner h2 {
-  color: #994020 !important;
-}
-
-/* Music float button hover for yellow theme */
-body.theme-yellow #music-float-btn:hover {
-  box-shadow: 
-    inset 0 0 10px #ff6b35,
-    0 0 15px rgba(255, 107, 53, 0.5) !important;
-}
-
-/* Main receiver for yellow theme */
-body.theme-yellow .codec-col {
-  border: 2px solid #ff6b35 !important;
-}
-
-body.theme-yellow #start-transmission {
-  color: #ff6b35 !important;
-  border-color: #ff6b35 !important;
-}
-
-body.theme-yellow #start-transmission:hover {
-  background-color: #ff6b35 !important;
-}
-
-body.theme-yellow #start-transmission:hover .start-link {
-  color: #000 !important;
-}
-
-body.theme-yellow #repeat-transmission:hover {
-  color: #000 !important;
-}
-
-body.theme-yellow #repeat-transmission {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow #track-name {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .modal-content h2 {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .modal-close {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .setting-row {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .setting-row label {
-  color: #ff6b35 !important;
-}
-
-body.theme-yellow .toggle-slider {
-  border-color: #ff6b35 !important;
-}
-
-body.theme-yellow .toggle-slider:before {
-  background-color: #ff6b35 !important;
-}
-
-body.theme-yellow .toggle-switch input:checked + .toggle-slider {
-  background-color: rgba(255, 107, 53, 0.3) !important;
 }
 
 /* ============================================
@@ -2374,7 +2082,7 @@ body.boot-phase .scanlines {
 @keyframes bootRevealSlideUpGlow {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(40px);
+    transform: translateY(40px);
     box-shadow:
       0 0 0 transparent,
       inset 0 0 0 transparent;
@@ -2387,20 +2095,20 @@ body.boot-phase .scanlines {
   }
   50% {
     opacity: 0.7;
-    transform: translateX(-50%) translateY(10px);
+    transform: translateY(10px);
     box-shadow:
       0 0 50px rgba(3, 251, 141, 1),
       0 0 80px rgba(3, 251, 141, 0.4);
   }
   75% {
     opacity: 0.95;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
     box-shadow:
       0 0 25px rgba(3, 251, 141, 0.8);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
     box-shadow:
       0 0 15px rgba(3, 251, 141, 0.8);
   }
@@ -2568,240 +2276,21 @@ body.theme-yellow .boot-reveal-terminal {
 @keyframes bootRevealSlideUpGlowYellow {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(40px);
+    transform: translateY(40px);
     box-shadow: 0 0 0 transparent;
   }
   50% {
     opacity: 0.7;
-    transform: translateX(-50%) translateY(10px);
+    transform: translateY(10px);
     box-shadow:
       0 0 50px rgba(255, 107, 53, 1),
       0 0 80px rgba(255, 107, 53, 0.4);
   }
   100% {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
     box-shadow: 0 0 15px rgba(255, 107, 53, 0.4);
   }
-}
-
-/* ============================================
-   КТБ — аристократичное старое золото
-   ============================================ */
-body.theme-ktb {
-  --ktb-gold: #d4af37;
-  --ktb-light: #f0dfaa;
-  --ktb-dark: #6f5724;
-  background-color: #090806;
-  color: var(--ktb-light);
-}
-
-/* Аристократичный фон КТБ: тёмное дерево, дамасский узор, золотое сияние. */
-body.theme-ktb .bg-grid {
-  display: block;
-  background-color: #0b0805;
-  background-image:
-    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(212, 175, 55, 0.07), transparent 62%),
-    repeating-linear-gradient(45deg, rgba(212, 175, 55, 0.024) 0 1px, transparent 1px 42px),
-    repeating-linear-gradient(-45deg, rgba(212, 175, 55, 0.024) 0 1px, transparent 1px 42px),
-    repeating-linear-gradient(90deg,
-      rgba(54, 38, 20, 0.20) 0px,
-      rgba(38, 26, 14, 0.20) 88px,
-      rgba(18, 12, 6, 0.26) 90px,
-      rgba(38, 26, 14, 0.20) 92px);
-  background-size: 100% 100%, auto, auto, auto;
-}
-
-body.theme-ktb .vignette {
-  display: block;
-  background: radial-gradient(ellipse at center, transparent 28%, rgba(5, 4, 2, 0.92) 100%);
-}
-
-body.theme-ktb .scanlines {
-  display: block;
-  opacity: 0.32;
-  background: repeating-linear-gradient(0deg, transparent 3px, rgba(212, 175, 55, 0.025) 3px, rgba(212, 175, 55, 0.025) 4px);
-}
-
-body.theme-ktb #contact_1,
-body.theme-ktb #contact_2,
-body.theme-ktb .codec-col,
-body.theme-ktb #text-con,
-body.theme-ktb #r_box,
-body.theme-ktb #terminal-background,
-body.theme-ktb .assembly-code-container {
-  border-color: #b8943f !important;
-  background-color: rgba(15, 12, 7, 0.88) !important;
-  box-shadow: inset 0 0 24px rgba(212, 175, 55, 0.045), 0 0 16px rgba(212, 175, 55, 0.16) !important;
-}
-
-body.theme-ktb .char-box,
-body.theme-ktb #char-1,
-body.theme-ktb #char-2 {
-  border-color: #b8943f !important;
-  box-shadow: inset 0 0 20px rgba(212, 175, 55, 0.08), 0 0 14px rgba(212, 175, 55, 0.14) !important;
-}
-
-body.theme-ktb .char-box .overlay,
-body.theme-ktb #char-1 .overlay,
-body.theme-ktb #char-2 .overlay {
-  background: linear-gradient(180deg, rgba(212, 175, 55, 0.18), rgba(110, 82, 26, 0.06) 55%, transparent) !important;
-  box-shadow: inset 0 0 24px rgba(212, 175, 55, 0.12) !important;
-}
-
-body.theme-ktb #left,
-body.theme-ktb #right,
-body.theme-ktb #left_2,
-body.theme-ktb #right_2,
-body.theme-ktb .caret,
-body.theme-ktb .freq,
-body.theme-ktb #c-char,
-body.theme-ktb #freq_2,
-body.theme-ktb #text,
-body.theme-ktb .terminal-line,
-body.theme-ktb .terminal-text,
-body.theme-ktb .terminal-message,
-body.theme-ktb .terminal-message-text,
-body.theme-ktb .start-link,
-body.theme-ktb .repeat-link,
-body.theme-ktb #track-name,
-body.theme-ktb .choice-button,
-body.theme-ktb .setting-row,
-body.theme-ktb .setting-row label,
-body.theme-ktb .modal-content h2,
-body.theme-ktb .modal-close {
-  color: #e5c96a !important;
-  border-color: #b8943f !important;
-  text-shadow: 0 0 8px rgba(212, 175, 55, 0.24) !important;
-}
-
-body.theme-ktb #codec_banner h2,
-body.theme-ktb #memory_banner h2,
-body.theme-ktb .banner h2 {
-  color: #f0dfaa !important;
-  border-color: #b8943f !important;
-  text-shadow: 0 0 10px rgba(212, 175, 55, 0.3) !important;
-}
-
-body.theme-ktb .banner {
-  background: linear-gradient(90deg, #171208, #241b0c 50%, #171208) !important;
-  border-color: #6f5724 !important;
-}
-
-body.theme-ktb #receiver-box {
-  background: rgba(212, 175, 55, 0.08) !important;
-  border-color: #6f5724 !important;
-  box-shadow: 0 0 12px rgba(212, 175, 55, 0.16) !important;
-}
-
-body.theme-ktb #start-transmission,
-body.theme-ktb #repeat-transmission,
-body.theme-ktb .choice-button,
-body.theme-ktb #music-float-btn,
-body.theme-ktb #admin-float-btn,
-body.theme-ktb #logout-btn,
-body.theme-ktb #settings-btn,
-body.theme-ktb #dossier-btn {
-  color: #e5c96a !important;
-  border-color: #b8943f !important;
-  background: linear-gradient(180deg, #211a0d, #100d07) !important;
-  box-shadow: inset 0 0 8px rgba(212, 175, 55, 0.12), 0 0 10px rgba(212, 175, 55, 0.16) !important;
-}
-
-body.theme-ktb #start-transmission:hover,
-body.theme-ktb #repeat-transmission:hover,
-body.theme-ktb .choice-button:hover,
-body.theme-ktb #music-float-btn:hover,
-body.theme-ktb #admin-float-btn:hover,
-body.theme-ktb #logout-btn:hover,
-body.theme-ktb #settings-btn:hover,
-body.theme-ktb #dossier-btn:hover {
-  color: #171106 !important;
-  background: linear-gradient(180deg, #f0dfaa, #c49b35) !important;
-  box-shadow: 0 0 20px rgba(212, 175, 55, 0.38) !important;
-}
-
-body.theme-ktb #start-transmission:hover .start-link,
-body.theme-ktb #repeat-transmission:hover .repeat-link {
-  color: #171106 !important;
-  text-shadow: none !important;
-}
-
-body.theme-ktb #music-popup,
-body.theme-ktb #settings-modal,
-body.theme-ktb .modal-content {
-  border-color: #b8943f !important;
-  background: rgba(15, 12, 7, 0.97) !important;
-  box-shadow: inset 0 0 30px rgba(212, 175, 55, 0.045), 0 0 28px rgba(212, 175, 55, 0.22) !important;
-}
-
-body.theme-ktb #music-popup button,
-body.theme-ktb input,
-body.theme-ktb select,
-body.theme-ktb textarea {
-  border-color: #b8943f !important;
-  color: #e5c96a !important;
-  background-color: rgba(212, 175, 55, 0.08) !important;
-}
-
-body.theme-ktb #volume-control {
-  accent-color: #d4af37 !important;
-}
-
-body.theme-ktb .toggle-slider {
-  border-color: #b8943f !important;
-}
-
-body.theme-ktb .toggle-slider:before {
-  background-color: #d4af37 !important;
-}
-
-body.theme-ktb .toggle-switch input:checked + .toggle-slider {
-  background-color: rgba(212, 175, 55, 0.3) !important;
-}
-
-body.theme-ktb #assembly-code-overlay {
-  display: none !important;
-}
-
-body.theme-ktb .assembly-code-line {
-  color: rgba(212, 175, 55, 0.24) !important;
-}
-
-body.theme-ktb #alien-boot-text,
-body.theme-ktb .alien-corp-title,
-body.theme-ktb .alien-corp-subtitle,
-body.theme-ktb .alien-corp-line,
-body.theme-ktb .alien-progress-label {
-  color: #e5c96a !important;
-  text-shadow: 0 0 12px rgba(212, 175, 55, 0.35) !important;
-}
-
-body.theme-ktb .alien-corner,
-body.theme-ktb .alien-progress-bar-bg {
-  border-color: #b8943f !important;
-}
-
-body.theme-ktb .alien-progress-bar-fill {
-  background: #d4af37 !important;
-  box-shadow: 0 0 12px rgba(212, 175, 55, 0.55) !important;
-}
-
-body.theme-ktb #alien-crt-circle {
-  border-color: #d4af37 !important;
-  box-shadow: 0 0 30px rgba(212, 175, 55, 0.28), inset 0 0 30px rgba(212, 175, 55, 0.12) !important;
-}
-
-body.theme-ktb #mCodec.boot-reveal-main {
-  animation-name: bootRevealHoloYellow !important;
-}
-
-body.theme-ktb .boot-reveal-btn {
-  animation-name: bootRevealEnergyPopYellow !important;
-}
-
-body.theme-ktb .boot-reveal-terminal {
-  animation-name: bootRevealSlideUpGlowYellow !important;
 }
 
 /* Прокрутка длинных реплик сохраняется, но полосы не отображаются. */
@@ -2814,92 +2303,6 @@ body.theme-ktb .boot-reveal-terminal {
   display: none;
   width: 0;
   height: 0;
-}
-
-/* Углы text-con рисуются на самой панели и не создают переполнение. */
-body.theme-ktb #text-con {
-  border-radius: 0 !important;
-  outline: 1px solid rgba(212, 175, 55, 0.2);
-  outline-offset: 4px;
-  background:
-    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 42px 2px no-repeat,
-    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 2px 42px no-repeat,
-    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 30px 1px no-repeat,
-    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 1px 30px no-repeat,
-    linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) left 8px top 8px / 20px 20px no-repeat,
-    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 42px 2px no-repeat,
-    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 2px 42px no-repeat,
-    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 30px 1px no-repeat,
-    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 1px 30px no-repeat,
-    linear-gradient(315deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) right 8px bottom 8px / 20px 20px no-repeat,
-    linear-gradient(rgba(15, 12, 7, 0.88), rgba(15, 12, 7, 0.88)) !important;
-}
-
-/* Многослойные углы остальных панелей по референсам. */
-body.theme-ktb #char-1,
-body.theme-ktb #char-2,
-body.theme-ktb .modal-content {
-  position: relative;
-}
-
-body.theme-ktb #terminal-background,
-body.theme-ktb #char-1,
-body.theme-ktb #char-2,
-body.theme-ktb .modal-content {
-  border-radius: 0 !important;
-  outline: 1px solid rgba(212, 175, 55, 0.2);
-  outline-offset: 4px;
-}
-
-body.theme-ktb #terminal-background::before,
-body.theme-ktb #char-1::before,
-body.theme-ktb #char-2::before,
-body.theme-ktb .modal-content::before,
-body.theme-ktb #terminal-background::after,
-body.theme-ktb #char-1::after,
-body.theme-ktb #char-2::after,
-body.theme-ktb .modal-content::after {
-  content: "";
-  position: absolute;
-  width: 52px;
-  height: 52px;
-  pointer-events: none;
-  z-index: 4;
-  background:
-    linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 42px 2px no-repeat,
-    linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 2px 42px no-repeat,
-    linear-gradient(#b8943f, #b8943f) 7px 7px / 30px 1px no-repeat,
-    linear-gradient(#b8943f, #b8943f) 7px 7px / 1px 30px no-repeat,
-    linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) 8px 8px / 20px 20px no-repeat;
-}
-
-body.theme-ktb #terminal-background::before,
-body.theme-ktb #char-1::before,
-body.theme-ktb #char-2::before,
-body.theme-ktb .modal-content::before {
-  top: -7px;
-  left: -7px;
-}
-
-body.theme-ktb #terminal-background::after,
-body.theme-ktb #char-1::after,
-body.theme-ktb #char-2::after,
-body.theme-ktb .modal-content::after {
-  right: -7px;
-  bottom: -7px;
-  transform: rotate(180deg);
-}
-
-body.theme-ktb #start-transmission,
-body.theme-ktb #repeat-transmission,
-body.theme-ktb .choice-button,
-body.theme-ktb #music-float-btn,
-body.theme-ktb #admin-float-btn,
-body.theme-ktb #logout-btn,
-body.theme-ktb #settings-btn,
-body.theme-ktb #dossier-btn {
-  border-radius: 0 !important;
-  clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px), 0 7px);
 }
 
 /* ============================================
@@ -3263,28 +2666,3 @@ body.theme-ktb #right_2 {
   outline: none;
 }
 
-/* ============================================
-   УГЛЫ ТЕРМИНАЛА СООБЩЕНИЙ — КАК У TEXT-CON
-   ============================================ */
-
-/* Псевдоэлементные углы терминала позиционировались некорректно,
-   поэтому углы рисуются фоновыми слоями на самом элементе. */
-body.theme-ktb #terminal-background {
-  background:
-    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 42px 2px no-repeat,
-    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 2px 42px no-repeat,
-    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 30px 1px no-repeat,
-    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 1px 30px no-repeat,
-    linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) left 8px top 8px / 20px 20px no-repeat,
-    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 42px 2px no-repeat,
-    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 2px 42px no-repeat,
-    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 30px 1px no-repeat,
-    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 1px 30px no-repeat,
-    linear-gradient(315deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) right 8px bottom 8px / 20px 20px no-repeat,
-    linear-gradient(rgba(15, 12, 7, 0.88), rgba(15, 12, 7, 0.88)) !important;
-}
-
-body.theme-ktb #terminal-background::before,
-body.theme-ktb #terminal-background::after {
-  content: none !important;
-}

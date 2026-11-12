@@ -3,37 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Панель администратора - Терминал GMS-4521</title>
+    <title>Панель — Терминал GMS-4521</title>
     <link href="https://fonts.googleapis.com/css?family=Orbitron:700" rel="stylesheet">
     <link rel="stylesheet" href="styles/admin-styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Темы GMS / IPS-N / КТБ в языке терминала: подключается последней. -->
+    <link rel="stylesheet" href="styles/admin-themes.css">
 </head>
-<body>
-    <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
+<body class="panel-page">
+    <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
     <div class="background-code" id="bgCode"></div>
-    
+
     <div class="container">
-        <header class="admin-header">
-            <div class="admin-title">ТЕРМИНАЛ GMS-4521 - ПАНЕЛЬ АДМИНИСТРАТОРА</div>
-            <button id="logout-btn" class="admin-logout">ВЫХОД</button>
-        </header>
-        
-        <nav class="admin-tabs">
-            <button class="admin-tab active" data-tab="statistics">Статистика</button>
-            <button class="admin-tab" data-tab="users">Пользователи</button>
-            <button class="admin-tab" data-tab="choices">Выборы</button>
-            <button class="admin-tab" data-tab="progress">Прогресс диалогов</button>
-            <button class="admin-tab" data-tab="relations">Отношения</button>
+        <!-- Шапка, навигация и выход — scripts/admin/admin-shell.js -->
+        <header id="admin-shell" class="admin-header"></header>
+
+        <nav class="admin-tabs" aria-label="Разделы панели">
+            <button class="admin-tab active" data-tab="overview">Обзор</button>
+            <button class="admin-tab" data-tab="players">Игроки</button>
             <button class="admin-tab" data-tab="music">Музыка</button>
-            <a href="editor.html" class="admin-tab" style="text-decoration: none;">Редактор диалогов</a>
-            <a href="catalog.html" class="admin-tab" style="text-decoration: none;">Каталог персонажей</a>
-            <a href="index.html" class="admin-tab" style="text-decoration: none;">Терминал</a>
         </nav>
-        
+
         <main class="admin-content">
-            <!-- Statistics Tab -->
-            <section id="statistics" class="tab-content active">
-                <div class="admin-card">
+            <!-- Обзор: статистика, выборы и прогресс диалогов в одной сетке -->
+            <section id="overview" class="tab-content active">
+                <div class="admin-card panel-wide">
                     <div class="admin-card-title">Общая статистика</div>
                     <div id="statistics-loading" class="loading">
                         <div class="loading-spinner"></div>
@@ -46,7 +40,7 @@
                                         <div class="statistic-value" id="total-users">0</div>
                                         <div class="statistic-label">Всего пользователей</div>
                                     </div>
-                                    <div class="statistic-icon">&#128100;</div>
+                                    <div class="statistic-icon" aria-hidden="true">◈</div>
                                 </div>
                             </div>
                             <div class="col">
@@ -55,7 +49,7 @@
                                         <div class="statistic-value" id="total-dialogues">0</div>
                                         <div class="statistic-label">Всего диалогов</div>
                                     </div>
-                                    <div class="statistic-icon">&#128196;</div>
+                                    <div class="statistic-icon" aria-hidden="true">▤</div>
                                 </div>
                             </div>
                             <div class="col">
@@ -64,118 +58,58 @@
                                         <div class="statistic-value" id="total-choices">0</div>
                                         <div class="statistic-label">Выборов сделано</div>
                                     </div>
-                                    <div class="statistic-icon">&#128260;</div>
+                                    <div class="statistic-icon" aria-hidden="true">⇄</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="admin-card">
-                    <div class="admin-card-title">Распределение выборов по частотам</div>
-                    <div class="chart-container">
-                        <canvas id="frequency-chart"></canvas>
-                    </div>
-                </div>
-                <div class="admin-card">
-                    <div class="admin-card-title">Популярные выборы</div>
-                    <div class="chart-container">
-                        <canvas id="choices-chart"></canvas>
-                    </div>
-                </div>
-            </section>
-            
-            <!-- Users Tab -->
-            <section id="users" class="tab-content">
-                <div class="admin-card">
-                    <div class="admin-card-title">Управление пользователями</div>
-                    <div class="search-container">
-                        <input type="text" id="user-search" class="search-input" placeholder="Поиск пользователя...">
-                    </div>
-                    <div id="users-loading" class="loading">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    <table class="user-table" id="users-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Позывной</th>
-                                <th>Дата регистрации</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="users-table-body"></tbody>
-                    </table>
-                    <div class="pagination" id="users-pagination"></div>
-                </div>
-            </section>
-            
-            <!-- Choices Tab -->
-            <section id="choices" class="tab-content">
-                <div class="admin-card">
-                    <div class="admin-card-title">Выборы пользователей</div>
-                    <div class="sub-tabs"></div>
-                    <div id="choices-loading" class="loading">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    <div id="choices-content">
-                        <ul class="choice-list" id="choice-list"></ul>
-                    </div>
-                </div>
-            </section>
-            
-            <!-- Progress Tab -->
-            <section id="progress" class="tab-content">
-                <div class="admin-card">
-                    <div class="admin-card-title">Прогресс пользователей в диалогах</div>
-                    <div id="progress-loading" class="loading">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    <div id="progress-content">
+
+                <div class="panel-grid">
+                    <div class="admin-card">
+                        <div class="admin-card-title">Распределение выборов по частотам</div>
                         <div class="chart-container">
-                            <canvas id="progress-chart"></canvas>
+                            <canvas id="frequency-chart"></canvas>
                         </div>
-                        <table class="user-table">
-                            <thead>
-                                <tr>
-                                    <th>Пользователь</th>
-                                    <th>Частота</th>
-                                    <th>Количество прохождений</th>
-                                    <th>Завершен</th>
-                                </tr>
-                            </thead>
-                            <tbody id="progress-table-body"></tbody>
-                        </table>
                     </div>
-                </div>
-            </section>
-            
-            <!-- Relations Tab -->
-            <section id="relations" class="tab-content">
-                <div class="admin-card">
-                    <div class="admin-card-title">Отношения игроков с NPC персонажами</div>
-                    <div style="display:flex;gap:20px;align-items:flex-start;">
-                        <div style="width:230px;flex-shrink:0;">
-                            <div class="form-group" style="margin-bottom:8px;">
-                                <label>Игрок:</label>
-                            </div>
-                            <div id="relations-loading" class="loading" style="display:none;">
-                                <div class="loading-spinner"></div>
-                            </div>
-                            <div id="relations-user-list" style="max-height:520px;overflow-y:auto;border:1px solid var(--primary-border);"></div>
-                            <div id="relations-user-empty" style="display:none;color:#888;font-size:12px;margin-top:8px;">Нет пользователей</div>
+                    <div class="admin-card">
+                        <div class="admin-card-title">Популярные выборы</div>
+                        <div class="chart-container">
+                            <canvas id="choices-chart"></canvas>
                         </div>
-                        <div style="flex:1;min-width:0;">
-                            <div id="relations-content">
-                                <div id="relations-placeholder" style="color:#888;font-size:13px;padding:20px 0;text-align:center;">Выберите игрока слева, чтобы увидеть его отношения с NPC.<br>Клик по NPC раскрывает отношения по его пилотам.</div>
-                                <table class="user-table" id="relations-table" style="display:none;">
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="admin-card-title">Выборы игроков</div>
+                        <div class="sub-tabs"></div>
+                        <div id="choices-loading" class="loading">
+                            <div class="loading-spinner"></div>
+                        </div>
+                        <div id="choices-content">
+                            <ul class="choice-list" id="choice-list"></ul>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="admin-card-title">Прогресс в диалогах</div>
+                        <div id="progress-loading" class="loading">
+                            <div class="loading-spinner"></div>
+                        </div>
+                        <div id="progress-content">
+                            <div class="chart-container">
+                                <canvas id="progress-chart"></canvas>
+                            </div>
+                            <div class="table-scroll">
+                                <table class="user-table">
                                     <thead>
                                         <tr>
-                                            <th>Персонаж (NPC)</th>
-                                            <th>Отношение</th>
-                                            <th>Действия</th>
+                                            <th>Пользователь</th>
+                                            <th>Частота</th>
+                                            <th>Прохождения</th>
+                                            <th>Завершен</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="relations-table-body"></tbody>
+                                    <tbody id="progress-table-body"></tbody>
                                 </table>
                             </div>
                         </div>
@@ -183,16 +117,82 @@
                 </div>
             </section>
 
-            <!-- Music Tab -->
+            <!-- Игроки: таблица слева, выбранный игрок — отношения и прогресс — справа -->
+            <section id="players" class="tab-content">
+                <div class="players-layout">
+                    <div class="admin-card">
+                        <div class="admin-card-title">Игроки</div>
+                        <div class="search-container">
+                            <input type="text" id="user-search" class="search-input" placeholder="Поиск пользователя..." aria-label="Поиск пользователя">
+                        </div>
+                        <div id="users-loading" class="loading">
+                            <div class="loading-spinner"></div>
+                        </div>
+                        <div class="table-scroll">
+                            <table class="user-table" id="users-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Позывной</th>
+                                        <th>Дата регистрации</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div class="pagination" id="users-pagination"></div>
+                    </div>
+
+                    <aside class="admin-card player-detail" id="player-detail" aria-live="polite">
+                        <div class="admin-card-title" id="player-detail-title">Игрок</div>
+                        <div id="player-placeholder" class="no-data">Выберите игрока в таблице, чтобы увидеть его отношения с персонажами и прогресс.<br>Клик по персонажу раскрывает отношения по пилотам.</div>
+                        <div id="player-content" hidden>
+                            <h3 class="section-title">Отношения с персонажами</h3>
+                            <div id="relations-loading" class="loading" style="display:none;">
+                                <div class="loading-spinner"></div>
+                            </div>
+                            <div class="table-scroll">
+                                <table class="user-table" id="relations-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Персонаж</th>
+                                            <th>Отношение</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="relations-table-body"></tbody>
+                                </table>
+                            </div>
+
+                            <h3 class="section-title">Прогресс в диалогах</h3>
+                            <div class="table-scroll">
+                                <table class="user-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Частота</th>
+                                            <th>Прохождения</th>
+                                            <th>Завершен</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="player-progress-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- Музыка -->
             <section id="music" class="tab-content">
                 <div class="admin-card">
                     <div class="admin-card-title">Плейлисты тем (фоновая музыка терминала)</div>
                     <div class="form-group" style="margin-bottom:15px;">
-                        <label>Тема оформления:</label>
+                        <label for="music-theme-select">Тема оформления:</label>
                         <select id="music-theme-select" class="form-input" style="max-width:300px;">
-                            <option value="yellow">Жёлтая (терминал)</option>
-                            <option value="green">Зелёная</option>
-                            <option value="ktb">КТБ (аристократия)</option>
+                            <option value="yellow">IPS-N</option>
+                            <option value="green">GMS</option>
+                            <option value="ktb">КТБ</option>
                         </select>
                     </div>
                     <div style="margin-bottom:15px;">
@@ -203,24 +203,26 @@
                     <div id="music-loading" class="loading" style="display:none;">
                         <div class="loading-spinner"></div>
                     </div>
-                    <table class="user-table" id="music-table">
-                        <thead>
-                            <tr>
-                                <th>Трек</th>
-                                <th>Громкость, %</th>
-                                <th>Прослушка</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="music-table-body"></tbody>
-                    </table>
+                    <div class="table-scroll">
+                        <table class="user-table" id="music-table">
+                            <thead>
+                                <tr>
+                                    <th>Трек</th>
+                                    <th>Громкость, %</th>
+                                    <th>Прослушка</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="music-table-body"></tbody>
+                        </table>
+                    </div>
                     <div id="music-empty" style="display:none; margin-top:10px;">Для выбранной темы пока нет треков.</div>
                 </div>
             </section>
         </main>
     </div>
 
-    <!-- Password Modal -->
+    <!-- Смена пароля -->
     <div id="password-modal" class="modal">
         <div class="modal-content">
             <div class="modal-title">Изменить пароль</div>
@@ -248,8 +250,8 @@
             </div>
         </div>
     </div>
-    
-    <!-- Choice Details Modal -->
+
+    <!-- Детализация выбора -->
     <div id="choice-details-modal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-title">Детализация выбора</div>
@@ -289,15 +291,15 @@
             </div>
         </div>
     </div>
-    
-    <!-- Delete User Modal -->
+
+    <!-- Удаление пользователя -->
     <div id="delete-user-modal" class="modal">
         <div class="modal-content">
             <div class="modal-title">Удалить пользователя</div>
             <div class="modal-body">
                 <input type="hidden" id="delete-user-id">
                 <p>Вы уверены, что хотите удалить пользователя <strong id="delete-username"></strong>?</p>
-                <p style="color: #ff3333;">Внимание: будут удалены все данные пользователя, включая пройденные диалоги и выборы.</p>
+                <p class="danger-note">Внимание: будут удалены все данные пользователя, включая пройденные диалоги и выборы.</p>
                 <div id="delete-error" class="alert alert-danger" style="display: none;"></div>
             </div>
             <div class="modal-actions">
@@ -306,8 +308,8 @@
             </div>
         </div>
     </div>
-    
-    <!-- Clear Progress Modal -->
+
+    <!-- Очистка прохождения -->
     <div id="clear-progress-modal" class="modal">
         <div class="modal-content">
             <div class="modal-title">Очистить прохождение</div>
@@ -331,7 +333,7 @@
             </div>
         </div>
     </div>
-    
+
     <script type="module" src="scripts/admin/admin-main.js"></script>
     <script type="module" src="scripts/music-player.js"></script>
 </body>

@@ -1,3 +1,13 @@
+// Цвета графиков берутся из активной темы (admin-styles.css: --primary-color / --primary-rgb).
+function themeColor() {
+    return getComputedStyle(document.body).getPropertyValue('--primary-color').trim() || '#db1a2d';
+}
+
+function themeRgba(alpha) {
+    const rgb = getComputedStyle(document.body).getPropertyValue('--primary-rgb').trim() || '219, 26, 45';
+    return `rgba(${rgb}, ${alpha})`;
+}
+
 class ChartManager {
     constructor() {
         this.charts = {};
@@ -172,8 +182,8 @@ class ChartManager {
                     {
                         label: 'Завершено',
                         data: completedData,
-                        backgroundColor: 'rgba(3, 251, 141, 0.7)',
-                        borderColor: 'rgba(3, 251, 141, 1)',
+                        backgroundColor: themeRgba(0.7),
+                        borderColor: themeRgba(1),
                         borderWidth: 1
                     },
                     {
@@ -191,20 +201,20 @@ class ChartManager {
                 scales: {
                     x: {
                         stacked: true,
-                        title: { display: true, text: 'Частота', color: '#03FB8D' },
-                        ticks: { color: '#03FB8D' },
-                        grid: { color: 'rgba(3, 251, 141, 0.1)' }
+                        title: { display: true, text: 'Частота', color: themeColor() },
+                        ticks: { color: themeColor() },
+                        grid: { color: themeRgba(0.1) }
                     },
                     y: {
                         stacked: true,
-                        title: { display: true, text: 'Пользователи', color: '#03FB8D' },
-                        ticks: { color: '#03FB8D', beginAtZero: true, stepSize: 1 },
-                        grid: { color: 'rgba(3, 251, 141, 0.1)' }
+                        title: { display: true, text: 'Пользователи', color: themeColor() },
+                        ticks: { color: themeColor(), beginAtZero: true, stepSize: 1 },
+                        grid: { color: themeRgba(0.1) }
                     }
                 },
                 plugins: {
-                    legend: { labels: { color: '#03FB8D' } },
-                    title: { display: true, text: 'Прогресс по частотам', color: '#03FB8D' }
+                    legend: { labels: { color: themeColor() } },
+                    title: { display: true, text: 'Прогресс по частотам', color: themeColor() }
                 }
             }
         });
@@ -237,9 +247,9 @@ class ChartManager {
                 plugins: {
                     legend: {
                         position: 'right',
-                        labels: { color: '#03FB8D', font: { size: 12 } }
+                        labels: { color: themeColor(), font: { size: 12 } }
                     },
-                    title: { display: true, text: 'Распределение ответов', color: '#03FB8D' },
+                    title: { display: true, text: 'Распределение ответов', color: themeColor() },
                     tooltip: {
                         callbacks: {
                             label: (context) => {
@@ -259,7 +269,7 @@ class ChartManager {
         const borders = [];
         
         const baseColors = [
-            'rgba(3, 251, 141, 0.7)',
+            themeRgba(0.7),
             'rgba(75, 192, 192, 0.7)',
             'rgba(153, 102, 255, 0.7)',
             'rgba(255, 159, 64, 0.7)',
@@ -267,7 +277,7 @@ class ChartManager {
         ];
         
         const baseBorders = [
-            'rgba(3, 251, 141, 1)',
+            themeRgba(1),
             'rgba(75, 192, 192, 1)',
             'rgba(153, 102, 255, 1)',
             'rgba(255, 159, 64, 1)',
@@ -295,12 +305,12 @@ class ChartManager {
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { color: '#03FB8D' }
+                    labels: { color: themeColor() }
                 },
                 title: {
                     display: true,
                     text: title,
-                    color: '#03FB8D'
+                    color: themeColor()
                 }
             }
         };
@@ -310,12 +320,12 @@ class ChartManager {
         return {
             y: {
                 beginAtZero: true,
-                ticks: { color: '#03FB8D' },
-                grid: { color: 'rgba(3, 251, 141, 0.1)' }
+                ticks: { color: themeColor() },
+                grid: { color: themeRgba(0.1) }
             },
             x: {
-                ticks: { color: '#03FB8D' },
-                grid: { color: 'rgba(3, 251, 141, 0.1)' }
+                ticks: { color: themeColor() },
+                grid: { color: themeRgba(0.1) }
             }
         };
     }

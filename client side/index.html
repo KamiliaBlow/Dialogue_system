@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <title>Терминал GMS-4521</title>
   <link rel="stylesheet" href="./styles/index_styles.css">
+  <link rel="stylesheet" href="./styles/themes.css">
+  <script src="./scripts/ktb-houses.js"></script>
+  <script src="./scripts/ui-scale.js"></script>
 
 </head>
 <body>
-<script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
+<script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);if(window.KtbHouses)KtbHouses.applyCached(document.body);}catch(e){}})();</script>
 <!-- partial:index.partial.html -->
 <html lang="ru">
 <head>
@@ -24,6 +27,7 @@
 <div class="vignette"></div>
 <div class="scanlines"></div>
 <div id="mCodec">
+	<div id="ktb-crest" class="ktb-crest" aria-hidden="true"></div>
 	<div id="main-con">
 		<div id="contact_1" class="grid-box codec-col">
 			<div id="char-1" class="char-box">
@@ -71,7 +75,6 @@
 				</div>
 			</div>
 		</div>
-		<div id="terminal-background"></div>
 	</div>
 	
 	<div id="text-con">
@@ -97,6 +100,8 @@
 			<i class="fa fa-caret-right caret" aria-hidden="true"></i>
 		</div>
 	</div>
+	<!-- Сообщения пилотов: в потоке под диалоговым окном при любом разрешении. -->
+	<div id="terminal-background"></div>
 </div>
 
 <script type="module" src="scripts/music-player.js"></script>
@@ -416,24 +421,42 @@
             type();
         }
 
+        // Убирает старые сообщения, пока журнал не помещается в рамку: при любой высоте
+        // рамки строки не сжимаются и не наезжают друг на друга.
+        // Строки прижаты к низу (flex-end), поэтому лишние уходят вверх за край рамки —
+        // scrollHeight этого не видит. Сравниваем верх первой строки с верхом области текста.
+        function trimTerminalMessages() {
+            const style = getComputedStyle(terminalBackground);
+            const contentTop = terminalBackground.getBoundingClientRect().top +
+                parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop);
+            while (terminalBackground.children.length > 1 &&
+                   terminalBackground.firstElementChild.getBoundingClientRect().top < contentTop - 1) {
+                terminalBackground.removeChild(terminalBackground.firstChild);
+            }
+        }
+
         function createTerminalMessage() {
-            // Если больше 5 сообщений, удаляем самые старые
             while (terminalBackground.children.length >= 8) {
                 terminalBackground.removeChild(terminalBackground.firstChild);
             }
 
             const message = document.createElement('div');
             message.classList.add('terminal-message');
-            
+
             // Случайный текст
             typeWriter(
-                pilotMessages[Math.floor(Math.random() * pilotMessages.length)], 
+                pilotMessages[Math.floor(Math.random() * pilotMessages.length)],
                 message
             );
-            
+
             // Добавляем сообщение
             terminalBackground.appendChild(message);
+            trimTerminalMessages();
         }
+
+        // Печать удлиняет строку (может перенестись), а смена размера окна меняет высоту рамки.
+        new ResizeObserver(trimTerminalMessages).observe(terminalBackground);
+        setInterval(trimTerminalMessages, 400);
 
         // Создаем сообщения каждые 3-5 секунд
         function startTerminalMessages() {
@@ -639,6 +662,13 @@
 	<script src="./scripts/boot-scenarios.js"></script>
 	<script src="./scripts/ktb-drama.js"></script>
 	<script src="./scripts/boot.js"></script>
+	<script>
+		// Масштаб интерфейса: пульт (#mCodec) целиком помещается в окно и не заезжает под кнопки.
+		if (window.UiScale) {
+			UiScale.init({ fit: { target: '#mCodec', avoid: ['#header-buttons', '#music-float-btn', '#admin-float-btn'] } });
+			window.addEventListener('load', () => UiScale.refresh());
+		}
+	</script>
 
 <!-- partial -->
 	<script type="module" src="./scripts/dialogue.js"></script>
@@ -647,7 +677,6 @@
 		import AppConfig from './scripts/config.js';
 
 		document.addEventListener('DOMContentLoaded', () => {
-			const adminBtn = document.getElementById('admin-float-btn');
 
 			// Шлагбаум пилота: без авторизации — на страницу входа,
 			// без активного пилот-профиля — на обязательную первичную настройку.
@@ -666,15 +695,20 @@
 				})
 				.catch(() => {});
 
+			// Кнопка админ-панели создаётся только для админа: у остальных её нет даже в DOM.
+			// Подпись по теме задаёт styles/themes.css (ADMIN / АДМИН / Канцелярия).
 			fetch(`${AppConfig.API_URL}/admin/check`, { credentials: 'include' })
 				.then(resp => { if (!resp.ok) throw new Error(); return resp.json(); })
 				.then(data => {
-					if (data.isAdmin) {
-						adminBtn.style.display = 'flex';
-						if (document.body.classList.contains('boot-phase')) {
-							adminBtn.classList.add('boot-reveal-btn');
-						}
-					}
+					if (!data.isAdmin || document.getElementById('admin-float-btn')) return;
+					const adminBtn = document.createElement('a');
+					adminBtn.id = 'admin-float-btn';
+					adminBtn.href = 'admin.html';
+					adminBtn.title = 'Админ-панель';
+					adminBtn.setAttribute('aria-label', 'Админ-панель');
+					// Если интерфейс уже появляется по одному (boot.js), кнопка встаёт в общий ряд.
+					if (document.body.classList.contains('boot-staged')) adminBtn.classList.add('ui-in');
+					document.body.appendChild(adminBtn);
 				})
 				.catch(() => {});
 		});

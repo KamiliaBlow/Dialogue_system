@@ -1,0 +1,918 @@
+/* =====================================================================
+   ТЕМЫ ТЕРМИНАЛА: GMS · IPS-N · КТБ
+   Подключается после index_styles.css и задаёт всё оформление тем.
+   Идентификаторы тем в БД прежние: green = GMS, yellow = IPS-N, ktb = КТБ.
+
+   Лор:
+   - GMS: фирменный красный #DB1A2D / #991E2A (COMP/CON), «гарантированное
+     качество, универсальное лицензирование» — графит, стандарт, спецификации.
+   - IPS-N: фирменный синий #1C9AE8 / #0C4D99 (COMP/CON), «Твой друг в
+     недружелюбном море» — морская навигация, конвои, корпусные плиты.
+   - КТБ: Karrakin Maroon («Royal Prime»), позолота, ливреи Домов.
+     Лансер и изгнанник видят неблагородную «канцелярию» (body.ktb-ignoble).
+   ===================================================================== */
+
+/* ---------- Токены ---------- */
+body.theme-green {
+  --t-bg: #08090b;
+  --t-panel: rgba(15, 16, 19, 0.94);
+  --t-panel-2: #121317;
+  --t-line: #393c43;
+  --t-line-soft: rgba(228, 230, 233, 0.08);
+  --t-accent: #db1a2d;
+  --t-accent-deep: #991e2a;
+  --t-accent-soft: rgba(219, 26, 45, 0.14);
+  --t-text: #e4e6e9;
+  --t-dim: #8a8f97;
+  --t-glow: rgba(219, 26, 45, 0.22);
+  --t-bar-on: #db1a2d;
+  --t-bar-off: #26282d;
+  --t-font-label: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-text: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-num: 'JetBrains Mono', 'Courier New', monospace;
+  --primary-color: #db1a2d;
+}
+
+body.theme-yellow {
+  --t-bg: #040a12;
+  --t-panel: rgba(6, 17, 30, 0.92);
+  --t-panel-2: #081a2c;
+  --t-line: rgba(28, 154, 232, 0.42);
+  --t-line-soft: rgba(28, 154, 232, 0.12);
+  --t-accent: #1c9ae8;
+  --t-accent-deep: #0c4d99;
+  --t-accent-soft: rgba(28, 154, 232, 0.14);
+  --t-signal: #ffb238;
+  --t-text: #d6e6f4;
+  --t-dim: #6f8aa3;
+  --t-glow: rgba(28, 154, 232, 0.25);
+  --t-bar-on: #1c9ae8;
+  --t-bar-off: #0d2640;
+  --t-font-label: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-text: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-num: 'JetBrains Mono', 'Courier New', monospace;
+  --primary-color: #1c9ae8;
+}
+
+body.theme-ktb {
+  --ktb-livery: #c6a052;
+  --t-bg: #0c0908;
+  --t-panel: rgba(22, 12, 12, 0.94);
+  --t-panel-2: #1c1112;
+  --t-line: #7a6334;
+  --t-line-soft: rgba(198, 160, 82, 0.16);
+  --t-accent: #c6a052;
+  --t-accent-light: #e9d7a5;
+  --t-accent-deep: #6e1f25;
+  --t-accent-soft: rgba(110, 31, 37, 0.42);
+  --t-text: #ece2cb;
+  --t-dim: #b3a588;
+  --t-glow: rgba(110, 31, 37, 0.5);
+  --t-bar-on: #c6a052;
+  --t-bar-off: #33231a;
+  --t-font-label: 'Cormorant', Georgia, serif;
+  --t-font-text: 'Alegreya', Georgia, serif;
+  --t-font-num: 'Cormorant', Georgia, serif;
+  --primary-color: #c6a052;
+}
+
+/* Неблагородные (Лансер) и изгнанники: олово, сланец, канцелярия. */
+body.theme-ktb.ktb-ignoble {
+  --t-bg: #0b0c0d;
+  --t-panel: rgba(18, 19, 21, 0.95);
+  --t-panel-2: #16171a;
+  --t-line: #4f4c46;
+  --t-line-soft: rgba(156, 150, 138, 0.14);
+  --t-accent: #9c968a;
+  --t-accent-light: #d8d3c6;
+  --t-accent-deep: #2c2b2a;
+  --t-accent-soft: rgba(156, 150, 138, 0.12);
+  --t-text: #d9d5cb;
+  --t-dim: #8f8a80;
+  --t-glow: rgba(0, 0, 0, 0);
+  --t-bar-on: #9c968a;
+  --t-bar-off: #25262a;
+  --t-font-label: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-num: 'JetBrains Mono', 'Courier New', monospace;
+  --primary-color: #9c968a;
+}
+
+/* ---------- Общая основа ---------- */
+html:has(body.theme-green), body.theme-green { background-color: var(--t-bg) !important; }
+html:has(body.theme-yellow), body.theme-yellow { background-color: var(--t-bg) !important; }
+html:has(body.theme-ktb), body.theme-ktb { background-color: var(--t-bg) !important; }
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) { color: var(--t-text); }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .scanlines { display: none !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .vignette {
+  display: block !important;
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.82) 100%) !important;
+}
+body:is(.theme-yellow, .theme-ktb) #assembly-code-overlay { display: none !important; }
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#contact_1, #contact_2, #main-receiver, #text-con, #terminal-background) {
+  position: relative;
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  background-color: var(--t-panel) !important;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: none !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#char-1, #char-2) {
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#char-1, #char-2) .overlay {
+  background: linear-gradient(180deg, var(--t-accent-soft), transparent 70%) !important;
+  box-shadow: none !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) #r_box,
+body:is(.theme-green, .theme-yellow, .theme-ktb) .assembly-code-container {
+  border-color: var(--t-line-soft) !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) #receiver-box {
+  border: 1px solid var(--t-line-soft) !important;
+  background-color: var(--t-panel-2) !important;
+  box-shadow: none !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) .banner {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) .banner h2 {
+  margin: 0 !important;
+  padding: 5px 10px !important;
+  border: 0 !important;
+  font-family: var(--t-font-label) !important;
+  font-size: 15px !important;
+  letter-spacing: 0.24em !important;
+  text-shadow: none !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) #codec_banner h2 { background: var(--t-accent); color: var(--t-bg) !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) #memory_banner h2 { background: transparent; color: var(--t-dim) !important; box-shadow: inset 0 0 0 1px var(--t-line) !important; }
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#left, #right, #left_2, #right_2) { background: transparent !important; border: 0 !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .caret { color: var(--t-accent) !important; text-shadow: none !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .bar { background-color: var(--t-bar-off); }
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(.freq, #freq, #freq_2) {
+  color: var(--t-text) !important;
+  font-family: var(--t-font-num) !important;
+  text-shadow: none !important;
+  letter-spacing: 0.06em;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) #c-char {
+  color: var(--t-accent) !important;
+  font-family: var(--t-font-label) !important;
+  text-shadow: none !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) #text {
+  color: var(--t-text) !important;
+  font-family: var(--t-font-text) !important;
+  font-weight: 400;
+  text-shadow: none !important;
+  line-height: 1.55;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(.terminal-line, .terminal-text, .terminal-message, .terminal-message-text) {
+  color: var(--t-dim) !important;
+  text-shadow: none !important;
+}
+
+/* Сообщения пилотов — служебный журнал: моноширинный шрифт темы и курсор её цвета. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) .terminal-message {
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+}
+/* Внутренние поля журнала: строки не заходят на угловые метки и подпись рамки. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) #terminal-background {
+  padding: 12px 22px 18px !important;
+  justify-content: flex-end !important;
+  align-items: stretch !important;
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) .terminal-message-cursor { background-color: var(--t-accent) !important; }
+
+/* Музыкальный плеер: текст и элементы управления в палитре темы. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#music-popup, #music-popup .controls, #music-float-btn) {
+  color: var(--t-text) !important;
+  font-family: var(--t-font-label) !important;
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) #music-popup button { font-family: 'JetBrains Mono', 'Segoe UI Symbol', monospace !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) #music-popup button:hover { border-color: var(--t-accent) !important; color: var(--t-accent) !important; }
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) .assembly-code-line { color: rgba(228, 230, 233, 0.06) !important; }
+
+/* Кнопки: запуск передачи, выборы, верхнее меню, музыка. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#start-transmission, #repeat-transmission, #logout-btn, #settings-btn, #dossier-btn, #music-float-btn, #admin-float-btn) {
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+  background: var(--t-panel) !important;
+  color: var(--t-text) !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35) !important;
+  text-shadow: none !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#start-transmission, #repeat-transmission, #logout-btn, #settings-btn, #dossier-btn, #music-float-btn, #admin-float-btn):hover {
+  border-color: var(--t-accent) !important;
+  background: var(--t-accent) !important;
+  color: var(--t-bg) !important;
+}
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(.start-link, .repeat-link) { color: inherit !important; text-shadow: none !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#start-transmission, #repeat-transmission):hover :is(.start-link, .repeat-link) { color: var(--t-bg) !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#logout-btn, #settings-btn, #dossier-btn) { font-family: var(--t-font-label) !important; letter-spacing: 0.12em; }
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) .choice-container { counter-reset: choice; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .choice-button {
+  counter-increment: choice;
+  position: relative;
+  padding: 9px 14px 9px 46px !important;
+  border: 1px solid var(--t-line-soft) !important;
+  border-left: 2px solid var(--t-accent) !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+  background: linear-gradient(90deg, var(--t-accent-soft), transparent 75%) !important;
+  color: var(--t-text) !important;
+  font-family: var(--t-font-text) !important;
+  font-size: 15px !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) .choice-button::before {
+  content: counter(choice, decimal-leading-zero);
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--t-accent);
+  font: 600 13px var(--t-font-label);
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) .choice-button:hover,
+body:is(.theme-green, .theme-yellow, .theme-ktb) .choice-button:focus-visible {
+  border-color: var(--t-accent) !important;
+  background: var(--t-accent-soft) !important;
+  color: var(--t-text) !important;
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) .choice-button:disabled { opacity: 0.45; }
+
+/* Модальные окна настроек и музыки. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#music-popup, .modal-content) {
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  background-color: var(--t-panel) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6) !important;
+}
+/* Крестик закрытия — в углу окна настроек, а не экрана. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) .modal-content { position: relative !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .modal-close { top: 8px !important; right: 14px !important; line-height: 1; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(.modal-content h2, .modal-close, .setting-row, .setting-row label, #track-name) {
+  color: var(--t-text) !important;
+  border-color: var(--t-line) !important;
+  text-shadow: none !important;
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) .modal-content h2 { color: var(--t-accent) !important; font-family: var(--t-font-label) !important; letter-spacing: 0.16em; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(.modal-content, .modal-content label, .setting-row, .modal-close) { font-family: var(--t-font-label) !important; }
+body.theme-ktb:not(.ktb-ignoble) :is(.modal-content label, .setting-row) { font-size: 17px; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .modal-close:hover { color: var(--t-accent) !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#music-popup button, input, select, textarea) {
+  border-color: var(--t-line) !important;
+  color: var(--t-text) !important;
+  background-color: rgba(0, 0, 0, 0.3) !important;
+  box-shadow: none !important;
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) #volume-control { accent-color: var(--t-accent) !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .toggle-slider { border-color: var(--t-line) !important; background-color: var(--t-panel-2) !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .toggle-slider:before { background-color: var(--t-dim) !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .toggle-switch input:checked + .toggle-slider { background-color: var(--t-accent-soft) !important; border-color: var(--t-accent) !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .toggle-switch input:checked + .toggle-slider:before { background-color: var(--t-accent) !important; }
+
+body:is(.theme-green, .theme-yellow, .theme-ktb) .dialogue-progress {
+  color: var(--t-dim) !important;
+  border-color: var(--t-line) !important;
+  text-shadow: none !important;
+}
+
+/* Появление пульта после заставки: свечение в цвете темы, без «хвоста» в конце. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) #mCodec.boot-reveal-main { animation-name: tRevealMain !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .boot-reveal-terminal { animation-name: tRevealTerminal !important; }
+body:is(.theme-green, .theme-yellow, .theme-ktb) .boot-reveal-btn { animation-name: tRevealBtn !important; }
+
+@keyframes tRevealMain {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.86); box-shadow: 0 0 0 transparent; }
+  10% { opacity: 0.5; box-shadow: 0 0 40px var(--t-glow); }
+  18% { opacity: 0.15; }
+  32% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.91); box-shadow: 0 0 60px var(--t-glow); }
+  45% { opacity: 0.35; }
+  65% { opacity: 0.95; transform: translate(-50%, -50%) scale(0.905); box-shadow: 0 0 24px var(--t-glow); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(0.9); box-shadow: 0 0 0 transparent; }
+}
+
+@keyframes tRevealTerminal {
+  0% { opacity: 0; transform: translateY(40px); }
+  20% { opacity: 0.3; }
+  35% { opacity: 0.1; }
+  60% { opacity: 0.8; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tRevealBtn {
+  0% { opacity: 0; transform: scale(0.6); }
+  40% { opacity: 0.7; transform: scale(1.08); }
+  60% { opacity: 0.35; }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Служебные подписи на панелях (sci-fi «шильдики»). */
+body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#contact_1, #contact_2, #text-con, #terminal-background)::after {
+  position: absolute;
+  right: 24px;
+  bottom: 4px;
+  z-index: 3;
+  color: var(--t-dim);
+  font: 9px/1 'JetBrains Mono', monospace;
+  letter-spacing: 0.22em;
+  opacity: 0.7;
+  pointer-events: none;
+}
+body:is(.theme-green, .theme-yellow, .theme-ktb) #text-con { overflow-x: hidden; }
+
+/* =====================================================================
+   GMS — «Галактический стандарт»
+   ===================================================================== */
+body.theme-green .bg-grid {
+  display: block !important;
+  background-color: var(--t-bg) !important;
+  background-image:
+    linear-gradient(rgba(228, 230, 233, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(228, 230, 233, 0.045) 1px, transparent 1px),
+    linear-gradient(rgba(228, 230, 233, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(228, 230, 233, 0.018) 1px, transparent 1px) !important;
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px !important;
+}
+
+/* Красная полоса спецификации сверху и регистрационные метки по углам. */
+body.theme-green :is(#contact_1, #contact_2, #main-receiver, #text-con, #terminal-background, .modal-content, #music-popup) {
+  background:
+    linear-gradient(var(--t-accent), var(--t-accent)) 0 0 / 100% 3px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 6px calc(100% - 6px) / 12px 2px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 6px calc(100% - 17px) / 2px 12px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 6px) calc(100% - 6px) / 12px 2px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 6px) calc(100% - 17px) / 2px 12px no-repeat,
+    var(--t-panel) !important;
+}
+body.theme-green #contact_1::after { content: "CH-A · GMS-STD"; }
+body.theme-green #contact_2::after { content: "CH-B · GMS-STD"; }
+body.theme-green #terminal-background::after { content: "ЭФИР · ОТКРЫТЫЕ КАНАЛЫ СОЮЗА"; }
+body.theme-green #text-con::after { content: "GMS · ГАРАНТИРОВАННОЕ КАЧЕСТВО · УНИВЕРСАЛЬНАЯ ЛИЦЕНЗИЯ"; left: 24px; right: auto; }
+
+body.theme-green #receiver-box {
+  background:
+    repeating-linear-gradient(90deg, rgba(228, 230, 233, 0.22) 0 1px, transparent 1px 10px) left bottom / 100% 6px no-repeat,
+    repeating-linear-gradient(90deg, rgba(228, 230, 233, 0.35) 0 1px, transparent 1px 50px) left bottom / 100% 10px no-repeat,
+    var(--t-panel-2) !important;
+}
+body.theme-green #codec_banner h2 { color: #fff !important; }
+body.theme-green .banner h2 { font-weight: 700 !important; }
+body.theme-green #text { font-size: 15px !important; }
+/* Фоновый «машинный код» GMS: едва заметный и под панелями, а не поверх них. */
+body.theme-green #assembly-code-overlay { z-index: 1 !important; }
+body.theme-green #mCodec { z-index: 3; }
+body.theme-green .assembly-line-cursor { background-color: rgba(219, 26, 45, 0.25) !important; color: transparent !important; }
+body.theme-green :is(.assembly-line, .assembly-line-text) {
+  color: rgba(228, 230, 233, 0.07) !important;
+  text-shadow: none !important;
+  border-color: transparent !important;
+}
+
+/* =====================================================================
+   IPS-N — «Твой друг в недружелюбном море»
+   ===================================================================== */
+body.theme-yellow .bg-grid {
+  display: block !important;
+  background-color: var(--t-bg) !important;
+  background-image:
+    radial-gradient(circle at 50% 42%, transparent 0 260px, rgba(28, 154, 232, 0.07) 261px 262px, transparent 263px 420px, rgba(28, 154, 232, 0.05) 421px 422px, transparent 423px 600px, rgba(28, 154, 232, 0.035) 601px 602px, transparent 603px),
+    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(12, 77, 153, 0.35), transparent 70%),
+    linear-gradient(rgba(28, 154, 232, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 154, 232, 0.05) 1px, transparent 1px) !important;
+  background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px !important;
+}
+
+/* Корпусная плита: срезанный угол-маркер и заклёпочный ряд по верхней кромке. */
+body.theme-yellow :is(#contact_1, #contact_2, #main-receiver, #text-con, #terminal-background, .modal-content, #music-popup) {
+  background:
+    linear-gradient(225deg, var(--t-accent) 0 11px, transparent 11px) top right / 26px 26px no-repeat,
+    linear-gradient(45deg, var(--t-accent-deep) 0 11px, transparent 11px) bottom left / 26px 26px no-repeat,
+    radial-gradient(circle, rgba(28, 154, 232, 0.55) 0 1.3px, transparent 1.6px) 14px 6px / 18px 6px repeat-x,
+    linear-gradient(180deg, rgba(28, 154, 232, 0.07), transparent 40%),
+    var(--t-panel) !important;
+}
+body.theme-yellow #contact_1::after { content: "КОНВОЙ · ПОРТ"; }
+body.theme-yellow #contact_2::after { content: "КОНВОЙ · ШТИРБОРТ"; }
+body.theme-yellow #terminal-background::after { content: "ЭФИР КОНВОЯ · ОТКРЫТЫЙ ДИАПАЗОН"; }
+body.theme-yellow #text-con::after { content: "IPS-NORTHSTAR · ТВОЙ ДРУГ В НЕДРУЖЕЛЮБНОМ МОРЕ"; left: 30px; right: auto; }
+
+/* Шкала пеленга над индикатором сигнала. */
+body.theme-yellow #receiver-box {
+  background:
+    repeating-linear-gradient(90deg, rgba(143, 211, 255, 0.4) 0 1px, transparent 1px 9px) left top / 100% 5px no-repeat,
+    repeating-linear-gradient(90deg, rgba(143, 211, 255, 0.7) 0 1px, transparent 1px 45px) left top / 100% 9px no-repeat,
+    radial-gradient(ellipse at 80% 100%, rgba(28, 154, 232, 0.18), transparent 60%),
+    var(--t-panel-2) !important;
+}
+body.theme-yellow :is(.freq, #freq, #freq_2) { color: #8fd3ff !important; }
+body.theme-yellow #codec_banner h2 { background: var(--t-accent-deep); color: #e6f4ff !important; box-shadow: inset 0 -2px 0 var(--t-accent) !important; }
+body.theme-yellow #text { font-size: 15px !important; }
+body.theme-yellow :is(#start-transmission, #repeat-transmission) { border-color: var(--t-signal) !important; color: var(--t-signal) !important; }
+body.theme-yellow :is(#start-transmission, #repeat-transmission):hover { background: var(--t-signal) !important; border-color: var(--t-signal) !important; color: #0a0f16 !important; }
+
+/* =====================================================================
+   КТБ — благородная тема (Кавалер, состоящий в Доме)
+   ===================================================================== */
+body.theme-ktb .bg-grid {
+  display: block !important;
+  background-color: var(--t-bg) !important;
+  background-image:
+    radial-gradient(ellipse 80% 45% at 50% -8%, rgba(110, 31, 37, 0.55), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 50% 112%, rgba(58, 16, 20, 0.7), transparent 70%),
+    repeating-linear-gradient(60deg, rgba(198, 160, 82, 0.028) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(-60deg, rgba(198, 160, 82, 0.028) 0 1px, transparent 1px 46px) !important;
+  background-size: auto !important;
+}
+
+/* Гравированная табличка: двойной кант, угловые заклёпки, голографическая позолота. */
+body.theme-ktb:not(.ktb-ignoble) :is(#contact_1, #contact_2, #main-receiver, #text-con, #terminal-background, .modal-content, #music-popup) {
+  background:
+    linear-gradient(var(--t-accent), var(--t-accent)) 7px 7px / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 7px) 7px / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 7px calc(100% - 7px) / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 7px) calc(100% - 7px) / 4px 4px no-repeat,
+    linear-gradient(180deg, rgba(110, 31, 37, 0.32), transparent 42%),
+    var(--t-panel) !important;
+  box-shadow:
+    inset 0 0 0 4px rgba(22, 12, 12, 0.94),
+    inset 0 0 0 5px rgba(198, 160, 82, 0.3),
+    0 20px 60px rgba(0, 0, 0, 0.55) !important;
+}
+
+/* Ромб-печать по центру верхней кромки. */
+body.theme-ktb:not(.ktb-ignoble) :is(#contact_1, #contact_2, #text-con, #terminal-background)::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  z-index: 4;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--t-bg);
+  border: 1px solid var(--t-accent);
+  pointer-events: none;
+}
+
+/* Голографический блик по позолоте текстового поля. */
+body.theme-ktb:not(.ktb-ignoble) #text-con {
+  background:
+    linear-gradient(90deg, transparent, rgba(233, 215, 165, 0.55), transparent) -40% 0 / 40% 1px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 7px 7px / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 7px) 7px / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 7px calc(100% - 7px) / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 7px) calc(100% - 7px) / 4px 4px no-repeat,
+    linear-gradient(180deg, rgba(110, 31, 37, 0.32), transparent 42%),
+    var(--t-panel) !important;
+  animation: ktbGildSweep 9s ease-in-out infinite;
+}
+
+@keyframes ktbGildSweep {
+  0%, 55% { background-position: -40% 0, 7px 7px, calc(100% - 7px) 7px, 7px calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), 0 0, 0 0; }
+  100% { background-position: 140% 0, 7px 7px, calc(100% - 7px) 7px, 7px calc(100% - 7px), calc(100% - 7px) calc(100% - 7px), 0 0, 0 0; }
+}
+
+body.theme-ktb #contact_1::after { content: "ФКМ · ORACULUM"; }
+body.theme-ktb #contact_2::after { content: "ЛИВРЕЯ · ПЕЧАТЬ"; }
+body.theme-ktb #terminal-background::after { content: "ГОЛОСА ЭФИРА · ВНЕ ЦЕРЕМОНИАЛА"; }
+body.theme-ktb #text-con::after { content: "ТРОН КАРРАКИСА · ЦЕРЕМОНИАЛ АУДИЕНЦИЙ"; left: 14px; right: auto; }
+
+/* Приёмник — та же гравированная табличка, что и панели: тонкий кант, угловые
+   заклёпки и сдержанная шкала по нижней кромке (как шкалы GMS и IPS-N). */
+body.theme-ktb:not(.ktb-ignoble) #receiver-box {
+  border: 0 !important;
+  background:
+    linear-gradient(var(--t-accent), var(--t-accent)) 5px 5px / 3px 3px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 5px) 5px / 3px 3px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 5px calc(100% - 5px) / 3px 3px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 5px) calc(100% - 5px) / 3px 3px no-repeat,
+    repeating-linear-gradient(90deg, rgba(198, 160, 82, 0.28) 0 1px, transparent 1px 10px) 12px calc(100% - 12px) / calc(100% - 24px) 4px no-repeat,
+    repeating-linear-gradient(90deg, rgba(198, 160, 82, 0.5) 0 1px, transparent 1px 50px) 12px calc(100% - 12px) / calc(100% - 24px) 8px no-repeat,
+    var(--t-panel-2) !important;
+  box-shadow: inset 0 0 0 1px rgba(198, 160, 82, 0.32) !important;
+}
+
+body.theme-ktb:not(.ktb-ignoble) #codec_banner h2 {
+  background: linear-gradient(180deg, #8a2a31, #6e1f25);
+  color: var(--t-accent-light) !important;
+  box-shadow: inset 0 0 0 1px var(--t-accent), inset 0 0 0 3px #6e1f25, inset 0 0 0 4px rgba(198, 160, 82, 0.45) !important;
+}
+body.theme-ktb:not(.ktb-ignoble) .banner h2 { font-variant: small-caps; font-weight: 600 !important; font-size: 19px !important; letter-spacing: 0.16em !important; }
+body.theme-ktb:not(.ktb-ignoble) :is(.freq, #freq, #freq_2) { color: var(--t-accent-light) !important; font-weight: 600; font-variant-numeric: oldstyle-nums; }
+body.theme-ktb:not(.ktb-ignoble) #c-char { font-size: 20px !important; font-weight: 600; font-variant: small-caps; text-transform: none; letter-spacing: 0.08em; }
+body.theme-ktb:not(.ktb-ignoble) #text { font-size: clamp(17px, 1.35vw, 21px) !important; }
+body.theme-ktb:not(.ktb-ignoble) .choice-button::before { content: counter(choice, upper-roman) "."; font: 600 17px var(--t-font-label); }
+body.theme-ktb:not(.ktb-ignoble) .choice-button { font-size: 16px !important; }
+body.theme-ktb:not(.ktb-ignoble) :is(#start-transmission, #repeat-transmission) {
+  border-color: var(--t-accent) !important;
+  background: linear-gradient(180deg, #4a1419, #2a0b0e) !important;
+  color: var(--t-accent-light) !important;
+  font-family: var(--t-font-label) !important;
+  font-variant: small-caps;
+  font-size: 16px !important;
+  letter-spacing: 0.12em;
+}
+body.theme-ktb:not(.ktb-ignoble) :is(#start-transmission, #repeat-transmission) :is(.start-link, .repeat-link) { font-family: var(--t-font-label) !important; text-transform: none; }
+
+/* ---------- Герб над пультом связи ---------- */
+.ktb-crest { display: none; }
+/* Герб стоит в потоке над пультом: центрирование #mCodec учитывает его высоту,
+   поэтому на невысоких экранах он не обрезается верхним краем. */
+body.theme-ktb .ktb-crest {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto 10px;
+  pointer-events: none;
+}
+.ktb-crest-sigil {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 50px;
+  color: #140c0b;
+  background: linear-gradient(180deg, var(--ktb-livery), color-mix(in srgb, var(--ktb-livery) 55%, #000));
+  clip-path: polygon(0 0, 100% 0, 100% 76%, 50% 100%, 0 76%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+.ktb-crest-label {
+  padding: 2px 12px;
+  border-top: 1px solid var(--t-line);
+  border-bottom: 1px solid var(--t-line);
+  color: var(--t-accent-light, var(--t-text));
+  font: 600 13px/1.3 var(--t-font-label);
+  letter-spacing: 0.18em;
+  font-variant: small-caps;
+  white-space: nowrap;
+}
+
+/* =====================================================================
+   КТБ — неблагородная тема (Лансер / изгнанник): канцелярия
+   ===================================================================== */
+body.theme-ktb.ktb-ignoble .bg-grid {
+  background-image:
+    linear-gradient(rgba(156, 150, 138, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(156, 150, 138, 0.04) 1px, transparent 1px) !important;
+  background-size: 32px 32px !important;
+}
+body.theme-ktb.ktb-ignoble :is(#contact_1, #contact_2, #main-receiver, #text-con, #terminal-background, .modal-content, #music-popup) {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(156, 150, 138, 0.045) 27px 28px),
+    var(--t-panel) !important;
+}
+body.theme-ktb.ktb-ignoble #contact_1::after { content: "ПРИЁМНАЯ · ОКНО 1"; }
+body.theme-ktb.ktb-ignoble #contact_2::after { content: "ПРИЁМНАЯ · ОКНО 2"; }
+body.theme-ktb.ktb-ignoble #terminal-background::after { content: "ОБЩИЙ ЭФИР · БЕЗ ПРЕЦЕДЕНТА"; }
+body.theme-ktb.ktb-ignoble #text-con::after { content: "РЕЕСТР ВНЕШНИХ ОБРАЩЕНИЙ · ОЖИДАЙТЕ В ПОРЯДКЕ ПРЕЦЕДЕНТА"; left: 14px; right: auto; }
+body.theme-ktb.ktb-ignoble #receiver-box {
+  background:
+    repeating-linear-gradient(90deg, rgba(156, 150, 138, 0.25) 0 1px, transparent 1px 10px) 12px calc(100% - 12px) / calc(100% - 24px) 4px no-repeat,
+    repeating-linear-gradient(90deg, rgba(156, 150, 138, 0.45) 0 1px, transparent 1px 50px) 12px calc(100% - 12px) / calc(100% - 24px) 8px no-repeat,
+    var(--t-panel-2) !important;
+}
+body.theme-ktb.ktb-ignoble #codec_banner h2 { background: #2c2b2a; color: var(--t-accent-light) !important; box-shadow: inset 0 0 0 1px var(--t-line) !important; }
+body.theme-ktb.ktb-ignoble .banner h2 { text-transform: uppercase; font-size: 13px !important; }
+body.theme-ktb.ktb-ignoble #c-char { font-size: 13px !important; }
+body.theme-ktb.ktb-ignoble #text { font-size: clamp(16px, 1.2vw, 19px) !important; }
+body.theme-ktb.ktb-ignoble :is(#start-transmission, #repeat-transmission) { font-family: var(--t-font-label) !important; letter-spacing: 0.1em; }
+
+body.theme-ktb.ktb-ignoble:not(.ktb-exile) .ktb-crest-sigil { --ktb-livery: #55524c; color: #d8d3c6; clip-path: none; width: 38px; height: 38px; }
+body.theme-ktb.ktb-ignoble .ktb-crest-label { font-variant: normal; text-transform: uppercase; font-size: 11px; letter-spacing: 0.2em; color: var(--t-dim); }
+/* Изгнанник: ливрея Дома сохраняется, но обесцвечена и перечёркнута. */
+body.theme-ktb.ktb-exile .ktb-crest-sigil { filter: grayscale(0.85) brightness(0.75); }
+body.theme-ktb.ktb-exile .ktb-crest-sigil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 45%, #b23a44 45% 55%, transparent 55%);
+}
+
+/* =====================================================================
+   ЗАСТАВКА ЗАПУСКА (#alien-boot-overlay)
+   ===================================================================== */
+#alien-boot-overlay[data-theme='green'] { background: #08090b !important; }
+#alien-boot-overlay[data-theme='yellow'] {
+  background:
+    radial-gradient(circle at 50% 45%, transparent 0 200px, rgba(28, 154, 232, 0.08) 201px 202px, transparent 203px 360px, rgba(28, 154, 232, 0.05) 361px 362px, transparent 363px),
+    #040a12 !important;
+}
+#alien-boot-overlay[data-theme='ktb'] {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(110, 31, 37, 0.45), transparent 60%),
+    #0c0908 !important;
+}
+#alien-boot-overlay[data-theme='ktb'][data-estate='ignoble'],
+#alien-boot-overlay[data-theme='ktb'][data-estate='exile'] { background: #0b0c0d !important; }
+
+#alien-boot-overlay[data-theme='green'] { --b-accent: #db1a2d; --b-text: #e4e6e9; --b-dim: #8a8f97; }
+#alien-boot-overlay[data-theme='yellow'] { --b-accent: #1c9ae8; --b-text: #cfe8fb; --b-dim: #6f8aa3; }
+#alien-boot-overlay[data-theme='ktb'] { --b-accent: #c6a052; --b-text: #e9d7a5; --b-dim: #b3a588; }
+#alien-boot-overlay[data-theme='ktb'][data-estate='ignoble'],
+#alien-boot-overlay[data-theme='ktb'][data-estate='exile'] { --b-accent: #9c968a; --b-text: #d9d5cb; --b-dim: #8f8a80; }
+
+#alien-boot-overlay[data-theme] #alien-boot-text {
+  color: var(--b-text) !important;
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  text-shadow: none !important;
+}
+#alien-boot-overlay[data-theme] #alien-system-id { color: var(--b-dim) !important; }
+#alien-boot-overlay[data-theme] .alien-corp-title { color: var(--b-accent) !important; text-shadow: none !important; }
+#alien-boot-overlay[data-theme] .alien-corp-subtitle,
+#alien-boot-overlay[data-theme] .alien-progress-label { color: var(--b-dim) !important; text-shadow: none !important; }
+#alien-boot-overlay[data-theme] .alien-corp-line { background: linear-gradient(90deg, transparent, var(--b-accent), transparent) !important; }
+#alien-boot-overlay[data-theme] .alien-corner { border-color: var(--b-accent) !important; }
+#alien-boot-overlay[data-theme] .alien-progress-bar-bg { border-color: var(--b-dim) !important; background: rgba(255, 255, 255, 0.04) !important; }
+#alien-boot-overlay[data-theme] .alien-progress-bar-fill { background: var(--b-accent) !important; box-shadow: none !important; }
+#alien-boot-overlay[data-theme] .alien-progress-bar-fill::after { background: linear-gradient(90deg, transparent, var(--b-text)) !important; }
+#alien-boot-overlay[data-theme] #alien-crt-circle {
+  border-color: var(--b-accent) !important;
+  box-shadow: none !important;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--b-accent) 5%, transparent), transparent 70%) !important;
+}
+
+/* Полоса развёртки и вспышка помех — в цвете темы, а не в зелёном/оранжевом базы. */
+#alien-boot-overlay[data-theme] #alien-scanline-sweep {
+  background: linear-gradient(180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--b-accent) 15%, transparent) 30%,
+    color-mix(in srgb, var(--b-accent) 60%, transparent) 50%,
+    color-mix(in srgb, var(--b-accent) 15%, transparent) 70%,
+    transparent 100%) !important;
+  box-shadow: none !important;
+}
+#alien-boot-overlay[data-theme] #alien-glitch-overlay.active { animation-name: tGlitchBurst !important; }
+
+@keyframes tGlitchBurst {
+  0% { opacity: 0; }
+  10% { opacity: 1; background: repeating-linear-gradient(0deg, transparent 0 2px, color-mix(in srgb, var(--b-accent) 7%, transparent) 2px 4px); }
+  25% { opacity: 0.4; transform: translateX(-3px); }
+  45% { opacity: 1; transform: translateX(2px); }
+  70% { opacity: 0.25; transform: none; }
+  100% { opacity: 0; transform: none; }
+}
+#alien-boot-overlay[data-theme] #alien-boot-greeting { color: var(--b-text) !important; border-color: var(--b-dim) !important; }
+#alien-boot-overlay[data-theme] .alien-boot-confirm {
+  border: 1px solid var(--b-accent) !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+  background: transparent !important;
+  color: var(--b-text) !important;
+}
+#alien-boot-overlay[data-theme] .alien-boot-confirm:hover,
+#alien-boot-overlay[data-theme] .alien-boot-confirm:focus-visible { background: var(--b-accent) !important; color: #0b0b0b !important; outline: none; }
+
+#alien-boot-overlay[data-theme='green'] .alien-corp-title { font-family: 'JetBrains Mono', monospace !important; font-weight: 700; letter-spacing: 0.3em; }
+#alien-boot-overlay[data-theme='yellow'] .alien-corp-title { letter-spacing: 0.22em; }
+#alien-boot-overlay[data-theme='ktb'] .alien-corp-title { font-family: 'Cormorant', Georgia, serif !important; font-variant: small-caps; }
+#alien-boot-overlay[data-theme='ktb'][data-estate='ignoble'] .alien-corp-title,
+#alien-boot-overlay[data-theme='ktb'][data-estate='exile'] .alien-corp-title { font-family: 'JetBrains Mono', monospace !important; font-variant: normal; font-size: clamp(30px, 5vw, 56px) !important; letter-spacing: 0.24em; }
+#alien-boot-overlay[data-theme='ktb'] #alien-boot-greeting { font-family: 'Alegreya', Georgia, serif; }
+
+/* =====================================================================
+   КТБ: ГЕРОЛЬД И ЦЕРЕМОНИАЛЬНЫЕ ОШИБКИ (scripts/ktb-drama.js)
+   ===================================================================== */
+.ktb-drama-overlay { background: rgba(8, 4, 4, 0.94) !important; }
+.ktb-drama-overlay::before { background: none !important; }
+.ktb-drama-panel {
+  border: 1px solid #c6a052 !important;
+  outline: none !important;
+  clip-path: none !important;
+  background: linear-gradient(180deg, rgba(110, 31, 37, 0.3), transparent 45%), #160d0d !important;
+  box-shadow: inset 0 0 0 6px #160d0d, inset 0 0 0 7px rgba(198, 160, 82, 0.4), 0 30px 90px rgba(0, 0, 0, 0.6) !important;
+}
+.ktb-drama-panel h2 { color: #e9d7a5 !important; font-variant: small-caps; text-shadow: none !important; }
+.ktb-drama-eyebrow { color: #c6a052 !important; }
+.ktb-drama-action { border-color: #c6a052 !important; background: #2a0b0e !important; color: #e9d7a5 !important; }
+.ktb-drama-action:hover, .ktb-drama-action:focus-visible { background: #c6a052 !important; color: #24090c !important; }
+
+/* Герольд — торжественный вызов, а не системная тревога. */
+.ktb-drama-herald { background: radial-gradient(ellipse at center, rgba(110, 31, 37, 0.5), rgba(8, 3, 3, 0.97) 70%) !important; }
+.ktb-drama-herald .ktb-drama-panel {
+  border-color: #c6a052 !important;
+  background: linear-gradient(180deg, #4a1419, #24090c 62%) !important;
+  box-shadow: inset 0 0 0 6px #2a0b0e, inset 0 0 0 7px rgba(198, 160, 82, 0.45), 0 30px 90px rgba(0, 0, 0, 0.6) !important;
+}
+.ktb-drama-herald .ktb-drama-panel h2 { color: #e9d7a5 !important; }
+.ktb-drama-herald .ktb-drama-eyebrow { color: #c6a052 !important; }
+.ktb-drama-herald .ktb-drama-action { border-color: #c6a052 !important; background: #2a0b0e !important; color: #e9d7a5 !important; }
+
+/* Сбой НЧЛ — единственный по-настоящему тревожный красный. */
+.ktb-drama-red .ktb-drama-panel { border-color: #b51f2e !important; background: #120405 !important; box-shadow: 0 0 90px rgba(181, 31, 46, 0.3) !important; }
+.ktb-drama-red .ktb-drama-panel h2 { color: #ef4758 !important; }
+.ktb-drama-red .ktb-drama-eyebrow { color: #d44a56 !important; }
+.ktb-drama-red .ktb-drama-action { border-color: #b51f2e !important; background: #20070a !important; color: #ff8a95 !important; }
+
+/* Неблагородным ошибки выдаёт канцелярия. */
+body.ktb-ignoble .ktb-drama-gold .ktb-drama-panel {
+  border-color: #6b675f !important;
+  background: #141517 !important;
+  box-shadow: inset 0 0 0 6px #141517, inset 0 0 0 7px rgba(156, 150, 138, 0.3), 0 30px 90px rgba(0, 0, 0, 0.6) !important;
+}
+body.ktb-ignoble .ktb-drama-gold .ktb-drama-panel h2 { color: #d8d3c6 !important; font-family: 'JetBrains Mono', monospace !important; font-variant: normal; font-size: clamp(26px, 4vw, 40px) !important; }
+body.ktb-ignoble .ktb-drama-gold .ktb-drama-eyebrow { color: #8f8a80 !important; }
+body.ktb-ignoble .ktb-drama-gold .ktb-drama-action { border-color: #9c968a !important; background: #1d1e21 !important; color: #d8d3c6 !important; }
+
+@media (max-width: 870px) {
+  body.theme-ktb .ktb-crest { margin-bottom: 6px; }
+  .ktb-crest-label { font-size: 11px; }
+  body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#contact_1, #contact_2)::after { display: none; }
+  body:is(.theme-green, .theme-yellow, .theme-ktb) .banner h2 { font-size: 11px !important; letter-spacing: 0.1em !important; padding: 3px 6px !important; }
+  body:is(.theme-green, .theme-yellow, .theme-ktb) :is(#text-con, #terminal-background)::after { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-ktb #text-con { animation: none !important; }
+}
+
+/* IPS-N: крестик не заходит на угловой маркер корпусной плиты. */
+body.theme-yellow .modal-close { right: 24px !important; }
+
+/* Фокус кнопки в окнах герольда и ошибок — в цвете самой кнопки (база давала старое золото). */
+.ktb-drama-action:focus-visible { outline: 2px solid currentColor !important; outline-offset: 4px; }
+
+/* =====================================================================
+   ПОЭТАПНОЕ ПОЯВЛЕНИЕ ИНТЕРФЕЙСА ВО ВРЕМЯ ЗАГРУЗКИ (scripts/boot.js)
+   body.boot-staged — идёт показ: элементы без .ui-in скрыты и не кликабельны.
+   .ui-in — элемент появляется анимацией своей темы. Без transform: у части
+   элементов он уже занят позиционированием, поэтому сдвиг — через translate.
+   ===================================================================== */
+body.boot-staged #mCodec { opacity: 1 !important; }
+body.boot-staged :is(#ktb-crest, #contact_1, #main-receiver, #contact_2, #text-con, #terminal-background, #header-buttons, #music-float-btn, #admin-float-btn) {
+  pointer-events: none !important;
+}
+body.boot-staged :is(#ktb-crest, #contact_1, #main-receiver, #contact_2, #text-con, #terminal-background, #header-buttons, #music-float-btn, #admin-float-btn):not(.ui-in) {
+  opacity: 0 !important;
+}
+
+/* Экран загрузки на этапе показа: лого и рамки гаснут, остаётся только шкала у нижнего края. */
+#alien-boot-overlay.ui-stage.ui-stage.ui-stage {
+  background: transparent !important;
+  transition: background 0.6s ease-out;
+}
+#alien-boot-overlay.ui-stage > :not(.alien-progress-container) {
+  opacity: 0 !important;
+  transition: opacity 0.4s ease-out;
+}
+#alien-boot-overlay.ui-stage .alien-progress-container { bottom: 14px; }
+
+.ui-in { animation: tUiFade 0.6s ease-out both; }
+
+/* GMS: жёсткая развёртка слева направо с промаргиванием. */
+body.theme-green .ui-in { animation: tUiGms 0.55s linear both; }
+/* IPS-N: «всплытие» из глубины. */
+body.theme-yellow .ui-in { animation: tUiIpsn 0.75s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* КТБ: раскрытие от центра с бликом позолоты. */
+body.theme-ktb .ui-in { animation: tUiKtb 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+body.theme-ktb:not(.ktb-ignoble) #text-con.ui-in { animation: tUiKtb 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both, ktbGildSweep 9s ease-in-out 1s infinite; }
+/* Канцелярия: короткий «штамп». */
+body.theme-ktb.ktb-ignoble .ui-in { animation: tUiStamp 0.45s steps(1, end) both; }
+
+@keyframes tUiFade { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes tUiGms {
+  0% { opacity: 0; clip-path: inset(0 100% 0 0); }
+  35% { opacity: 1; clip-path: inset(0 45% 0 0); filter: brightness(1.8); }
+  50% { opacity: 0.35; }
+  62% { opacity: 1; clip-path: inset(0 0 0 0); filter: brightness(1.3); }
+  100% { opacity: 1; clip-path: inset(-40px); filter: none; }
+}
+
+@keyframes tUiIpsn {
+  0% { opacity: 0; translate: 0 18px; filter: blur(3px) brightness(1.4); }
+  60% { opacity: 1; translate: 0 -2px; filter: blur(0) brightness(1.1); }
+  100% { opacity: 1; translate: 0 0; filter: none; }
+}
+
+@keyframes tUiKtb {
+  0% { opacity: 0; clip-path: inset(50% 0 50% 0); filter: brightness(1.9) sepia(0.5); }
+  55% { opacity: 1; clip-path: inset(0 0 0 0); filter: brightness(1.35) sepia(0.2); }
+  100% { opacity: 1; clip-path: inset(-40px); filter: none; }
+}
+
+@keyframes tUiStamp {
+  0% { opacity: 0; }
+  25% { opacity: 0.55; translate: 0 -3px; }
+  45% { opacity: 0.15; }
+  65% { opacity: 1; translate: 0 0; }
+  100% { opacity: 1; translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-in, body:is(.theme-green, .theme-yellow, .theme-ktb) .ui-in { animation: tUiFade 0.2s ease-out both !important; }
+}
+
+/* Текст строки журнала — строчный элемент, чтобы длинные реплики переносились, а не вылезали. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) .terminal-message-text { display: inline; }
+
+/* Невысокие экраны: компактные поля журнала, чтобы в рамку помещалось хотя бы две-три строки. */
+@media (max-height: 760px) {
+  body:is(.theme-green, .theme-yellow, .theme-ktb) #terminal-background { padding: 8px 22px 14px !important; }
+}
+@media (max-height: 620px) {
+  #terminal-background { height: 72px; }
+}
+
+/* Телефон: подписи «СВЯЗЬ / ЗАПИСЬ» не помещаются в узкую центральную колонку. */
+@media (max-width: 550px) {
+  body:is(.theme-green, .theme-yellow, .theme-ktb) #main-receiver .banner { display: none !important; }
+}
+
+/* Кнопка админ-панели (создаётся в index.html только для админа): подпись в языке темы. */
+body:is(.theme-green, .theme-yellow, .theme-ktb) #admin-float-btn { font-family: var(--t-font-label) !important; }
+#admin-float-btn::after { content: "ADMIN"; }
+body.theme-yellow #admin-float-btn::after { content: "АДМИН"; }
+body.theme-ktb #admin-float-btn::after { content: "Канцелярия"; }
+body.theme-ktb #admin-float-btn { font-variant: small-caps; text-transform: none; font-size: 15px; letter-spacing: 0.08em; }
+
+/* ==========================================================================
+   МАСШТАБ ИНТЕРФЕЙСА (scripts/ui-scale.js)
+   --ui-scale = авто по разрешению × множитель пользователя, с защитой от переполнения.
+   zoom, в отличие от transform, пересчитывает вёрстку: клики и переносы остаются верными.
+   Проценты (max-width: 90%, top: 50%) не умножаются, поэтому пульт не шире окна.
+   ========================================================================== */
+:root { --ui-scale: 1; }
+
+#mCodec,
+#header-buttons,
+#music-float-btn,
+#music-popup,
+#admin-float-btn,
+.modal-content,
+#alien-system-id,
+#alien-boot-text,
+#alien-corp-banner,
+.alien-progress-container,
+.ktb-drama-panel {
+    zoom: var(--ui-scale);
+}
+
+/* Ползунок масштаба в окне «Настройки». */
+.ui-scale-control {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--t-line-soft, rgba(3, 251, 141, 0.25));
+    color: var(--t-text, #03FB8D);
+    font-family: var(--t-font-label, 'Orbitron', sans-serif);
+    min-width: 0;
+}
+.ui-scale-label { display: block; margin-bottom: 8px; color: var(--t-accent, #03FB8D); }
+.ui-scale-row { display: flex; align-items: center; gap: 10px; }
+.ui-scale-range { flex: 1 1 auto; min-width: 120px; accent-color: var(--t-accent, #03FB8D); }
+.ui-scale-value { min-width: 4ch; text-align: right; font-family: var(--t-font-num, monospace); font-variant-numeric: tabular-nums; }
+.ui-scale-reset {
+    padding: 4px 10px;
+    border: 1px solid var(--t-line, #03FB8D);
+    background: transparent;
+    color: var(--t-text, #03FB8D);
+    font: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+.ui-scale-reset:hover:not(:disabled),
+.ui-scale-reset:focus-visible { border-color: var(--t-accent, #03FB8D); color: var(--t-accent, #03FB8D); outline: none; }
+.ui-scale-reset:disabled { opacity: 0.4; cursor: default; }
+.ui-scale-note { display: block; margin-top: 6px; color: var(--t-dim, #8a8f97); font-size: 11px; line-height: 1.4; }
+body.theme-ktb .ui-scale-label { font-variant: small-caps; }

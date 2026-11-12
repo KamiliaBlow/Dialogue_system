@@ -135,6 +135,7 @@ class DialogueTreeVisualizer {
                 sortOrder: conv.sort_order || 0,
                 hasChoice: choices.length > 0,
                 choices: choices,
+                variantAudiences: conv.variant_audiences || [],
                 x: 0,
                 y: 0
             };
@@ -359,6 +360,7 @@ class DialogueTreeVisualizer {
             <div class="tree-node-header">
                 <span class="tree-node-speaker">${this.escapeHtml(nodeData.speaker)}</span>
                 ${nodeData.hasChoice ? '<span class="tree-node-badge choice-badge">Выбор</span>' : ''}
+                ${nodeData.variantAudiences.length ? `<span class="tree-node-badge variant-badge" title="Есть вариант для: ${nodeData.variantAudiences.map(a => a === 'cavalier' ? 'Кавалера' : 'Лансера').join(', ')}">⇄ ${nodeData.variantAudiences.map(a => a === 'cavalier' ? 'К' : 'Л').join('')}</span>` : ''}
             </div>
             <div class="tree-node-text">${this.escapeHtml(textPreview)}</div>
         `;

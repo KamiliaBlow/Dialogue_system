@@ -1,4 +1,6 @@
 import debug, { debugGroup, debugGroupEnd } from './debug.js';
+import { readPortrait, applyPortrait, watchFrame } from './portrait-frame.js';
+import { prepareDialogue } from './pilot-tokens.js';
 
 let games = null;
 let API_URL = null;
@@ -123,6 +125,8 @@ async function loadActiveProfile() {
         if (!response.ok) return;
         const data = await response.json();
         state.pilotProfile = window.BootScenarios.normalizeProfile(data.profile);
+        // Вид темы КТБ: благородный для Кавалера в Доме, неблагородный для Лансера и изгнанника.
+        window.KtbHouses?.apply(state.pilotProfile);
     } catch (e) {
         console.warn('Failed to load active pilot profile:', e);
     }
@@ -157,7 +161,7 @@ async function loadDialogueFromDB(frequency) {
         const data = await response.json();
         debug(`Dialogue ${frequency} loaded from DB`);
         
-        const dialogue = {
+        let dialogue = {
             characters: data.characters || [],
             allowedUsers: data.allowedUsers || [-1],
             conversations: data.conversations || [],
@@ -173,6 +177,11 @@ async function loadDialogueFromDB(frequency) {
             }
         });
         
+        // Реплики под активного пилота: вариант по сословию (Кавалер / Лансер) и метки
+        // <Name>, <FullName>, <Title>, <House> (scripts/pilot-tokens.js). Делается до печати
+        // по буквам и до предзагрузки, поэтому длина печати и озвучка — от итоговой реплики.
+        dialogue = prepareDialogue(dialogue, state.pilotProfile);
+
         dialoguesCache[frequency] = dialogue;
         debug(`Processed dialogue for ${frequency}:`, dialogue);
         
@@ -1442,25 +1451,15 @@ function applyPortraitTransforms(element, speakerIndex) {
         ? state.currentDialogue.characters[speakerIndex] 
         : null;
     
-    if (char) {
-        const scale = char.portraitScale || 1.0;
-        const posX = char.portraitX || 0;
-        const posY = char.portraitY || 0;
-        const mirror = char.portraitMirror || false;
-        
-        element.css({
-            'background-size': `${scale * 100}%`,
-            'background-position': `${posX}px ${posY}px`,
-            'transform': mirror ? 'scaleX(-1)' : 'none'
-        });
-    } else {
-        element.css({
-            'background-size': '',
-            'background-position': '',
-            'transform': ''
-        });
-    }
+    // Формула общая со студией (scripts/portrait-frame.js): смещение в долях ширины рамки,
+    // поэтому портрет выглядит одинаково при любом разрешении и масштабе интерфейса.
+    applyPortrait(element[0], char ? readPortrait(char) : null);
 }
+
+// Рамки меняют размер (медиазапросы, поворот экрана) — смещение пересчитывается.
+document.addEventListener('DOMContentLoaded', () => {
+    ['char-1', 'char-2'].forEach(id => watchFrame(document.getElementById(id)));
+});
 
 function updateCharacterDisplay(speakerIndex, image) {
     const speakerWindow = getCharacterWindow(speakerIndex);
@@ -1672,7 +1671,8 @@ function handleChoiceSelection(choiceId, selectedOption) {
 	debug(`Обновлены локальные выборы:`, state.userChoices[currentFrequency]);
 
 	try {
-		saveUserChoice(currentFrequency, choiceId, selectedOption.id, selectedOption.text, selectedOption.relationNpcName, selectedOption.relationEffect)
+		// В статистику — исходный текст варианта (с метками), а не подставленное имя пилота.
+		saveUserChoice(currentFrequency, choiceId, selectedOption.id, selectedOption.rawText ?? selectedOption.text, selectedOption.relationNpcName, selectedOption.relationEffect)
 			.catch(error => {
 				console.error('Ошибка при сохранении выбора на сервере:', error);
 			});
@@ -2547,10 +2547,10 @@ function barSignal() {
     var dBar = true;
 
     function animateBars() {
-        var isYellowTheme = document.body.classList.contains('theme-yellow');
-        var isKtbTheme = document.body.classList.contains('theme-ktb');
-        var activeColor = isKtbTheme ? '#d4af37' : isYellowTheme ? '#ff9500' : '#03FB8D';
-        var inactiveColor = isKtbTheme ? '#4a3b19' : isYellowTheme ? '#4a2800' : '#397975';
+        // Цвета полос задаёт активная тема (styles/themes.css: --t-bar-on / --t-bar-off).
+        var themeStyle = getComputedStyle(document.body);
+        var activeColor = themeStyle.getPropertyValue('--t-bar-on').trim() || '#db1a2d';
+        var inactiveColor = themeStyle.getPropertyValue('--t-bar-off').trim() || '#26282d';
         
         if (dBar) {
             signalCount--;
@@ -3461,6 +3461,8 @@ $(document).ready(function() {
         bootRow.append(bootLabel).append(bootToggle);
 
         modalContent.append(closeBtn).append(title).append(settingRow).append(bootRow);
+        // Масштаб интерфейса (scripts/ui-scale.js): хранится на устройстве, меняется сразу.
+        if (window.UiScale) window.UiScale.mountControl(modalContent[0]);
         modal.append(modalContent);
         $('body').append(modal);
 

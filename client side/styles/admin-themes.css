@@ -1,0 +1,341 @@
+/* =====================================================================
+   ТЕМЫ АДМИН-СТРАНИЦ: панель администратора, редактор диалогов, каталог.
+   Подключается после admin-styles.css (каркас, редактор и дерево диалога)
+   и повторяет язык тем терминала (styles/themes.css): те же токены, шрифты
+   и оформление панелей.
+   green = GMS (по умолчанию), yellow = IPS-N, ktb = КТБ.
+   ===================================================================== */
+
+@font-face { font-family: 'Cormorant'; src: url('../assets/fonts/Cormorant-Variable.ttf') format('truetype'); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: 'Alegreya'; src: url('../assets/fonts/Alegreya-Variable.ttf') format('truetype'); font-weight: 400 800; font-display: swap; }
+@font-face { font-family: 'JetBrains Mono'; src: url('../assets/fonts/JetBrainsMono-Variable.ttf') format('truetype'); font-weight: 100 800; font-display: swap; }
+
+/* ---------- Токены ---------- */
+:root,
+body.theme-green {
+  --t-bg: #08090b;
+  --t-panel: rgba(15, 16, 19, 0.94);
+  --t-panel-2: #121317;
+  --t-line: #393c43;
+  --t-line-soft: rgba(228, 230, 233, 0.09);
+  --t-accent: #db1a2d;
+  --t-accent-soft: rgba(219, 26, 45, 0.14);
+  --t-text: #e4e6e9;
+  --t-dim: #8a8f97;
+  --t-font-label: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-text: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-data: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+body.theme-yellow {
+  --t-bg: #040a12;
+  --t-panel: rgba(6, 17, 30, 0.92);
+  --t-panel-2: #081a2c;
+  --t-line: rgba(28, 154, 232, 0.42);
+  --t-line-soft: rgba(28, 154, 232, 0.14);
+  --t-accent: #1c9ae8;
+  --t-accent-deep: #0c4d99;
+  --t-accent-soft: rgba(28, 154, 232, 0.14);
+  --t-text: #d6e6f4;
+  --t-dim: #6f8aa3;
+  --t-font-label: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-text: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-data: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+body.theme-ktb {
+  --t-bg: #0c0908;
+  --t-panel: rgba(22, 12, 12, 0.94);
+  --t-panel-2: #1c1112;
+  --t-line: #7a6334;
+  --t-line-soft: rgba(198, 160, 82, 0.18);
+  --t-accent: #c6a052;
+  --t-accent-light: #e9d7a5;
+  --t-accent-deep: #6e1f25;
+  --t-accent-soft: rgba(110, 31, 37, 0.42);
+  --t-text: #ece2cb;
+  --t-dim: #b3a588;
+  --t-font-label: 'Cormorant', Georgia, serif;
+  --t-font-text: 'Alegreya', Georgia, serif;
+  --t-font-data: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* ---------- Фон страниц: как у терминала ---------- */
+body {
+  background-color: var(--t-bg) !important;
+  background-attachment: fixed !important;
+  color: var(--t-text);
+  font-family: var(--t-font-text);
+}
+
+body:not(.theme-yellow):not(.theme-ktb) {
+  background-image:
+    linear-gradient(rgba(228, 230, 233, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(228, 230, 233, 0.045) 1px, transparent 1px),
+    linear-gradient(rgba(228, 230, 233, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(228, 230, 233, 0.018) 1px, transparent 1px) !important;
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px !important;
+}
+
+body.theme-yellow {
+  background-image:
+    radial-gradient(circle at 50% 42%, transparent 0 260px, rgba(28, 154, 232, 0.07) 261px 262px, transparent 263px 420px, rgba(28, 154, 232, 0.05) 421px 422px, transparent 423px),
+    radial-gradient(ellipse 70% 50% at 50% 110%, rgba(12, 77, 153, 0.35), transparent 70%),
+    linear-gradient(rgba(28, 154, 232, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 154, 232, 0.05) 1px, transparent 1px) !important;
+  background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px !important;
+}
+
+body.theme-ktb {
+  background-image:
+    radial-gradient(ellipse 80% 45% at 50% -8%, rgba(110, 31, 37, 0.55), transparent 70%),
+    repeating-linear-gradient(60deg, rgba(198, 160, 82, 0.028) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(-60deg, rgba(198, 160, 82, 0.028) 0 1px, transparent 1px 46px) !important;
+  background-size: auto !important;
+}
+
+/* Фоновый «машинный код» админки: едва заметный во всех темах. */
+.background-code, .background-code .code-line { color: rgba(228, 230, 233, 0.05) !important; text-shadow: none !important; }
+body.theme-ktb .background-code { display: none !important; }
+
+/* ---------- Типографика ---------- */
+.admin-title,
+.admin-card-title,
+.section-title,
+.sidebar-header h3,
+.modal-title,
+.admin-tab,
+.sub-tab,
+.btn,
+.btn-small,
+.btn-secondary,
+.admin-logout,
+.form-label,
+.statistic-label,
+.catalog-card-name,
+.character-name,
+.tree-node-speaker,
+.npc-catalog-name {
+  font-family: var(--t-font-label) !important;
+}
+
+.form-input, .search-input, .form-textarea, select, textarea, input,
+.statistic-value, .dialogue-item-frequency, .user-table td, .pagination-button,
+.tree-node-badge, .status-badge, .choice-count, .choice-option-count, .choice-option-percent {
+  font-family: var(--t-font-data) !important;
+}
+
+.node-text, .tree-node-text, .choice-option-text, .dialogue-item-title, .form-help, .textarea-help, .no-data {
+  font-family: var(--t-font-text) !important;
+}
+
+.admin-title { color: var(--t-text) !important; font-size: 18px !important; letter-spacing: 0.14em; text-shadow: none !important; }
+.admin-title .sys { color: var(--t-accent); }
+.admin-card-title, .section-title, .sidebar-header h3, .modal-title { color: var(--t-accent) !important; letter-spacing: 0.14em; text-shadow: none !important; }
+
+body.theme-ktb :is(.admin-title, .admin-card-title, .section-title, .sidebar-header h3, .modal-title, .admin-tab, .catalog-card-name, .character-name) {
+  font-variant: small-caps;
+  font-weight: 600;
+  text-transform: none;
+}
+body.theme-ktb .admin-title { font-size: 22px; color: var(--t-accent-light) !important; }
+.statistic-icon { font-family: 'JetBrains Mono', 'Segoe UI Symbol', monospace !important; font-size: 26px; }
+body.theme-ktb :is(.admin-card-title, .section-title, .sidebar-header h3, .modal-title) { font-size: 20px; }
+body.theme-ktb .admin-tab { font-size: 16px; }
+
+/* ---------- Шапка ---------- */
+.admin-header { border-bottom: 1px solid var(--t-line) !important; box-shadow: 0 1px 0 var(--t-line-soft); }
+body.theme-green .admin-header { border-bottom: 3px solid var(--t-accent) !important; }
+body.theme-ktb .admin-header { border-bottom-color: var(--t-accent) !important; }
+
+/* ---------- Крупные панели: оформление темы ---------- */
+:is(.admin-card, .sidebar, .editor-main, .modal-content, .tree-context-menu) {
+  position: relative;
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  background-color: var(--t-panel) !important;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* GMS: красная полоса спецификации и регистрационные метки по нижним углам. */
+body:not(.theme-yellow):not(.theme-ktb) :is(.admin-card, .sidebar, .editor-main, .modal-content) {
+  background:
+    linear-gradient(var(--t-accent), var(--t-accent)) 0 0 / 100% 3px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 6px calc(100% - 6px) / 12px 2px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 6px calc(100% - 17px) / 2px 12px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 6px) calc(100% - 6px) / 12px 2px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 6px) calc(100% - 17px) / 2px 12px no-repeat,
+    var(--t-panel) !important;
+}
+
+/* IPS-N: корпусная плита — срезанные углы-маркеры и заклёпочный ряд. */
+body.theme-yellow :is(.admin-card, .sidebar, .editor-main, .modal-content) {
+  background:
+    linear-gradient(225deg, var(--t-accent) 0 11px, transparent 11px) top right / 26px 26px no-repeat,
+    linear-gradient(45deg, var(--t-accent-deep) 0 11px, transparent 11px) bottom left / 26px 26px no-repeat,
+    radial-gradient(circle, rgba(28, 154, 232, 0.55) 0 1.3px, transparent 1.6px) 14px 6px / 18px 6px repeat-x,
+    linear-gradient(180deg, rgba(28, 154, 232, 0.07), transparent 40%),
+    var(--t-panel) !important;
+}
+
+/* КТБ: гравированная табличка — двойной кант и угловые заклёпки. */
+body.theme-ktb :is(.admin-card, .sidebar, .editor-main, .modal-content) {
+  background:
+    linear-gradient(var(--t-accent), var(--t-accent)) 7px 7px / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 7px) 7px / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) 7px calc(100% - 7px) / 4px 4px no-repeat,
+    linear-gradient(var(--t-accent), var(--t-accent)) calc(100% - 7px) calc(100% - 7px) / 4px 4px no-repeat,
+    linear-gradient(180deg, rgba(110, 31, 37, 0.32), transparent 42%),
+    var(--t-panel) !important;
+  box-shadow: inset 0 0 0 4px rgba(22, 12, 12, 0.94), inset 0 0 0 5px rgba(198, 160, 82, 0.3), 0 20px 60px rgba(0, 0, 0, 0.55) !important;
+}
+
+/* Ромб-печать КТБ по центру верхней кромки крупных панелей. */
+body.theme-ktb :is(.admin-card, .modal-content)::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  z-index: 2;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--t-bg);
+  border: 1px solid var(--t-accent);
+  pointer-events: none;
+}
+
+/* ---------- Мелкие плашки: карточки, элементы списков, узлы дерева ---------- */
+:is(.statistic-card, .character-card, .catalog-card, .choice-item, .dialogue-item, .npc-catalog-item, .user-item, .tree-node, .tree-node-visual, .choice-option, .upload-section, .voice-section, .typing-speed-section, .choice-section, .users-selector, .tree-legend, .tree-minimap) {
+  border: 1px solid var(--t-line-soft) !important;
+  border-radius: 0 !important;
+  background-color: var(--t-panel-2) !important;
+  box-shadow: none !important;
+}
+
+:is(.statistic-card, .character-card, .catalog-card, .choice-item, .dialogue-item, .npc-catalog-item, .tree-node, .tree-node-visual):hover {
+  border-color: var(--t-line) !important;
+}
+
+/* Выбранный элемент — акцентная кромка слева, как у вариантов ответа в терминале. */
+:is(.dialogue-item.active, .tree-node.active, .tree-node-visual.selected, .choice-item.expanded) {
+  border-color: var(--t-line) !important;
+  border-left: 2px solid var(--t-accent) !important;
+  background: linear-gradient(90deg, var(--t-accent-soft), transparent 75%), var(--t-panel-2) !important;
+}
+
+.tree-node-visual.has-choice { border-left: 2px solid var(--t-accent) !important; }
+.tree-node-visual.branch-start { box-shadow: inset 0 2px 0 var(--t-accent) !important; }
+.tree-node-visual.connecting-mode { animation: none !important; box-shadow: 0 0 0 1px var(--t-accent) !important; }
+.dialogue-tree-container { border: 1px solid var(--t-line-soft) !important; border-radius: 0 !important; background-color: rgba(0, 0, 0, 0.25) !important; }
+.dialogue-tree-svg path, .tree-edge { stroke: var(--t-line) !important; }
+.tree-edge.choice-edge { stroke: var(--t-accent) !important; }
+
+.statistic-icon { color: var(--t-accent) !important; }
+.statistic-value { color: var(--t-text) !important; }
+.statistic-label, .dialogue-item-frequency { color: var(--t-dim) !important; }
+
+/* ---------- Кнопки, вкладки, поля ---------- */
+:is(.btn, .btn-small, .btn-secondary, .admin-logout, .pagination-button, .tree-node-action-btn, .preview-btn) {
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  background: var(--t-panel) !important;
+  color: var(--t-text) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  letter-spacing: 0.08em;
+}
+
+:is(.btn, .btn-small, .btn-secondary, .admin-logout, .pagination-button, .tree-node-action-btn, .preview-btn):hover:not(:disabled),
+.pagination-button.active {
+  border-color: var(--t-accent) !important;
+  background: var(--t-accent) !important;
+  color: var(--t-bg) !important;
+}
+
+:is(.btn-danger, .tree-node-action-btn.delete) { border-color: var(--danger-color) !important; color: var(--danger-color) !important; }
+:is(.btn-danger, .tree-node-action-btn.delete):hover:not(:disabled) { background: var(--danger-color) !important; color: var(--t-bg) !important; }
+body.theme-ktb :is(.btn, .btn-small, .btn-secondary, .admin-logout) { font-variant: small-caps; font-size: 15px; }
+
+.admin-tabs { border-bottom: 1px solid var(--t-line) !important; }
+:is(.admin-tab, .sub-tab) {
+  border: 1px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--t-dim) !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+:is(.admin-tab, .sub-tab):hover { color: var(--t-text) !important; border-color: var(--t-line-soft) !important; }
+:is(.admin-tab, .sub-tab).active {
+  color: var(--t-text) !important;
+  border-color: var(--t-line) !important;
+  background: var(--t-accent-soft) !important;
+  box-shadow: inset 0 -2px 0 var(--t-accent) !important;
+}
+.admin-tab.active::after { background: var(--t-accent) !important; box-shadow: none !important; }
+
+:is(.form-input, .search-input, .form-textarea, .voice-mode-select, select, textarea, input[type="text"], input[type="number"], input[type="search"]) {
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  background-color: rgba(0, 0, 0, 0.32) !important;
+  color: var(--t-text) !important;
+  box-shadow: none !important;
+}
+:is(.form-input, .search-input, .form-textarea, select, textarea, input):focus { border-color: var(--t-accent) !important; outline: none !important; }
+:is(input[type="checkbox"], input[type="radio"], input[type="range"]) { accent-color: var(--t-accent); }
+select { color-scheme: dark; }
+
+/* ---------- Таблицы и списки ---------- */
+.user-table { border-collapse: collapse; }
+.user-table th {
+  color: var(--t-accent) !important;
+  font-family: var(--t-font-label) !important;
+  border-bottom: 1px solid var(--t-line) !important;
+  background: transparent !important;
+  letter-spacing: 0.12em;
+}
+.user-table td { border-bottom: 1px solid var(--t-line-soft) !important; color: var(--t-text) !important; }
+.user-table tr:hover td { background: var(--t-accent-soft) !important; }
+
+.progress-bar { border-radius: 0 !important; background: var(--t-panel-2) !important; border: 1px solid var(--t-line-soft) !important; }
+.progress-value { border-radius: 0 !important; background: var(--t-accent) !important; box-shadow: none !important; }
+.status-badge { border-radius: 0 !important; }
+
+.alert { border-radius: 0 !important; }
+.alert-success { border-color: var(--success-color) !important; color: var(--success-color) !important; background: transparent !important; }
+.alert-danger { border-color: var(--danger-color) !important; color: var(--danger-color) !important; background: transparent !important; }
+
+.loading-spinner { border-color: var(--t-line-soft) !important; border-top-color: var(--t-accent) !important; }
+
+/* Портреты в каталоге и редакторе — без скруглений, в рамке темы. */
+:is(.catalog-card-portrait, .character-portrait, .npc-catalog-portrait, .portrait-preview-large, .catalog-portrait-preview) {
+  border: 1px solid var(--t-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.tree-context-menu-item:hover { background: var(--t-accent-soft) !important; color: var(--t-text) !important; }
+.legend-normal { background: var(--t-panel-2) !important; border-color: var(--t-line) !important; }
+.legend-choice, .legend-branch { border-color: var(--t-accent) !important; }
+
+/* ---------- Цвета репутации: одинаковые во всех темах (scripts/relation-colors.js) ---------- */
+:root {
+  --rel-positive: #4fd18b;
+  --rel-negative: #e5484d;
+  --rel-neutral: #f2c94c;
+}
+
+/* Поля значений отношений берут цвет из --rel-color, который ставит скрипт. */
+/* Специфичность выше общего правила полей (input[type="number"]), иначе цвет перебивается. */
+input.form-input:is(.relation-value-input, .rel-edit-input, .rel-pilot-value-input) {
+  color: var(--rel-color, var(--t-text)) !important;
+  font-weight: 600;
+}
+
+/* Несохранённое изменение — пунктирная рамка в цвете темы. */
+:is(.form-input, input, select, textarea).is-dirty {
+  border-style: dashed !important;
+  border-color: var(--t-accent) !important;
+  box-shadow: 0 0 0 1px var(--t-accent) !important;
+}

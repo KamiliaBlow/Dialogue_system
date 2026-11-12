@@ -15,6 +15,7 @@ const config = require('./config');
 const Logger = require('./utils/logger');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const { Validator, validateBody } = require('./utils/validator');
+const { BASE_FRAME_WIDTH: PORTRAIT_BASE_WIDTH, portraitForClient } = require('./utils/portrait');
 
 // ====== Утилиты безопасности ======
 
@@ -478,6 +479,12 @@ function initDatabase() {
             avatar_path TEXT,
             gender TEXT NOT NULL DEFAULT 'neutral',
             estate TEXT NOT NULL DEFAULT 'lancer',
+            house_key TEXT NOT NULL DEFAULT '',
+            house_custom TEXT NOT NULL DEFAULT '',
+            house_color TEXT NOT NULL DEFAULT '',
+            house_sigil TEXT NOT NULL DEFAULT '',
+            house_standing TEXT NOT NULL DEFAULT 'member',
+            theme TEXT NOT NULL DEFAULT '',
             is_nhp INTEGER NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -492,6 +499,8 @@ function initDatabase() {
             portrait_x REAL DEFAULT 0,
             portrait_y REAL DEFAULT 0,
             portrait_mirror INTEGER DEFAULT 0,
+            portrait_x_rel REAL,
+            portrait_y_rel REAL,
             default_relation INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`,
@@ -515,7 +524,29 @@ function initDatabase() {
             volume INTEGER NOT NULL DEFAULT 100,
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`
+        )`,
+        // Вариант реплики для сословия пилота: заменяет основную реплику, когда аудитория совпадает.
+        // cavalier — Кавалер в Доме; lancer — Лансер и Кавалер-изгнанник (client side/scripts/pilot-tokens.js).
+        `CREATE TABLE IF NOT EXISTS conversation_variants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            audience TEXT NOT NULL CHECK (audience IN ('cavalier', 'lancer')),
+            text TEXT NOT NULL,
+            voiceline TEXT NOT NULL DEFAULT '',
+            fake_name TEXT NOT NULL DEFAULT '',
+            custom_image TEXT NOT NULL DEFAULT '',
+            typing_speed REAL NOT NULL DEFAULT 0,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            UNIQUE(conversation_id, audience)
+        )`,
+        // Реплику удаляют из разных мест (реплика, ветка, диалог) — варианты уходят вместе с ней
+        // независимо от PRAGMA foreign_keys.
+        `CREATE TRIGGER IF NOT EXISTS conversation_variants_cleanup
+            AFTER DELETE ON conversations
+            BEGIN
+                DELETE FROM conversation_variants WHERE conversation_id = OLD.id;
+            END`
     ];
 
 tables.forEach(sql => db.run(sql));
@@ -529,6 +560,14 @@ tables.forEach(sql => db.run(sql));
     db.run(`ALTER TABLE conversations ADD COLUMN voiceline TEXT DEFAULT ''`, (err) => {
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (voiceline):', err.message);
+        }
+    });
+
+    // Скорость печати реплики. Миграцию убрали в 2.8.1, а роуты редактора колонку пишут:
+    // на новой базе без неё не создавалась ни одна реплика (500).
+    db.run(`ALTER TABLE conversations ADD COLUMN typing_speed REAL DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (typing_speed):', err.message);
         }
     });
     
@@ -573,6 +612,35 @@ tables.forEach(sql => db.run(sql));
         }
     });
 
+    // Дом Кавалера КТБ: готовый Великий Дом или собственный, положение — в Доме или изгнанник.
+    [
+        ['house_key', "TEXT NOT NULL DEFAULT ''"],
+        ['house_custom', "TEXT NOT NULL DEFAULT ''"],
+        ['house_color', "TEXT NOT NULL DEFAULT ''"],
+        ['house_sigil', "TEXT NOT NULL DEFAULT ''"],
+        ['house_standing', "TEXT NOT NULL DEFAULT 'member'"]
+    ].forEach(([column, definition]) => {
+        db.run(`ALTER TABLE pilot_profiles ADD COLUMN ${column} ${definition}`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                Logger.error(`Migration error (${column}):`, err.message);
+            }
+        });
+    });
+
+    // Тема терминала закреплена за пилотом (green = GMS, yellow = IPS-N, ktb = КТБ).
+    // Пилотам без темы проставляется тема владельца из user_settings — у старых аккаунтов ничего не меняется.
+    db.run(`ALTER TABLE pilot_profiles ADD COLUMN theme TEXT NOT NULL DEFAULT ''`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (pilot theme):', err.message);
+        }
+    });
+    db.run(`UPDATE pilot_profiles
+            SET theme = COALESCE((SELECT us.theme FROM user_settings us
+                                  WHERE us.user_id = pilot_profiles.user_id AND us.theme IN ('yellow', 'green', 'ktb')), 'yellow')
+            WHERE theme IS NULL OR theme NOT IN ('yellow', 'green', 'ktb')`, (err) => {
+        if (err) Logger.error('Migration error (pilot theme backfill):', err.message);
+    });
+
     db.run(`ALTER TABLE user_settings ADD COLUMN skip_boot INTEGER DEFAULT 0`, (err) => {
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (skip_boot):', err.message);
@@ -601,6 +669,24 @@ tables.forEach(sql => db.run(sql));
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (portrait_mirror):', err.message);
         }
+    });
+
+    // Смещение портрета в долях ширины рамки (utils/portrait.js): одинаково на любом экране.
+    // Старые пиксели пересчитываются от базовой рамки 258 px — на 1920×1080 вид не меняется.
+    ['global_characters', 'characters'].forEach(table => {
+        ['portrait_x_rel', 'portrait_y_rel'].forEach(column => {
+            db.run(`ALTER TABLE ${table} ADD COLUMN ${column} REAL`, (err) => {
+                if (err && !err.message.includes('duplicate column')) {
+                    Logger.error(`Migration error (${table}.${column}):`, err.message);
+                }
+            });
+        });
+        db.run(`UPDATE ${table}
+                SET portrait_x_rel = COALESCE(portrait_x, 0) / ${PORTRAIT_BASE_WIDTH}.0,
+                    portrait_y_rel = COALESCE(portrait_y, 0) / ${PORTRAIT_BASE_WIDTH}.0
+                WHERE portrait_x_rel IS NULL OR portrait_y_rel IS NULL`, (err) => {
+            if (err) Logger.error(`Migration error (${table} portrait rel):`, err.message);
+        });
     });
 
     db.run(`ALTER TABLE choice_options ADD COLUMN relation_npc_id INTEGER DEFAULT NULL`, (err) => {
@@ -865,10 +951,22 @@ authRoutes.get('/check-auth', (req, res) => {
 
 app.use('/api', authRoutes);
 
+// Совпадает с client side/scripts/ktb-houses.js.
+const KTB_HOUSE_KEYS = ['order', 'glass', 'smoke', 'stone', 'sand', 'water', 'dust', 'moments', 'remembrance', 'promise'];
+const KTB_SIGILS = [...KTB_HOUSE_KEYS, 'crown', 'tower', 'blade', 'wing', 'star', 'key'];
+const VALID_THEMES = ['yellow', 'green', 'ktb'];
+
+// Тема по умолчанию для нового пилота — последняя выбранная пользователем (user_settings.theme).
+function getUserTheme(userId, callback) {
+    db.get('SELECT theme FROM user_settings WHERE user_id = ?', [userId], (err, row) => {
+        callback(!err && row && VALID_THEMES.includes(row.theme) ? row.theme : 'yellow');
+    });
+}
+
 const pilotRoutes = express.Router();
 
 pilotRoutes.get('/pilot-profiles', requireAuth, (req, res) => {
-    db.all('SELECT id, slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp, is_active, created_at, updated_at FROM pilot_profiles WHERE user_id = ? ORDER BY slot_number', 
+    db.all('SELECT id, slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, house_key, house_custom, house_color, house_sigil, house_standing, theme, is_nhp, is_active, created_at, updated_at FROM pilot_profiles WHERE user_id = ? ORDER BY slot_number',
         [req.session.userId], 
         (err, rows) => {
             if (err) return res.status(500).json({ message: 'Ошибка получения профилей' });
@@ -887,6 +985,12 @@ pilotRoutes.get('/pilot-profiles', requireAuth, (req, res) => {
                         avatar_path: null,
                         gender: 'neutral',
                         estate: 'lancer',
+                        house_key: '',
+                        house_custom: '',
+                        house_color: '',
+                        house_sigil: '',
+                        house_standing: 'member',
+                        theme: '',
                         is_nhp: 0,
                         is_active: 0
                     });
@@ -906,7 +1010,8 @@ pilotRoutes.get('/pilot-profiles/active', requireAuth, (req, res) => {
 });
 
 pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
-    const { slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp } = req.body;
+    const { slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp,
+        house_key, house_custom, house_color, house_sigil, house_standing, theme } = req.body;
     const userId = req.session.userId;
     const normalizedGender = gender === undefined ? 'neutral' : gender;
     const normalizedEstate = estate === undefined ? 'lancer' : estate;
@@ -941,6 +1046,28 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
 
     const normalizedIsNhp = [1, '1', true].includes(is_nhp) ? 1 : 0;
 
+    // Дом хранится только у Кавалера; у Лансера поля обнуляются.
+    const isCavalier = normalizedEstate === 'cavalier';
+    const normalizedHouseKey = isCavalier && typeof house_key === 'string' ? house_key : '';
+    if (normalizedHouseKey && !KTB_HOUSE_KEYS.includes(normalizedHouseKey) && normalizedHouseKey !== 'custom') {
+        return res.status(400).json({ message: 'Неизвестный Дом' });
+    }
+    const normalizedHouseCustom = normalizedHouseKey === 'custom' && typeof house_custom === 'string'
+        ? house_custom.trim().replace(/\s+/g, ' ').slice(0, 60) : '';
+    if (normalizedHouseKey === 'custom' && !normalizedHouseCustom) {
+        return res.status(400).json({ message: 'Укажите название своего Дома' });
+    }
+    const normalizedHouseColor = normalizedHouseKey === 'custom' && typeof house_color === 'string' && /^#[0-9a-f]{6}$/i.test(house_color)
+        ? house_color.toLowerCase() : '';
+    const normalizedHouseSigil = normalizedHouseKey === 'custom' && KTB_SIGILS.includes(house_sigil) ? house_sigil : '';
+    const normalizedStanding = isCavalier && house_standing === 'exile' ? 'exile' : 'member';
+
+    // Тема пилота: не передана — у существующего пилота сохраняется, новому достаётся тема пользователя.
+    if (theme !== undefined && theme !== null && theme !== '' && !VALID_THEMES.includes(theme)) {
+        return res.status(400).json({ message: 'Неизвестная тема' });
+    }
+    const requestedTheme = VALID_THEMES.includes(theme) ? theme : null;
+
     // avatar_path должен указывать только на директорию аватаров (защита от path traversal).
     let safeAvatarPath = null;
     if (avatar_path && typeof avatar_path === 'string') {
@@ -954,8 +1081,10 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
         }
     }
 
-    db.run(`INSERT INTO pilot_profiles (user_id, slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    getUserTheme(userId, defaultTheme => {
+    db.run(`INSERT INTO pilot_profiles (user_id, slot_number, callsign, full_name, mech_name, avatar_path, gender, estate,
+                house_key, house_custom, house_color, house_sigil, house_standing, theme, is_nhp, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, slot_number) DO UPDATE SET
                 callsign = excluded.callsign,
                 full_name = excluded.full_name,
@@ -963,9 +1092,17 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
                 avatar_path = excluded.avatar_path,
                 gender = excluded.gender,
                 estate = excluded.estate,
+                house_key = excluded.house_key,
+                house_custom = excluded.house_custom,
+                house_color = excluded.house_color,
+                house_sigil = excluded.house_sigil,
+                house_standing = excluded.house_standing,
+                theme = CASE WHEN ? THEN excluded.theme ELSE pilot_profiles.theme END,
                 is_nhp = excluded.is_nhp,
                 updated_at = CURRENT_TIMESTAMP`,
-        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), safeAvatarPath, normalizedGender, normalizedEstate, normalizedIsNhp],
+        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), safeAvatarPath, normalizedGender, normalizedEstate,
+            normalizedHouseKey, normalizedHouseCustom, normalizedHouseColor, normalizedHouseSigil, normalizedStanding,
+            requestedTheme || defaultTheme, normalizedIsNhp, requestedTheme ? 1 : 0],
         function(err) {
             if (err) return res.status(500).json({ message: 'Ошибка сохранения профиля' });
 
@@ -988,6 +1125,7 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
                 });
             });
         });
+    });
 });
 
 pilotRoutes.delete('/pilot-profiles/:slot_number', requireAuth, (req, res) => {
@@ -1693,17 +1831,27 @@ app.get('/api/user-settings', (req, res) => {
         return res.status(401).json({ message: 'Не авторизован' });
     }
     
+    // Тема — активного пилота; без пилота остаётся тема из настроек пользователя.
     db.get('SELECT auto_play_music, theme, skip_boot FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
 
-        if (!settings) {
-            db.run('INSERT INTO user_settings (user_id, auto_play_music, theme, skip_boot) VALUES (?, 1, ?, 0)', [req.session.userId, 'yellow'], (err) => {
-                if (err) Logger.error('Error creating user settings:', err.message);
-            });
-            return res.json({ auto_play_music: 1, theme: 'yellow', skip_boot: 0 });
-        }
+        db.get('SELECT theme FROM pilot_profiles WHERE user_id = ? AND is_active = 1', [req.session.userId], (err, pilot) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
 
-        res.json({ auto_play_music: settings.auto_play_music, theme: settings.theme || 'yellow', skip_boot: settings.skip_boot || 0 });
+            const pilotTheme = VALID_THEMES.includes(pilot?.theme) ? pilot.theme : null;
+            const userTheme = VALID_THEMES.includes(settings?.theme) ? settings.theme : 'yellow';
+            const theme = pilotTheme || userTheme;
+            const themeSource = pilotTheme ? 'pilot' : 'user';
+
+            if (!settings) {
+                db.run('INSERT INTO user_settings (user_id, auto_play_music, theme, skip_boot) VALUES (?, 1, ?, 0)', [req.session.userId, 'yellow'], (err) => {
+                    if (err) Logger.error('Error creating user settings:', err.message);
+                });
+                return res.json({ auto_play_music: 1, theme, theme_source: themeSource, skip_boot: 0 });
+            }
+
+            res.json({ auto_play_music: settings.auto_play_music, theme, theme_source: themeSource, skip_boot: settings.skip_boot || 0 });
+        });
     });
 });
 
@@ -1718,7 +1866,7 @@ app.post('/api/user-settings', (req, res) => {
         return res.status(400).json({ message: 'Отсутствуют параметры' });
     }
 
-    if (theme !== undefined && !['yellow', 'green', 'ktb'].includes(theme)) {
+    if (theme !== undefined && !VALID_THEMES.includes(theme)) {
         return res.status(400).json({ message: 'Неизвестная тема' });
     }
 
@@ -1729,7 +1877,8 @@ app.post('/api/user-settings', (req, res) => {
     db.get('SELECT * FROM user_settings WHERE user_id = ?', [req.session.userId], (err, existing) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
 
-        const newAutoPlay = auto_play_music !== undefined ? (auto_play_music ? 1 : 0) : (existing?.auto_play_music || 1);
+        // ?? вместо ||: сохранённый 0 (музыка выключена) не должен превращаться в 1.
+        const newAutoPlay = auto_play_music !== undefined ? (auto_play_music ? 1 : 0) : (existing?.auto_play_music ?? 1);
         const newTheme = theme || existing?.theme || 'yellow';
         const newSkipBoot = skip_boot !== undefined ? (skip_boot ? 1 : 0) : (existing?.skip_boot || 0);
 
@@ -1737,7 +1886,19 @@ app.post('/api/user-settings', (req, res) => {
             [req.session.userId, newAutoPlay, newTheme, newSkipBoot],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
-                res.json({ success: true, auto_play_music: newAutoPlay, theme: newTheme, skip_boot: newSkipBoot });
+                // Тема принадлежит пилоту: пишем её активному пилоту. user_settings.theme остаётся
+                // темой по умолчанию для новых пилотов и для аккаунта без пилота.
+                const reply = pilotTheme => res.json({ success: true, auto_play_music: newAutoPlay,
+                    theme: pilotTheme || newTheme, theme_source: pilotTheme ? 'pilot' : 'user', skip_boot: newSkipBoot });
+                if (theme === undefined) {
+                    return db.get('SELECT theme FROM pilot_profiles WHERE user_id = ? AND is_active = 1', [req.session.userId],
+                        (err, row) => reply(!err && VALID_THEMES.includes(row?.theme) ? row.theme : null));
+                }
+                db.run('UPDATE pilot_profiles SET theme = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_active = 1',
+                    [theme, req.session.userId], function(err) {
+                        if (err) return res.status(500).json({ message: 'Ошибка сохранения темы пилота' });
+                        reply(this.changes > 0 ? theme : null);
+                    });
             });
     });
 });
@@ -1765,6 +1926,8 @@ app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
         db.all(`SELECT c.*, gc.name as gc_name, gc.image as gc_image, 
                 gc.portrait_scale as gc_portrait_scale, gc.portrait_x as gc_portrait_x,
                 gc.portrait_y as gc_portrait_y, gc.portrait_mirror as gc_portrait_mirror,
+                gc.portrait_x_rel as gc_portrait_x_rel, gc.portrait_y_rel as gc_portrait_y_rel,
+                gc.id as gc_id,
                 gc.default_relation as gc_default_relation
                 FROM characters c
                 LEFT JOIN global_characters gc ON c.global_character_id = gc.id
@@ -1806,10 +1969,15 @@ app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
                             return;
                         }
                         
-                        db.all(`SELECT * FROM choice_options WHERE conversation_id IN (${convIds.map(() => '?').join(',')}) ORDER BY sort_order`, 
+                        db.all(`SELECT * FROM choice_options WHERE conversation_id IN (${convIds.map(() => '?').join(',')}) ORDER BY sort_order`,
                             convIds, (err, choices) => {
                             if (err) return res.status(500).json({ message: 'Ошибка' });
-                            res.json(formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap, relMap));
+                            // Варианты для сословий отдаются все: нужный выбирает клиент по профилю пилота.
+                            db.all(`SELECT * FROM conversation_variants WHERE conversation_id IN (${convIds.map(() => '?').join(',')})`,
+                                convIds, (err, variants) => {
+                                if (err) return res.status(500).json({ message: 'Ошибка' });
+                                res.json(formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap, relMap, variants));
+                            });
                         });
                     });
                 });
@@ -1818,7 +1986,7 @@ app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
     });
 });
 
-function formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap = {}, relMap = {}) {
+function formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap = {}, relMap = {}, variants = []) {
     const result = {
         characters: characters.map(c => ({
             name: c.gc_name || c.name || 'Неизвестный',
@@ -1826,10 +1994,11 @@ function formatDialogueForClient(dialogue, characters, conversations, choices, g
             voice: c.voice,
             voiceMode: c.voice_mode || 'none',
             window: c.window,
-            portraitScale: c.gc_portrait_scale || c.portrait_scale || 1.0,
-            portraitX: c.gc_portrait_x || c.portrait_x || 0,
-            portraitY: c.gc_portrait_y || c.portrait_y || 0,
-            portraitMirror: (c.gc_portrait_mirror || c.portrait_mirror) === 1,
+            // Портрет из каталога, если персонаж привязан к нему; иначе — старые поля диалога.
+            ...portraitForClient(c.gc_id ? {
+                portrait_scale: c.gc_portrait_scale, portrait_x: c.gc_portrait_x, portrait_y: c.gc_portrait_y,
+                portrait_mirror: c.gc_portrait_mirror, portrait_x_rel: c.gc_portrait_x_rel, portrait_y_rel: c.gc_portrait_y_rel
+            } : c),
             globalCharacterId: c.global_character_id
         })),
         allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),
@@ -1864,7 +2033,21 @@ function formatDialogueForClient(dialogue, characters, conversations, choices, g
         if (c.fake_name) convObj.fakeName = c.fake_name;
         if (c.voiceline) convObj.voiceline = c.voiceline;
         if (c.typing_speed && c.typing_speed > 0) convObj.typingSpeed = c.typing_speed;
-        
+
+        const convVariants = variants.filter(v => v.conversation_id === c.id && v.text);
+        if (convVariants.length > 0) {
+            convObj.variants = {};
+            convVariants.forEach(v => {
+                convObj.variants[v.audience] = {
+                    text: v.text,
+                    voiceline: v.voiceline || '',
+                    fakeName: v.fake_name || '',
+                    image: v.custom_image || '',
+                    typingSpeed: v.typing_speed > 0 ? v.typing_speed : 0
+                };
+            });
+        }
+
         if (convChoices.length > 0) {
             convObj.hasChoice = true;
             convObj.choice = {

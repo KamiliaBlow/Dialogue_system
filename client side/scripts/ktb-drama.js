@@ -5,15 +5,20 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    const HERALD_TEXT = 'ВНИМАНИЕ ГЕРОЛЬДА: честь Дома задета. Секунданты уведомлены. Аудиенция приостановлена. ПОЛЕ ЧЕСТИ ОТКРЫТО.';
+    // Поединки в Баронствах формализованы; до первой крови дерутся куда чаще, чем до смерти.
+    const HERALD_TEXT = 'ВНИМАНИЕ ГЕРОЛЬДА: честь Дома задета. Секунданты уведомлены. Аудиенция приостановлена. Условие поединка — до первой крови. ПОЛЕ ЧЕСТИ ОТКРЫТО.';
 
     function normalize(profile) {
         if (typeof globalThis !== 'undefined' && globalThis.BootScenarios) {
-            return globalThis.BootScenarios.normalizeProfile(profile);
+            const normalized = globalThis.BootScenarios.normalizeProfile(profile);
+            normalized.standing = globalThis.BootScenarios.getStanding(normalized);
+            return normalized;
         }
         const source = profile && typeof profile === 'object' ? profile : {};
+        const estate = source.estate === 'cavalier' ? 'cavalier' : 'lancer';
         return {
-            estate: source.estate === 'cavalier' ? 'cavalier' : 'lancer',
+            estate,
+            standing: estate !== 'cavalier' ? 'ignoble' : source.house_standing === 'exile' ? 'exile' : 'noble',
             is_nhp: source.is_nhp === 1 || source.is_nhp === '1' || source.is_nhp === true
         };
     }
@@ -110,7 +115,8 @@
 
     function showHerald(profile) {
         const normalized = normalize(profile);
-        if (normalized.estate !== 'cavalier') return false;
+        // Право вызова есть только у Кавалера, состоящего в Доме.
+        if (normalized.standing !== 'noble') return false;
         return showDialog({
             eyebrow: 'ЦЕРЕМОНИАЛ ПРЕРВАН // ПОРОГ ОТНОШЕНИЙ',
             title: 'ВНИМАНИЕ ГЕРОЛЬДА',

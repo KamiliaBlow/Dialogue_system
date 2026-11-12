@@ -17,6 +17,10 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    function applyLivery(profile) {
+        if (window.KtbHouses && profile) window.KtbHouses.apply(profile);
+    }
+
     async function resolveScenario() {
         let apiUrl = null;
         try {
@@ -28,6 +32,7 @@
         const context = await window.BootScenarios.loadContext(apiUrl, { timeout: 3000 });
         const scenario = window.BootScenarios.buildScenario(context.theme, context.profile);
         scenario.skipBoot = context.skipBoot === true;
+        applyLivery(context.profile);
         return scenario;
     }
 
@@ -41,7 +46,8 @@
         const overlay = document.createElement('div');
         overlay.id = 'alien-boot-overlay';
         overlay.dataset.theme = scenario.theme;
-        overlay.dataset.estate = scenario.estate || '';
+        // Для КТБ: noble / ignoble / exile — определяет вид заставки.
+        overlay.dataset.estate = scenario.standing || scenario.estate || '';
         overlay.setAttribute('role', 'status');
         overlay.setAttribute('aria-label', `Запуск системы ${scenario.system}`);
 
@@ -93,7 +99,8 @@
         canvas.style.imageRendering = 'pixelated';
         const imageData = ctx.createImageData(w, h);
         const data = imageData.data;
-        const palette = theme === 'ktb' ? [0.85, 0.66, 0.24] : theme === 'yellow' ? [1, 0.35, 0.12] : [0.2, 0.8, 0.5];
+        // Шум в цветах тем: позолота КТБ, синий IPS-N, красный GMS.
+        const palette = theme === 'ktb' ? [0.78, 0.63, 0.32] : theme === 'yellow' ? [0.11, 0.6, 0.91] : [0.86, 0.1, 0.18];
         for (let i = 0; i < data.length; i += 4) {
             const value = Math.random() * 255 * intensity;
             data[i] = value * palette[0];
@@ -220,6 +227,43 @@
         });
     }
 
+    // Порядок появления элементов интерфейса во время загрузки (сверху вниз, затем кнопки).
+    const STAGE_TARGETS = ['#ktb-crest', '#contact_1', '#main-receiver', '#contact_2', '#text-con',
+        '#terminal-background', '#header-buttons', '#music-float-btn', '#admin-float-btn'];
+
+    function stageTargets() {
+        return STAGE_TARGETS
+            .map(selector => document.querySelector(selector))
+            .filter(el => el && getComputedStyle(el).display !== 'none' && el.style.display !== 'none');
+    }
+
+    // Элементы появляются по одному в стиле темы (styles/themes.css: body.boot-staged и .ui-in).
+    // Пока идёт показ, интерфейс не принимает нажатий; после — полностью доступен.
+    async function stageInterface(duration) {
+        const body = document.body;
+        body.classList.remove('boot-phase');
+        body.classList.add('boot-staged');
+        const targets = stageTargets();
+        const step = duration / (targets.length + 1);
+        for (const el of targets) {
+            el.classList.add('ui-in');
+            await delay(step);
+        }
+        await delay(step);
+    }
+
+    function finishStaging() {
+        document.body.classList.remove('boot-staged', 'boot-phase');
+        // Пульт и кнопки на месте — пересчитываем масштаб с защитой от переполнения.
+        if (window.UiScale) window.UiScale.refresh();
+        // Снимаем классы показа после анимации, чтобы не мешать эффектам помех dialogue.js.
+        setTimeout(() => {
+            document.querySelectorAll('.ui-in').forEach(el => el.classList.remove('ui-in'));
+        }, 1200);
+        const asmCode = document.getElementById('assembly-code-overlay');
+        if (asmCode) asmCode.style.display = '';
+    }
+
     async function runBootSequence(scenario) {
         document.body.classList.add('boot-phase');
         let overlay = null;
@@ -240,11 +284,6 @@
             const cornerMarkers = overlay.querySelector('.alien-corner-markers');
             const progressContainer = overlay.querySelector('.alien-progress-container');
             const progressFill = overlay.querySelector('.alien-progress-bar-fill');
-            const mCodec = document.getElementById('mCodec');
-            const textCon = document.getElementById('text-con');
-            const termBg = document.getElementById('terminal-background');
-            const musicBtn = document.getElementById('music-float-btn');
-            const adminBtn = document.getElementById('admin-float-btn');
             const asmCode = document.getElementById('assembly-code-overlay');
 
             if (asmCode) asmCode.style.display = 'none';
@@ -283,52 +322,40 @@
             void glitchOverlay.offsetWidth;
             glitchOverlay.classList.add('active');
             await delay(400);
+            // Лого гаснет, экран загрузки становится прозрачным, шкала уходит к нижнему краю,
+            // и пока она заполняется, элементы интерфейса появляются один за другим.
+            overlay.classList.add('ui-stage');
             progressContainer.classList.add('visible');
             await delay(300);
-            await animateProgressBar(progressFill, 2600);
-            await delay(200);
+            const STAGE_DURATION = 3600;
+            await Promise.all([
+                animateProgressBar(progressFill, STAGE_DURATION),
+                stageInterface(STAGE_DURATION - 300)
+            ]);
+            await delay(250);
             progressContainer.classList.add('fade-out');
-            await delay(500);
-            overlay.classList.add('reveal-phase');
-            await delay(200);
-            if (mCodec) mCodec.classList.add('boot-reveal-main');
-            await delay(200);
-            overlay.classList.add('reveal-phase-transparent');
-            if (textCon) textCon.classList.add('boot-reveal-text');
-            if (termBg) termBg.classList.add('boot-reveal-terminal');
-            await delay(300);
-            if (asmCode) {
-                asmCode.style.display = '';
-                asmCode.classList.add('boot-reveal-code');
-            }
-            await delay(200);
-            if (musicBtn) musicBtn.classList.add('boot-reveal-btn');
-            if (adminBtn && adminBtn.style.display !== 'none') adminBtn.classList.add('boot-reveal-btn');
-            await delay(600);
-            document.body.classList.remove('boot-phase');
+            await delay(400);
+            finishStaging();
             overlay.classList.add('fade-out');
-            await delay(1300);
+            await delay(600);
             overlay.classList.add('boot-complete');
             markBootPlayed();
-            setTimeout(() => overlay.remove(), 2000);
+            setTimeout(() => overlay.remove(), 1500);
         } catch (error) {
             console.error('Boot sequence failed:', error);
-            document.body.classList.remove('boot-phase');
+            finishStaging();
             if (overlay) overlay.remove();
-            document.getElementById('mCodec')?.classList.add('boot-reveal-main');
-            document.getElementById('text-con')?.classList.add('boot-reveal-text');
         }
     }
 
-    function instantReveal(scenario) {
+    // Запуск без заставки: тот же поочерёдный показ, только быстрее.
+    async function instantReveal(scenario) {
         applyTheme(scenario.theme);
         document.title = `Терминал ${scenario.system}`;
-        document.getElementById('mCodec')?.classList.add('boot-reveal-main');
-        document.getElementById('text-con')?.classList.add('boot-reveal-text');
-        document.getElementById('terminal-background')?.classList.add('boot-reveal-terminal');
-        document.getElementById('music-float-btn')?.classList.add('boot-reveal-btn');
-        const adminBtn = document.getElementById('admin-float-btn');
-        if (adminBtn && adminBtn.style.display !== 'none') adminBtn.classList.add('boot-reveal-btn');
+        document.body.classList.add('boot-phase');
+        await delay(50);
+        await stageInterface(900);
+        finishStaging();
     }
 
     async function startBoot() {
