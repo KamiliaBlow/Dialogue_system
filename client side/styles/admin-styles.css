@@ -7,6 +7,10 @@
     --primary-color: #03FB8D;
     --primary-bg: rgba(3, 251, 141, 0.1);
     --primary-border: rgba(3, 251, 141, 0.3);
+    --glow-soft: rgba(3, 251, 141, 0.05);
+    --glow: rgba(3, 251, 141, 0.2);
+    --glow-mid: rgba(3, 251, 141, 0.3);
+    --glow-line: rgba(3, 251, 141, 0.5);
     --danger-color: #ff3333;
     --success-color: #00ff00;
     --bg-dark: #000;
@@ -117,7 +121,7 @@ body {
     border: 1px solid var(--primary-color);
     padding: 20px;
     margin-bottom: 20px;
-    box-shadow: 0 0 10px rgba(3, 251, 141, 0.2);
+    box-shadow: 0 0 10px var(--glow);
 }
 
 .admin-card-title {
@@ -151,7 +155,7 @@ body {
 }
 
 .user-table tr:hover {
-    background-color: rgba(3, 251, 141, 0.05);
+    background-color: var(--glow-soft);
 }
 
 .btn {
@@ -211,7 +215,7 @@ body {
     width: 90%;
     max-width: 400px;
     padding: 20px;
-    box-shadow: 0 0 20px rgba(3, 251, 141, 0.3);
+    box-shadow: 0 0 20px var(--glow-mid);
 }
 
 .modal-title {
@@ -288,8 +292,8 @@ body {
 .choice-item {
     padding: 10px;
     margin-bottom: 10px;
-    background-color: rgba(3, 251, 141, 0.05);
-    border-left: 3px solid rgba(3, 251, 141, 0.5);
+    background-color: var(--glow-soft);
+    border-left: 3px solid var(--glow-line);
     cursor: pointer;
     transition: all 0.3s;
 }
@@ -311,7 +315,7 @@ body {
 }
 
 .choice-count {
-    background-color: rgba(3, 251, 141, 0.2);
+    background-color: var(--glow);
     padding: 2px 8px;
     border-radius: 10px;
     font-size: 12px;
@@ -585,13 +589,69 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .status-completed {
-    background-color: rgba(3, 251, 141, 0.2);
-    color: #03FB8D;
-    border: 1px solid #03FB8D;
+    background-color: var(--glow);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
 }
 
 .status-replay {
     background-color: rgba(0, 123, 255, 0.2);
     color: #007BFF;
     border: 1px solid #007BFF;
+}
+
+/* ============================================
+   Темы админ-панели (по теме профиля админа)
+   ============================================ */
+@font-face {
+    font-family: 'Cormorant';
+    src: url('../assets/fonts/Cormorant-Variable.ttf') format('truetype');
+    font-weight: 100 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Жёлтая (оранжевый терминал) */
+body.theme-yellow {
+    --primary-color: #ff6b35;
+    --primary-bg: rgba(255, 107, 53, 0.1);
+    --primary-border: rgba(255, 107, 53, 0.3);
+    --glow-soft: rgba(255, 107, 53, 0.05);
+    --glow: rgba(255, 107, 53, 0.2);
+    --glow-mid: rgba(255, 107, 53, 0.3);
+    --glow-line: rgba(255, 107, 53, 0.5);
+}
+
+/* КТБ — аристократичное старое золото */
+body.theme-ktb {
+    --primary-color: #d4af37;
+    --primary-bg: rgba(212, 175, 55, 0.1);
+    --primary-border: rgba(212, 175, 55, 0.35);
+    --glow-soft: rgba(212, 175, 55, 0.05);
+    --glow: rgba(212, 175, 55, 0.2);
+    --glow-mid: rgba(212, 175, 55, 0.3);
+    --glow-line: rgba(212, 175, 55, 0.5);
+    --bg-dark: #090806;
+    --bg-card: rgba(26, 20, 11, 0.92);
+    background-color: #0b0805;
+    background-image:
+        radial-gradient(ellipse 90% 55% at 50% 0%, rgba(212, 175, 55, 0.07), transparent 62%),
+        repeating-linear-gradient(45deg, rgba(212, 175, 55, 0.024) 0 1px, transparent 1px 42px),
+        repeating-linear-gradient(-45deg, rgba(212, 175, 55, 0.024) 0 1px, transparent 1px 42px),
+        repeating-linear-gradient(90deg,
+            rgba(54, 38, 20, 0.20) 0px,
+            rgba(38, 26, 14, 0.20) 88px,
+            rgba(18, 12, 6, 0.26) 90px,
+            rgba(38, 26, 14, 0.20) 92px);
+    color: #f0dfaa;
+}
+
+body.theme-ktb .admin-title,
+body.theme-ktb .admin-card-title {
+    font-family: 'Cormorant', Georgia, serif;
+    letter-spacing: 0.06em;
+}
+
+body.theme-ktb .admin-card {
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.18);
 }

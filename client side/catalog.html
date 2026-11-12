@@ -117,12 +117,14 @@
     </style>
 </head>
 <body>
+    <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
     <div class="background-code" id="bgCode"></div>
     
     <div class="container">
         <header class="admin-header">
             <div class="admin-title">ТЕРМИНАЛ GMS-4521 - КАТАЛОГ ПЕРСОНАЖЕЙ</div>
             <div class="header-buttons">
+                <a href="index.html" class="btn">Терминал</a>
                 <a href="editor.html" class="btn">Редактор</a>
                 <a href="admin.html" class="btn">Админ-панель</a>
                 <button id="logout-btn" class="admin-logout">ВЫХОД</button>
@@ -220,5 +222,6 @@
     </div>
     
     <script type="module" src="scripts/catalog.js"></script>
+    <script type="module" src="scripts/music-player.js"></script>
 </body>
 </html>

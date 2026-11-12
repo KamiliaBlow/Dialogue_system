@@ -818,6 +818,7 @@
   </style>
 </head>
 <body>
+  <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
   <!-- ФОН -->
   <div class="bg-grid"></div>
   <div class="code-overlay" id="codeOverlay"></div>
@@ -984,6 +985,7 @@
       try {
         const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
         const data = await response.json();
+        try { localStorage.setItem('userTheme', ['green', 'ktb'].includes(data.theme) ? data.theme : 'yellow'); } catch (e) {}
         document.body.classList.remove('theme-green', 'theme-ktb');
         if (data.theme === 'green' || data.theme === 'ktb') {
           document.body.classList.add(`theme-${data.theme}`);
@@ -1207,5 +1209,6 @@
       `;
     }
   </script>
+  <script type="module" src="scripts/music-player.js"></script>
 </body>
 </html>

@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>КТБ — Ливрея и Печать (тестовый шаблон)</title>
+<style>
+  @font-face { font-family: 'Cormorant'; src: url('./assets/fonts/Cormorant-Variable.ttf') format('truetype'); font-weight: 300 700; font-display: swap; }
+  @font-face { font-family: 'Alegreya'; src: url('./assets/fonts/Alegreya-Variable.ttf') format('truetype'); font-weight: 400 800; font-display: swap; }
+  @font-face { font-family: 'JetBrains Mono'; src: url('./assets/fonts/JetBrainsMono-Variable.ttf') format('truetype'); font-weight: 100 800; font-display: swap; }
+
+  /* ================================================================
+     ПАЛИТРА
+     Канон: Karrakin Maroon / «Royal Prime» — глубокий землистый красный,
+     цвет Первого Барона (вне ливрей домов). Золото — тусклая позолота,
+     а не неоновый «гold-glow». Текст — пергамент, а не жёлтый.
+     ================================================================ */
+  :root {
+    color-scheme: dark;
+    --ink: #0c0908;
+    --lacquer: #160d0d;
+    --lacquer-2: #1f1213;
+    --maroon: #6e1f25;          /* Karrakin Maroon — Royal Prime */
+    --maroon-deep: #3a1014;
+    --maroon-bright: #93323a;
+    --gold: #c6a052;            /* старая позолота */
+    --gold-light: #e9d7a5;
+    --gold-dim: #7a6334;
+    --vellum: #ece2cb;          /* основной текст */
+    --vellum-dim: #b3a588;
+    --livery: #7fb3b5;          /* перезаписывается выбранным Домом */
+    --plate-shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
+    --font-display: 'Cormorant', 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'Alegreya', Georgia, 'Times New Roman', serif;
+    --font-mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  }
+
+  /* Неблагородное сословие: та же сетка, но без позолоты —
+     канцелярия, олово и чернила. Иерархия видна по интерфейсу. */
+  body[data-estate="ignoble"] {
+    --lacquer: #121314;
+    --lacquer-2: #18191b;
+    --maroon: #3b3a39;
+    --maroon-deep: #232323;
+    --maroon-bright: #56534f;
+    --gold: #9c968a;
+    --gold-light: #d8d3c6;
+    --gold-dim: #4f4c46;
+    --vellum: #d9d5cb;
+    --vellum-dim: #8f8a80;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--ink); }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    padding: 0 16px;
+    overflow-x: clip;
+    color: var(--vellum);
+    font: 17px/1.6 var(--font-body);
+    background:
+      radial-gradient(ellipse 80% 45% at 50% -5%, color-mix(in srgb, var(--maroon) 38%, transparent), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 50% 110%, color-mix(in srgb, var(--maroon-deep) 60%, transparent), transparent 70%),
+      var(--ink);
+    transition: color .4s ease;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--gold-light); outline-offset: 4px; }
+
+  .page { max-width: 1160px; margin: 0 auto; padding-block: 40px 64px; }
+
+  /* ---------- Шапка ---------- */
+  .masthead { text-align: center; padding-bottom: 28px; }
+  .masthead .eyebrow {
+    margin: 0; color: var(--vellum-dim);
+    font: 600 13px/1 var(--font-display); letter-spacing: .38em; text-transform: uppercase;
+  }
+  .masthead h1 {
+    margin: 14px 0 10px; color: var(--gold-light);
+    font: 500 clamp(40px, 7vw, 76px)/1 var(--font-display);
+    letter-spacing: .14em; font-variant: small-caps;
+  }
+  .masthead .motto { margin: 0; color: var(--vellum-dim); font-style: italic; }
+  .rule {
+    display: flex; align-items: center; gap: 14px; margin: 22px auto 0; max-width: 520px; color: var(--gold);
+  }
+  .rule::before, .rule::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--gold-dim)); }
+  .rule::after { transform: scaleX(-1); }
+  .rule i { width: 9px; height: 9px; transform: rotate(45deg); border: 1px solid currentColor; }
+  .rule i:nth-child(2) { width: 5px; height: 5px; background: currentColor; }
+
+  /* ---------- Панель-«табличка»: двойной гравированный кант + ромбы ---------- */
+  .plate {
+    position: relative;
+    padding: clamp(20px, 3.4vw, 36px);
+    border: 1px solid var(--gold-dim);
+    background:
+      linear-gradient(var(--gold), var(--gold)) 7px 7px / 4px 4px no-repeat,
+      linear-gradient(var(--gold), var(--gold)) calc(100% - 7px) 7px / 4px 4px no-repeat,
+      linear-gradient(var(--gold), var(--gold)) 7px calc(100% - 7px) / 4px 4px no-repeat,
+      linear-gradient(var(--gold), var(--gold)) calc(100% - 7px) calc(100% - 7px) / 4px 4px no-repeat,
+      linear-gradient(180deg, color-mix(in srgb, var(--maroon) 22%, transparent), transparent 38%),
+      var(--lacquer);
+    box-shadow:
+      inset 0 0 0 4px var(--lacquer),
+      inset 0 0 0 5px color-mix(in srgb, var(--gold) 32%, transparent),
+      var(--plate-shadow);
+  }
+  .plate::before, .plate::after {
+    content: ""; position: absolute; left: 50%; width: 11px; height: 11px;
+    background: var(--ink); border: 1px solid var(--gold);
+    transform: translateX(-50%) rotate(45deg);
+  }
+  .plate::before { top: -6px; }
+  .plate::after { bottom: -6px; }
+  body[data-estate="ignoble"] .plate { background: var(--lacquer); box-shadow: inset 0 0 0 4px var(--lacquer), inset 0 0 0 5px var(--gold-dim), var(--plate-shadow); }
+  body[data-estate="ignoble"] .plate::before, body[data-estate="ignoble"] .plate::after { display: none; }
+
+  .section-title {
+    display: flex; align-items: baseline; gap: 14px; margin: 48px 0 18px;
+    color: var(--gold-light); font: 500 26px/1.1 var(--font-display); letter-spacing: .08em; font-variant: small-caps;
+  }
+  .section-title small { color: var(--vellum-dim); font: italic 15px var(--font-body); letter-spacing: 0; font-variant: normal; }
+  .section-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--gold-dim), transparent); }
+
+  /* ---------- Управление ---------- */
+  .controls { display: grid; grid-template-columns: 2fr 1.3fr 1fr 1fr; gap: 14px 18px; }
+  .controls label { display: grid; gap: 6px; color: var(--vellum-dim); font: 600 12px var(--font-display); letter-spacing: .2em; text-transform: uppercase; }
+  .controls input, .controls select {
+    width: 100%; min-height: 42px; padding: 8px 12px;
+    border: 1px solid var(--gold-dim); border-radius: 0;
+    background: var(--ink); color: var(--vellum);
+    font: 16px var(--font-body); letter-spacing: 0; text-transform: none;
+  }
+  .estate-switch { display: flex; border: 1px solid var(--gold-dim); min-height: 42px; }
+  .estate-switch button {
+    flex: 1; border: 0; background: transparent; color: var(--vellum-dim); cursor: pointer;
+    font: 600 13px var(--font-display); letter-spacing: .12em; text-transform: uppercase;
+  }
+  .estate-switch button[aria-pressed="true"] { background: var(--maroon); color: var(--gold-light); }
+  body[data-estate="ignoble"] .estate-switch button[aria-pressed="true"] { background: var(--gold-dim); color: var(--ink); }
+
+  /* ---------- Кодек ---------- */
+  .codec { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: clamp(14px, 2.4vw, 28px); align-items: stretch; }
+
+  .gonfalon { display: flex; flex-direction: column; }
+  .gonfalon-banner {
+    position: relative; display: flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 54px; padding: 8px 12px 18px;
+    background: linear-gradient(180deg, var(--livery-c, var(--livery)), color-mix(in srgb, var(--livery-c, var(--livery)) 55%, #000));
+    color: var(--ink);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), 50% 100%, 0 calc(100% - 12px));
+    font: 700 13px/1.15 var(--font-display); letter-spacing: .16em; text-transform: uppercase; text-align: left;
+  }
+  .gonfalon-banner svg { flex: none; width: 26px; height: 26px; }
+  body[data-estate="ignoble"] .gonfalon.player .gonfalon-banner { background: repeating-linear-gradient(135deg, #3a3a3a 0 6px, #2e2e2e 6px 12px); color: var(--vellum-dim); }
+
+  .portrait {
+    position: relative; flex: 1; min-height: 230px; margin-top: 8px;
+    display: grid; place-items: center;
+    border: 1px solid var(--gold-dim);
+    background:
+      radial-gradient(ellipse at 50% 30%, color-mix(in srgb, var(--livery-c, var(--livery)) 16%, transparent), transparent 65%),
+      var(--lacquer-2);
+    box-shadow: inset 0 0 0 5px var(--lacquer-2), inset 0 0 0 6px color-mix(in srgb, var(--gold) 22%, transparent);
+  }
+  .portrait svg.bust { width: 58%; max-width: 150px; color: color-mix(in srgb, var(--gold) 55%, var(--lacquer)); }
+  .portrait figcaption {
+    position: absolute; left: 0; right: 0; bottom: 10px; text-align: center;
+    color: var(--vellum-dim); font: italic 14px var(--font-body);
+  }
+
+  .seal-receiver { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+  .astrolabe {
+    position: relative; width: min(220px, 100%); aspect-ratio: 1; border-radius: 50%;
+    display: grid; place-items: center;
+    border: 1px solid var(--gold-dim);
+    background:
+      radial-gradient(circle, var(--lacquer) 0 52%, transparent 52.5%),
+      repeating-conic-gradient(from 0deg, var(--gold-dim) 0 .6deg, transparent .6deg 7.5deg),
+      radial-gradient(circle, transparent 0 62%, color-mix(in srgb, var(--maroon) 55%, transparent) 62% 100%);
+    box-shadow: inset 0 0 0 10px var(--lacquer), inset 0 0 0 11px var(--gold-dim), 0 0 40px color-mix(in srgb, var(--maroon) 40%, transparent);
+  }
+  .astrolabe .needle {
+    position: absolute; inset: 9%; border-radius: 50%;
+    background: conic-gradient(from var(--needle, 40deg), var(--gold) 0 1.2deg, transparent 1.2deg);
+    transition: --needle .9s;
+  }
+  .astrolabe .freq { position: relative; color: var(--gold-light); font: 600 clamp(28px, 3.6vw, 40px)/1 var(--font-display); letter-spacing: .06em; font-variant-numeric: oldstyle-nums; }
+  .astrolabe .freq small { display: block; margin-top: 6px; color: var(--vellum-dim); font: 600 10px var(--font-display); letter-spacing: .3em; }
+  .receiver-caption { color: var(--vellum-dim); font: 600 12px var(--font-display); letter-spacing: .26em; text-transform: uppercase; }
+  .receiver-caption b { display: block; margin-top: 4px; color: var(--gold); font-weight: 600; letter-spacing: .14em; }
+
+  /* ---------- Реплика ---------- */
+  .dialogue { margin-top: 28px; }
+  .speaker { margin: 0 0 4px; color: var(--gold-light); font: 600 22px/1.2 var(--font-display); letter-spacing: .06em; font-variant: small-caps; }
+  .speaker-title { margin: 0 0 14px; color: var(--vellum-dim); font: italic 15px var(--font-body); }
+  .line { margin: 0; min-height: 3.2em; font-size: clamp(18px, 1.6vw, 21px); line-height: 1.55; }
+  .line::first-letter { color: var(--gold); font: 600 1.9em/1 var(--font-display); float: left; padding: .06em .1em 0 0; }
+  body[data-estate="ignoble"] .line::first-letter { color: inherit; font: inherit; float: none; padding: 0; }
+
+  .choices { display: grid; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; counter-reset: choice; }
+  .choice {
+    counter-increment: choice;
+    display: grid; grid-template-columns: 2.4em auto 1fr; align-items: baseline; gap: 12px;
+    width: 100%; padding: 10px 14px; text-align: left; cursor: pointer;
+    border: 1px solid transparent; border-left: 2px solid var(--gold-dim); border-radius: 0;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--maroon) 18%, transparent), transparent 70%);
+    transition: background-color .18s ease, border-color .18s ease;
+  }
+  .choice::before { content: counter(choice, upper-roman) "."; color: var(--gold); font: 600 18px var(--font-display); text-align: right; }
+  .choice:hover:not(:disabled), .choice:focus-visible { border-color: var(--gold-dim); border-left-color: var(--gold); background: color-mix(in srgb, var(--maroon) 45%, transparent); }
+  .choice:disabled { cursor: not-allowed; opacity: .5; }
+  .tone {
+    padding: 1px 8px; white-space: nowrap;
+    border: 1px solid var(--tone, var(--gold-dim)); color: var(--tone, var(--vellum-dim));
+    font: 600 11px var(--font-display); letter-spacing: .16em; text-transform: uppercase;
+  }
+  .tone.challenge { --tone: var(--maroon-bright); }
+  .choice-text { font-size: 17px; }
+  .choice-note { grid-column: 3; color: var(--vellum-dim); font: italic 14px var(--font-body); }
+
+  .dialogue-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 22px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--gold-dim) 60%, transparent); }
+  .precedence { color: var(--vellum-dim); font: 13px var(--font-mono); }
+
+  /* ---------- Печать ---------- */
+  .seal-button {
+    display: inline-flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 20px 6px 8px;
+    border: 1px solid var(--gold-dim); border-radius: 999px; background: var(--ink); cursor: pointer;
+    font: 600 13px var(--font-display); letter-spacing: .16em; text-transform: uppercase; color: var(--gold-light);
+    transition: border-color .18s ease, background-color .18s ease;
+  }
+  .seal-button:hover { border-color: var(--gold); background: var(--maroon-deep); }
+  .seal-button svg { width: 36px; height: 36px; }
+  .wax { color: var(--maroon); }
+  body[data-estate="ignoble"] .wax { color: #4a4744; }
+
+  .stamp {
+    position: absolute; right: clamp(14px, 3vw, 34px); top: clamp(14px, 3vw, 30px);
+    width: 104px; height: 104px; pointer-events: none; opacity: 0;
+  }
+  .stamp.pressed { animation: stamp .45s cubic-bezier(.2, .9, .3, 1.2) forwards; }
+  @keyframes stamp { 0% { opacity: 0; transform: scale(1.7) rotate(-18deg); } 60% { opacity: 1; transform: scale(.94) rotate(-9deg); } 100% { opacity: .95; transform: scale(1) rotate(-9deg); } }
+
+  /* ---------- Летопись запуска ---------- */
+  .boot { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
+  .boot-title { margin: 0 0 4px; color: var(--gold-light); font: 500 34px/1 var(--font-display); letter-spacing: .16em; }
+  .boot-sub { margin: 0 0 18px; color: var(--vellum-dim); font: 600 11px var(--font-display); letter-spacing: .26em; text-transform: uppercase; }
+  .boot-log {
+    margin: 0; min-height: 16.5em; padding: 18px 20px;
+    border: 1px solid var(--gold-dim); background: var(--ink);
+    color: color-mix(in srgb, var(--gold) 82%, var(--vellum));
+    font: 13px/1.65 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .boot-log .ok { color: var(--gold-light); }
+  .boot-greeting { margin: 16px 0 0; color: var(--gold-light); font: italic 20px/1.45 var(--font-body); min-height: 2.9em; }
+  .notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; align-content: start; }
+  .notes li { padding: 0 0 12px 16px; border-bottom: 1px solid color-mix(in srgb, var(--gold-dim) 45%, transparent); position: relative; color: var(--vellum-dim); font-size: 15px; }
+  .notes li::before { content: ""; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; transform: rotate(45deg); background: var(--gold); }
+  .notes b { color: var(--vellum); font-weight: 600; }
+
+  /* ---------- Кнопки ---------- */
+  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .btn {
+    min-height: 42px; padding: 8px 18px; cursor: pointer;
+    border: 1px solid var(--gold-dim); border-radius: 0; background: var(--lacquer-2); color: var(--gold-light);
+    font: 600 13px var(--font-display); letter-spacing: .14em; text-transform: uppercase;
+    transition: background-color .18s ease, border-color .18s ease;
+  }
+  .btn:hover { border-color: var(--gold); background: var(--maroon-deep); }
+  .btn.maroon { border-color: var(--maroon-bright); }
+
+  /* ---------- Сравнение ---------- */
+  .compare-wrap { overflow-x: auto; }
+  table.compare { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 15px; }
+  .compare th, .compare td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--gold-dim) 45%, transparent); }
+  .compare th { color: var(--gold); font: 600 12px var(--font-display); letter-spacing: .2em; text-transform: uppercase; }
+  .compare td:first-child { color: var(--gold-light); font: 600 17px var(--font-display); white-space: nowrap; }
+  .compare td:nth-child(2) { color: var(--vellum-dim); }
+  .chips { display: flex; gap: 4px; margin-top: 6px; }
+  .chips span { width: 26px; height: 18px; border: 1px solid rgba(255,255,255,.12); }
+
+  .houses { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .house-tile {
+    display: grid; justify-items: center; gap: 6px; padding: 14px 6px 12px; cursor: pointer;
+    border: 1px solid var(--gold-dim); background: var(--lacquer-2); color: var(--vellum-dim);
+    font: 600 12px/1.2 var(--font-display); letter-spacing: .1em; text-transform: uppercase; text-align: center;
+  }
+  .house-tile svg { width: 34px; height: 34px; color: var(--hc); }
+  .house-tile i { display: block; width: 70%; height: 4px; background: var(--hc); }
+  .house-tile[aria-pressed="true"] { border-color: var(--gold); color: var(--gold-light); background: color-mix(in srgb, var(--maroon) 30%, var(--lacquer-2)); }
+
+  .footnote { margin-top: 36px; color: var(--vellum-dim); font-size: 14px; text-align: center; font-style: italic; }
+
+  /* ---------- Герольд (оверлей) ---------- */
+  .herald {
+    position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px;
+    background: radial-gradient(ellipse at center, rgba(110, 31, 37, .45), rgba(8, 3, 3, .96) 70%);
+    animation: fade .25s ease-out;
+  }
+  .herald[hidden] { display: none; }
+  .herald-panel {
+    position: relative; width: min(760px, 100%); padding: clamp(28px, 5vw, 56px); text-align: center;
+    border: 1px solid var(--gold); background: linear-gradient(180deg, #4a1419, #24090c 60%);
+    box-shadow: inset 0 0 0 6px #2a0b0e, inset 0 0 0 7px rgba(198, 160, 82, .45), 0 30px 90px rgba(0, 0, 0, .6);
+  }
+  .herald-panel .eyebrow { color: var(--gold); font: 600 12px var(--font-display); letter-spacing: .32em; text-transform: uppercase; }
+  .herald-panel h2 { margin: 14px 0 18px; color: var(--gold-light); font: 500 clamp(34px, 6vw, 58px)/1.05 var(--font-display); letter-spacing: .1em; font-variant: small-caps; }
+  .herald-panel p { margin: 0 auto 10px; max-width: 56ch; color: #f1e3cf; font-size: clamp(17px, 2.2vw, 20px); }
+  .herald-panel .terms { margin: 18px auto 26px; color: var(--gold); font: 13px var(--font-mono); }
+  .herald-panel .btn { background: #2a0b0e; border-color: var(--gold); }
+  .herald-panel .btn:hover { background: var(--gold); color: #24090c; }
+  .crossed { width: 64px; height: 64px; color: var(--gold); }
+  @keyframes fade { from { opacity: 0; } }
+
+  @media (max-width: 860px) {
+    .controls { grid-template-columns: 1fr 1fr; }
+    .codec { grid-template-columns: 1fr 1fr; }
+    .seal-receiver { grid-column: 1 / -1; grid-row: 1; }
+    .astrolabe { width: 170px; }
+    .boot { grid-template-columns: 1fr; }
+    .houses { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 480px) {
+    .controls { grid-template-columns: 1fr; }
+    .portrait { min-height: 170px; }
+    .gonfalon-banner { font-size: 11px; letter-spacing: .1em; }
+    .choice { grid-template-columns: 1.8em 1fr; }
+    .choice .tone { grid-column: 2; justify-self: start; }
+    .choice-text, .choice-note { grid-column: 2; }
+    .houses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition: none !important; }
+  }
+</style>
+</head>
+<body data-estate="noble">
+<main class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Федеральная Карракинская Монархия</p>
+    <h1>Ливрея и Печать</h1>
+    <p class="motto">Тестовый шаблон темы КТБ, вариант II: позолота, карракинский маронский и гербы Домов</p>
+    <div class="rule" aria-hidden="true"><i></i><i></i><i></i></div>
+  </header>
+
+  <section class="plate" aria-label="Параметры персоны">
+    <div class="controls">
+      <label>Каноническое имя
+        <input id="name" value="Кассия-Вейл" maxlength="80" autocomplete="off">
+      </label>
+      <label>Великий Дом
+        <select id="house"></select>
+      </label>
+      <label>Обращение
+        <select id="gender">
+          <option value="female">Леди</option>
+          <option value="male">Лорд</option>
+          <option value="neutral">Без титула</option>
+        </select>
+      </label>
+      <label>Сословие
+        <div class="estate-switch" role="group" aria-label="Сословие">
+          <button type="button" data-estate="noble" aria-pressed="true">Благородное</button>
+          <button type="button" data-estate="ignoble" aria-pressed="false">Неблагор.</button>
+        </div>
+      </label>
+    </div>
+  </section>
+
+  <h2 class="section-title">Аудиенция <small>экран диалога</small></h2>
+  <section class="plate" aria-label="Демонстрация экрана диалога">
+    <svg class="stamp" id="stamp" viewBox="0 0 100 100" aria-hidden="true"></svg>
+
+    <div class="codec">
+      <figure class="gonfalon" style="--livery-c:#c9b27c; margin:0">
+        <div class="gonfalon-banner"><span id="npcSigil"></span><span>Дом Порядка</span></div>
+        <div class="portrait">
+          <svg class="bust" viewBox="0 0 100 110" aria-hidden="true"><path fill="currentColor" d="M50 8c13 0 22 10 22 24s-9 26-22 26-22-12-22-26S37 8 50 8Zm-38 98c2-24 18-38 38-38s36 14 38 38Z"/><path d="M38 70 50 92 62 70" fill="none" stroke="var(--lacquer-2)" stroke-width="3"/></svg>
+          <figcaption>Сенешаль · Трон Карракиса</figcaption>
+        </div>
+      </figure>
+
+      <div class="seal-receiver">
+        <div class="astrolabe" id="astrolabe">
+          <div class="needle"></div>
+          <div class="freq">140.85<small>КАНАЛ АУДИЕНЦИЙ</small></div>
+        </div>
+        <div class="receiver-caption">Омнисеть · узел Карракиса<b id="channelState">Свеча зажжена</b></div>
+      </div>
+
+      <figure class="gonfalon player" style="margin:0">
+        <div class="gonfalon-banner"><span id="playerSigil"></span><span id="playerHouseLabel">Дом Стекла</span></div>
+        <div class="portrait">
+          <svg class="bust" viewBox="0 0 100 110" aria-hidden="true"><path fill="currentColor" d="M50 10c12 0 21 9 21 23 0 15-9 25-21 25S29 48 29 33c0-14 9-23 21-23Zm-38 96c2-24 18-38 38-38s36 14 38 38Z"/></svg>
+          <figcaption id="playerCaption">Проситель</figcaption>
+        </div>
+      </figure>
+    </div>
+
+    <div class="dialogue" aria-live="polite">
+      <p class="speaker" id="speaker">Сенешаль Дома Порядка</p>
+      <p class="speaker-title" id="speakerTitle">хранитель церемониала Трона Карракиса</p>
+      <p class="line" id="line"></p>
+      <ul class="choices" id="choices"></ul>
+      <div class="dialogue-footer">
+        <span class="precedence" id="precedence"></span>
+        <button class="seal-button" id="sealBtn" type="button"><span id="sealIcon"></span><span id="sealLabel">Скрепить печатью</span></button>
+      </div>
+    </div>
+  </section>
+
+  <h2 class="section-title">Церемониал запуска <small>текст загрузки, сверенный с каноном</small></h2>
+  <section class="plate boot">
+    <div>
+      <h3 class="boot-title" id="bootTitle">СЕНЕШАЛЬ</h3>
+      <p class="boot-sub" id="bootSub">ORACULUM-5.5.0 · церемониал аудиенций</p>
+      <pre class="boot-log" id="bootLog" aria-live="off"></pre>
+      <p class="boot-greeting" id="bootGreeting"></p>
+      <div class="btn-row">
+        <button class="btn" id="replayBoot" type="button">Повторить церемониал</button>
+        <button class="btn maroon" id="err401" type="button">Ошибка 401: печать</button>
+      </div>
+    </div>
+    <ul class="notes" aria-label="Что изменено в тексте">
+      <li><b>Баронский совет</b> вместо «Бюро баронов»: по канону титулы и дела знати ведёт Baronic Council.</li>
+      <li><b>Солнечные узы</b>: в лоре Узы (Bonds) — астрологическая связь человека, а не родословная.</li>
+      <li><b>Календарь Страстей</b>: местные календари строятся вокруг восьми Страстей: Брокер, Строитель, Шут, Арлекин, Маг, Следопыт, Титан, Волк.</li>
+      <li><b>Трон Карракиса</b>: столица и узел связи ФКМ.</li>
+      <li><b>Дуэль до первой крови</b>: поединки формализованы, и до первой крови дерутся куда чаще, чем до смерти.</li>
+      <li><b>Неблагородные</b>: по канону ~95% населения не имеет титула, поэтому интерфейс для них — казённая канцелярия без позолоты.</li>
+    </ul>
+  </section>
+
+  <h2 class="section-title">Ливреи Великих Домов <small>цвета и знаки — моя интерпретация, не канон</small></h2>
+  <section class="houses" id="houseTiles" aria-label="Выбор Дома"></section>
+
+  <h2 class="section-title">Было → Стало</h2>
+  <section class="plate compare-wrap">
+    <table class="compare">
+      <thead><tr><th>Аспект</th><th>Текущая тема</th><th>Вариант II</th></tr></thead>
+      <tbody>
+        <tr><td>Палитра</td>
+          <td>Чёрный + насыщенное золото #D4AF37, текст жёлто-золотой.<div class="chips"><span style="background:#090806"></span><span style="background:#6f5724"></span><span style="background:#d4af37"></span><span style="background:#f0dfaa"></span></div></td>
+          <td>Чёрный лак + <b>Karrakin Maroon («Royal Prime»)</b> как второй главный цвет, тусклая позолота, текст цвета пергамента.<div class="chips"><span style="background:#0c0908"></span><span style="background:#6e1f25"></span><span style="background:#c6a052"></span><span style="background:#ece2cb"></span></div></td></tr>
+        <tr><td>Красный</td>
+          <td>Только тревожный алый (#EF4758) в ошибках и окне герольда.</td>
+          <td>Маронский — цвет власти и церемонии, а не тревоги. Окно герольда — торжественное (вызов на дуэль), а не «системная ошибка».</td></tr>
+        <tr><td>Орнамент</td>
+          <td>Фацетные «кибер»-углы, срезанные кнопки, сканлинии CRT.</td>
+          <td>Гравированная табличка: двойной кант, ромбы, угловые заклёпки; без сканлиний. Церемониальный вид вместо «терминала, перекрашенного в золото».</td></tr>
+        <tr><td>Геральдика</td>
+          <td>Нет; Дом упоминается только в тексте.</td>
+          <td>Гонфалон с ливреей и знаком Дома над портретом, восковая печать Дома вместо кнопки «Подтвердить».</td></tr>
+        <tr><td>Типографика</td>
+          <td>Cormorant/Alegreya поверх моноширинного терминала.</td>
+          <td>Cormorant small-caps для титулов, буквица в реплике, римская нумерация выборов. Моноширинный — только для системного журнала.</td></tr>
+        <tr><td>Сословия</td>
+          <td>Различаются только текстом запуска.</td>
+          <td>Различается весь интерфейс: неблагородный видит олово и канцелярию, вызов на дуэль ему недоступен.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <p class="footnote">Автономный файл: использует только шрифты из ./assets/fonts, сервер не нужен. Боевая тема в index_styles.css не изменена.</p>
+</main>
+
+<div class="herald" id="herald" role="dialog" aria-modal="true" aria-labelledby="heraldTitle" hidden>
+  <div class="herald-panel">
+    <svg class="crossed" viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 54 46 18M46 18l6-8 2 2-8 6M14 46l4 4M8 52l4 4M54 54 18 18M18 18l-6-8-2 2 8 6M50 46l-4 4M56 52l-4 4"/></svg>
+    <div class="eyebrow" id="heraldEyebrow">Герольд Баронского совета</div>
+    <h2 id="heraldTitle">Вызов принят</h2>
+    <p id="heraldText"></p>
+    <div class="terms" id="heraldTerms">УСЛОВИЕ: ДО ПЕРВОЙ КРОВИ · СЕКУНДАНТЫ УВЕДОМЛЕНЫ · МЕСТО НАЗНАЧИТ ПРЕЦЕДЕНТ</div>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn" id="heraldAccept" type="button">Назначить секундантов</button>
+      <button class="btn" id="heraldWithdraw" type="button">Принести извинения</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // Знаки Домов (stroke = currentColor). Интерпретация, не канон.
+  const SIGILS = {
+    order: '<rect x="11" y="11" width="18" height="18" transform="rotate(45 20 20)"/><rect x="16" y="16" width="8" height="8"/>',
+    glass: '<path d="M20 4 34 16 20 36 6 16Z M6 16H34 M14 16 20 4 26 16 20 36Z"/>',
+    smoke: '<path d="M10 34c-5-5 5-9 0-14s5-9 0-14M20 34c-5-5 5-9 0-14s5-9 0-14M30 34c-5-5 5-9 0-14s5-9 0-14"/>',
+    stone: '<path d="M5 33H35M8 33V25H32V33M12 25V17H28V25M16 17V9H24V17"/>',
+    sand:  '<path d="M4 30c8-9 16-9 16 0 0-9 8-9 16 0M4 22c8-9 16-9 16 0 0-9 8-9 16 0"/><circle cx="29" cy="9" r="3"/>',
+    water: '<circle cx="20" cy="20" r="15"/><path d="M8 19c3-4 5-4 8 0s5 4 8 0 5-4 8 0M10 26c3-3 5-3 7 0s4 3 7 0 4-3 6 0"/>',
+    dust:  '<g fill="currentColor" stroke="none"><circle cx="20" cy="8" r="2.4"/><circle cx="11" cy="17" r="2"/><circle cx="29" cy="17" r="2"/><circle cx="20" cy="20" r="3"/><circle cx="13" cy="29" r="1.6"/><circle cx="27" cy="29" r="1.6"/><circle cx="20" cy="33" r="1.2"/></g>',
+    moments: '<path d="M11 5H29M11 35H29M13 5 27 35M27 5 13 35"/><path d="M17 31h6" />',
+    remembrance: '<path d="M16 35V18H24V35ZM11 35H29M20 18V15"/><path d="M20 4c4 5 4 8 0 11-4-3-4-6 0-11Z"/>',
+    promise: '<path d="M20 3V37M3 20H37M8 8 32 32M32 8 8 32"/><circle cx="20" cy="20" r="6" fill="var(--ink)"/>'
+  };
+
+  const HOUSES = [
+    { id: 'order',       name: 'Дом Порядка',     gen: 'Дома Порядка',     color: '#c9b27c' },
+    { id: 'glass',       name: 'Дом Стекла',      gen: 'Дома Стекла',      color: '#86bcbc' },
+    { id: 'smoke',       name: 'Дом Дыма',        gen: 'Дома Дыма',        color: '#9a948d' },
+    { id: 'stone',       name: 'Дом Камня',       gen: 'Дома Камня',       color: '#a38f78' },
+    { id: 'sand',        name: 'Дом Песка',       gen: 'Дома Песка',       color: '#d2a865' },
+    { id: 'water',       name: 'Дом Воды',        gen: 'Дома Воды',        color: '#5c8fb0' },
+    { id: 'dust',        name: 'Дом Пыли',        gen: 'Дома Пыли',        color: '#b49a80' },
+    { id: 'moments',     name: 'Дом Мгновений',   gen: 'Дома Мгновений',   color: '#a985b3' },
+    { id: 'remembrance', name: 'Дом Памяти',      gen: 'Дома Памяти',      color: '#8fa078' },
+    { id: 'promise',     name: 'Дом Обещания',    gen: 'Дома Обещания',    color: '#e3dccb' }
+  ];
+  const PASSIONS = ['Брокера', 'Строителя', 'Шута', 'Арлекина', 'Мага', 'Следопыта', 'Титана', 'Волка'];
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+  const $ = id => document.getElementById(id);
+  const state = { house: 'glass', estate: 'noble', gender: 'female', name: 'Кассия-Вейл', node: 'start' };
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const sigilSvg = (id, size) => `<svg viewBox="0 0 40 40" width="${size || 26}" height="${size || 26}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">${SIGILS[id]}</svg>`;
+  const house = () => HOUSES.find(h => h.id === state.house);
+  const noble = () => state.estate === 'noble';
+
+  function hash(str) { let h = 0; for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0; return Math.abs(h); }
+  function cleanName() { return (state.name.trim().replace(/\s+/g, ' ') || 'Безымянный проситель'); }
+  function title() { return !noble() ? '' : state.gender === 'female' ? 'леди ' : state.gender === 'male' ? 'лорд ' : ''; }
+  function fullName() { return noble() ? `${title()}${cleanName()} из ${house().gen}` : cleanName(); }
+  function addressShort() { return noble() ? `${title()}${cleanName()}`.replace(/^./, c => c.toUpperCase()) : 'Проситель'; }
+  function petition() { const h = hash(cleanName() + state.house); return `${100 + h % 900}-${'АБВГД'[h % 5]}`; }
+
+  function waxSeal(houseId, opts) {
+    const o = opts || {};
+    // Неровный край сургуча.
+    const pts = [];
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2, r = 44 + ((i * 7) % 5) - 2 + (i % 3 === 0 ? 2 : 0);
+      pts.push(`${(50 + Math.cos(a) * r).toFixed(1)},${(50 + Math.sin(a) * r).toFixed(1)}`);
+    }
+    return `<svg viewBox="0 0 100 100" ${o.size ? `width="${o.size}" height="${o.size}"` : ''} aria-hidden="true">
+      <defs><radialGradient id="wg${o.uid || ''}" cx="38%" cy="32%"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>
+      <polygon class="wax" points="${pts.join(' ')}" fill="currentColor"/>
+      <polygon points="${pts.join(' ')}" fill="url(#wg${o.uid || ''})"/>
+      <circle cx="50" cy="50" r="31" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2"/>
+      <circle cx="50" cy="50" r="31" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="1" transform="translate(-.8 -.8)"/>
+      <g transform="translate(30 30)" style="color:rgba(0,0,0,.45)"><svg viewBox="0 0 40 40" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.4">${SIGILS[houseId]}</svg></g>
+      <g transform="translate(29.3 29.3)" style="color:rgba(255,230,200,.18)"><svg viewBox="0 0 40 40" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.2">${SIGILS[houseId]}</svg></g>
+    </svg>`;
+  }
+
+  /* ---------------- Диалог ---------------- */
+  const NODES = {
+    start: () => ({
+      line: noble()
+        ? `${addressShort()}. Барон Дома Порядка примет вас по истечении положенного времени. Терпение — высшая из добродетелей, и Дом помнит тех, кто его проявляет.`
+        : `Проситель ${cleanName()}. Ваше прошение № ${petition()} принято к рассмотрению. Дома рассматривают обращения в порядке прецедента. Ожидайте.`,
+      choices: [
+        { tone: 'Учтиво', text: noble() ? '«Я подожду столько, сколько потребует церемониал.»' : '«Благодарю. Я подожду.»', go: 'patience' },
+        { tone: 'Прямо', text: '«Моё дело касается поставок для Союза. Оно не терпит отлагательств.»', go: 'trade' },
+        { tone: 'Вызов', cls: 'challenge', text: '«Ваш барон заставляет ждать представителя моего Дома? Это оскорбление.»', go: 'duel',
+          disabled: !noble(), note: noble() ? '' : 'Недоступно: право вызова есть лишь у носителя титула.' }
+      ]
+    }),
+    patience: () => ({
+      line: noble()
+        ? `Мудрый ответ. Ваше имя внесено в книгу прецедента выше трёх иных просителей. ${house().name} будет упомянут в вечерней хронике.`
+        : 'Терпение отмечено. Прошение переведено в общую очередь второй ступени.',
+      choices: [{ tone: 'Завершить', text: '«Да будет так.»', go: 'start' }]
+    }),
+    trade: () => ({
+      line: 'Всё в Баронствах касается поставок для Союза — на этом стоит Трон Карракиса. Я передам ваши слова. Но барон не любит, когда торговлю путают со спешкой.',
+      choices: [{ tone: 'Учтиво', text: '«Прошу простить мою прямоту.»', go: 'patience' }, { tone: 'Назад', text: '«Вернёмся к началу.»', go: 'start' }]
+    }),
+    afterDuel: () => ({
+      line: `Герольд записал ваш вызов. До назначенного часа ${addressShort()} остаётся гостем Трона Карракиса и под защитой его законов. Свеча аудиенции погашена.`,
+      choices: [{ tone: 'Назад', text: '«Вернёмся к началу.»', go: 'start' }]
+    }),
+    apology: () => ({
+      line: 'Извинения приняты и занесены в книгу прецедента. Дом Порядка ценит тех, кто умеет вовремя отступить. Аудиенция продолжается.',
+      choices: [{ tone: 'Учтиво', text: '«Благодарю за снисхождение.»', go: 'patience' }]
+    })
+  };
+
+  function renderDialogue() {
+    const node = NODES[state.node]();
+    $('line').textContent = node.line;
+    const list = $('choices');
+    list.innerHTML = '';
+    node.choices.forEach(c => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'choice'; b.disabled = !!c.disabled;
+      b.innerHTML = `<span class="tone ${c.cls || ''}"></span><span class="choice-text"></span>${c.note ? '<span class="choice-note"></span>' : ''}`;
+      b.querySelector('.tone').textContent = c.tone;
+      b.querySelector('.choice-text').textContent = c.text;
+      if (c.note) b.querySelector('.choice-note').textContent = c.note;
+      b.addEventListener('click', () => c.go === 'duel' ? openHerald() : go(c.go));
+      li.appendChild(b); list.appendChild(li);
+    });
+    const h = hash(cleanName() + state.house);
+    $('precedence').textContent = noble()
+      ? `Прецедент: место ${ROMAN[h % 12]} из XII · день ${PASSIONS[h % 8]}`
+      : `Прошение № ${petition()} · очередь ${100 + h % 900}`;
+    $('astrolabe').style.setProperty('--needle', (h % 360) + 'deg');
+  }
+  function go(id) { state.node = id; renderDialogue(); }
+
+  /* ---------------- Герольд ---------------- */
+  let lastFocus = null;
+  function openHerald() {
+    lastFocus = document.activeElement;
+    $('heraldText').textContent = `${fullName().replace(/^./, c => c.toUpperCase())} заявляет, что честь ${house().gen} задета. Аудиенция приостановлена; спор переходит на поле чести.`;
+    $('herald').hidden = false;
+    $('heraldAccept').focus();
+  }
+  function closeHerald(next) {
+    $('herald').hidden = true;
+    go(next);
+    $('channelState').textContent = next === 'afterDuel' ? 'Свеча погашена' : 'Свеча зажжена';
+    if (lastFocus && lastFocus.isConnected) lastFocus.focus(); else $('line').focus?.();
+  }
+  $('heraldAccept').addEventListener('click', () => closeHerald('afterDuel'));
+  $('heraldWithdraw').addEventListener('click', () => closeHerald('apology'));
+  document.addEventListener('keydown', e => {
+    if ($('herald').hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeHerald('apology'); }
+    if (e.key === 'Tab') {
+      const f = [$('heraldAccept'), $('heraldWithdraw')];
+      const i = f.indexOf(document.activeElement);
+      e.preventDefault(); f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+    }
+  });
+
+  /* ---------------- Печать ---------------- */
+  $('sealBtn').addEventListener('click', () => {
+    const s = $('stamp');
+    s.innerHTML = waxSeal(state.house, { uid: 's' }).replace(/^<svg[^>]*>|<\/svg>\s*$/g, '');
+    s.classList.remove('pressed'); void s.getBoundingClientRect(); s.classList.add('pressed');
+    $('sealLabel').textContent = noble() ? `Скреплено печатью ${house().gen}` : 'Заверено канцелярией';
+    $('channelState').textContent = noble() ? 'Слово дано' : 'Прошение заверено';
+  });
+
+  /* ---------------- Церемониал запуска ---------------- */
+  let bootTimer = null;
+  function bootLines() {
+    const h = hash(cleanName() + state.house);
+    if (!noble()) return {
+      title: 'ПУРСИВАНТ', sub: 'ORACULUM-5.5.0 · приёмная общего доступа',
+      lines: [
+        'ПУРСИВАНТ // приёмная общего доступа',
+        'ORACULUM-5.5.0 · реестр внешних обращений',
+        '',
+        '> Печать: отсутствует → сословие ........ НЕБЛАГОРОДНОЕ',
+        `> Прошение зарегистрировано ............. № ${petition()}`,
+        `> Адресат: ${house().name} · канцелярия`,
+        '> Дома рассматривают обращения в порядке прецедента.',
+        '> Терпение есть добродетель. Ожидайте.'
+      ],
+      greeting: `Прошение от ${cleanName()} заполнено. Подтвердите его и ожидайте принятия к рассмотрению.`
+    };
+    return {
+      title: 'СЕНЕШАЛЬ', sub: 'ORACULUM-5.5.0 · церемониал аудиенций',
+      lines: [
+        'СЕНЕШАЛЬ // церемониал аудиенций · ред. IX, оттиск 3',
+        `год 5027u · календарь Страстей: день ${PASSIONS[h % 8]}`,
+        '',
+        '> Печать Дома: оттиск сверен ............ ПОДЛИННО',
+        '> Баронский совет: реестр титулов ....... НАЙДЕН',
+        `>   ${fullName()}`,
+        '> Солнечные узы: прочтение .............. БЛАГОПРИЯТНЫ',
+        `> Ливрея ${house().gen}${' '.repeat(Math.max(1, 22 - house().gen.length))}...... ПРИНЯТА`,
+        '> Омнисеть: узел Трона Карракиса ........ РУКОПОЖАТИЕ',
+        '> Протоколы Союза: совместимость ........ ВКЛ (по уступкам)',
+        `> Прецедент: место в очереди ............ ${ROMAN[h % 12]} из XII`,
+        '> Клятва: «Слово моё — печать моя».',
+        '> Свеча зажжена. Аудиенция открыта.'
+      ],
+      greeting: `С возвращением, ${title()}${cleanName()}. ${house().name} свидетельствует ваше прибытие.`
+    };
+  }
+  function runBoot() {
+    clearTimeout(bootTimer);
+    const b = bootLines();
+    $('bootTitle').textContent = b.title;
+    $('bootSub').textContent = b.sub;
+    $('bootGreeting').textContent = '';
+    const log = $('bootLog');
+    const paint = n => {
+      log.innerHTML = '';
+      b.lines.slice(0, n).forEach(l => {
+        const row = document.createElement('div');
+        const m = l.match(/^(.*?\.{3,}\s)(.+)$/);
+        if (m) { row.append(m[1]); const s = document.createElement('span'); s.className = 'ok'; s.textContent = m[2]; row.append(s); }
+        else row.textContent = l || ' ';
+        log.appendChild(row);
+      });
+    };
+    if (reduceMotion) { paint(b.lines.length); $('bootGreeting').textContent = b.greeting; return; }
+    let i = 0;
+    const step = () => {
+      paint(++i);
+      if (i < b.lines.length) bootTimer = setTimeout(step, b.lines[i] === '' ? 120 : 260);
+      else bootTimer = setTimeout(() => { $('bootGreeting').textContent = b.greeting; }, 500);
+    };
+    step();
+  }
+  $('replayBoot').addEventListener('click', runBoot);
+  $('err401').addEventListener('click', () => {
+    clearTimeout(bootTimer);
+    $('bootTitle').textContent = 'ПЕЧАТЬ НЕ СХОДИТСЯ';
+    $('bootSub').textContent = 'ORACULUM-5.5.0 · ошибка 401';
+    $('bootLog').textContent = [
+      '> Сверка оттиска ........................ РАСХОЖДЕНИЕ',
+      '> Баронский совет: титул ................ НЕ ПОДТВЕРЖДЁН',
+      '> Аудиенция ............................. ОТЛОЖЕНА',
+      '',
+      '  Подлинность не подтверждена. Представьтесь вновь.'
+    ].join('\n');
+    $('bootGreeting').textContent = '«Дом приносит извинения за неудобство и ожидает вас вновь.»';
+  });
+
+  /* ---------------- Синхронизация ---------------- */
+  function applyAll(reboot) {
+    const h = house();
+    document.documentElement.style.setProperty('--livery', h.color);
+    document.body.dataset.estate = state.estate;
+    document.querySelectorAll('.estate-switch button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.estate === state.estate)));
+    $('playerSigil').innerHTML = sigilSvg(h.id);
+    $('playerHouseLabel').textContent = noble() ? h.name : 'Без ливреи';
+    $('playerCaption').textContent = noble() ? addressShort() : `Проситель ${cleanName()}`;
+    $('sealIcon').innerHTML = waxSeal(h.id, { size: 36, uid: 'b' });
+    $('sealLabel').textContent = noble() ? 'Скрепить печатью' : 'Заверить прошение';
+    $('stamp').classList.remove('pressed');
+    $('channelState').textContent = 'Свеча зажжена';
+    $('house').value = h.id;
+    document.querySelectorAll('.house-tile').forEach(t => t.setAttribute('aria-pressed', String(t.dataset.id === h.id)));
+    renderDialogue();
+    if (reboot) runBoot();
+  }
+
+  // Наполнение селектов и плиток
+  HOUSES.forEach(h => {
+    const o = document.createElement('option'); o.value = h.id; o.textContent = h.name + (h.id === 'promise' ? ' (врем.)' : ''); $('house').appendChild(o);
+    const t = document.createElement('button');
+    t.type = 'button'; t.className = 'house-tile'; t.dataset.id = h.id; t.style.setProperty('--hc', h.color);
+    t.innerHTML = `${sigilSvg(h.id, 34)}<span></span><i></i>`;
+    t.querySelector('span').textContent = h.name;
+    t.addEventListener('click', () => { state.house = h.id; state.node = 'start'; applyAll(true); });
+    $('houseTiles').appendChild(t);
+  });
+  $('npcSigil').innerHTML = sigilSvg('order');
+
+  $('house').addEventListener('change', e => { state.house = e.target.value; state.node = 'start'; applyAll(true); });
+  $('gender').addEventListener('change', e => { state.gender = e.target.value; applyAll(true); });
+  $('name').addEventListener('input', e => { state.name = e.target.value; applyAll(false); });
+  $('name').addEventListener('change', () => runBoot());
+  document.querySelectorAll('.estate-switch button').forEach(b => b.addEventListener('click', () => { state.estate = b.dataset.estate; state.node = 'start'; applyAll(true); }));
+
+  applyAll(true);
+})();
+</script>
+</body>
+</html>

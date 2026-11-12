@@ -233,11 +233,54 @@ body, html {
 #loading-bar {
     width: 0;
     height: 100%;
-    background-color: #03FB8D;
+    background-color: var(--terminal-color);
     transition: width linear;
     position: absolute;
     top: 0;
     left: 0;
+}
+
+/* ===== Темы оформления заставки (жёлтая и КТБ) ===== */
+body.theme-yellow {
+    --terminal-color: #ff6b35;
+}
+
+body.theme-ktb {
+    --terminal-color: #d4af37;
+}
+
+/* Жёлтая тема: тёплые акценты полосы загрузки. */
+body.theme-yellow #loading-bar-container {
+    background-color: rgba(255, 107, 53, 0.1);
+}
+
+body.theme-yellow #loading-bar::after {
+    background: linear-gradient(to right,
+        rgba(255, 107, 53, 0) 0%,
+        rgba(255, 107, 53, 0.3) 50%,
+        rgba(255, 107, 53, 0) 100%);
+}
+
+body.theme-yellow #skip-button:hover {
+    background-color: rgba(255, 107, 53, 0.1);
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+}
+
+/* КТБ: старое золото. */
+body.theme-ktb #loading-bar-container {
+    background-color: rgba(212, 175, 55, 0.1);
+}
+
+body.theme-ktb #loading-bar::after {
+    background: linear-gradient(to right,
+        rgba(212, 175, 55, 0) 0%,
+        rgba(212, 175, 55, 0.3) 50%,
+        rgba(212, 175, 55, 0) 100%);
+}
+
+body.theme-ktb #skip-button:hover {
+    background-color: rgba(212, 175, 55, 0.1);
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
 }
 
 #loading-bar::after {

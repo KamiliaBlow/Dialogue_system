@@ -1,5 +1,6 @@
 import AppConfig from './config.js';
 import { escapeAttr, safeNumber } from './escape-utils.js';
+import { applyAdminTheme } from './admin-theme.js';
 
 const { API_URL, ASSETS_URL, CACHE_HEADERS } = AppConfig;
 
@@ -37,6 +38,7 @@ class CharacterCatalog {
             return;
         }
         
+        applyAdminTheme();
         this.generateBackground();
         this.bindEvents();
         this.loadCharacters();
@@ -424,12 +426,12 @@ class CharacterCatalog {
     async openRelationsModal(characterId, characterName) {
         const modal = document.getElementById('relations-modal');
         const tbody = document.getElementById('relations-tbody');
-        
+
         document.getElementById('relations-modal-title').textContent = `Отношения: ${characterName}`;
         document.getElementById('relations-loading').style.display = 'block';
         document.getElementById('relations-content').style.display = 'none';
         modal.style.display = 'flex';
-        
+
         try {
             const res = await fetch(`${API_URL}/editor/global-characters/${characterId}/relations`, {
                 credentials: 'include',
@@ -437,46 +439,76 @@ class CharacterCatalog {
             });
             if (!res.ok) throw new Error(res.status);
             const data = await res.json();
-            
-            const relationsMap = {};
-            data.relations.forEach(r => { relationsMap[r.user_id] = r; });
-            
+
+            this._relData = data;
+            this._relCharId = characterId;
+
+            // Стартовые значения (пилот 0) и значения по пилотам — раздельно
+            const baseMap = {};
+            const pilotMap = {};
+            data.relations.forEach(r => {
+                if (r.pilot_profile_id === 0) baseMap[r.user_id] = r;
+                else pilotMap[`${r.user_id}_${r.pilot_profile_id}`] = r;
+            });
+            this._relPilotMap = pilotMap;
+
             const defaultRel = data.character.default_relation || 0;
-            
+
             tbody.innerHTML = data.users.map(user => {
-                const rel = relationsMap[user.id];
-                const value = rel ? rel.relation_value : defaultRel;
-                const relId = rel ? rel.id : null;
+                const base = baseMap[user.id];
+                const value = base ? base.relation_value : defaultRel;
+                const relId = base ? base.id : null;
                 const color = value > 0 ? '#03fb8d' : value < 0 ? '#ff3333' : 'inherit';
                 return `
-                    <tr data-rel-id="${escapeAttr(relId)}" data-user-id="${escapeAttr(user.id)}" data-gc-id="${escapeAttr(characterId)}">
-                        <td>${this.escapeHtml(user.username)}</td>
+                    <tr class="rel-user-row" data-rel-id="${escapeAttr(relId)}" data-user-id="${escapeAttr(user.id)}" data-gc-id="${escapeAttr(characterId)}" style="cursor:pointer;">
+                        <td>
+                            <span class="rel-toggle" style="display:inline-block;width:14px;color:var(--primary-color);">▸</span>
+                            ${this.escapeHtml(user.username)}
+                        </td>
                         <td>
                             <input type="number" class="form-input relation-value-input"
                                    value="${escapeAttr(value)}" min="-100" max="100" step="5"
                                    style="width:100%;color:${color};text-align:center;">
+                            <div style="font-size:10px;color:#888;margin-top:3px;">Применяется ко всем пилотам аккаунта</div>
                         </td>
                         <td>
                             <button class="btn btn-small save-relation-btn">✓</button>
                         </td>
                     </tr>
+                    <tr class="rel-pilots-row" data-user-id="${escapeAttr(user.id)}" style="display:none;">
+                        <td colspan="3" class="rel-pilots-cell" style="padding:4px 10px;background:rgba(128,128,128,0.06);"></td>
+                    </tr>
                 `;
             }).join('');
-            
+
             document.getElementById('relations-loading').style.display = 'none';
             document.getElementById('relations-content').style.display = 'block';
-            
+
             tbody.querySelectorAll('.save-relation-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const row = e.target.closest('tr');
+                    e.stopPropagation();
+                    const row = btn.closest('tr');
                     this.saveRelationValue(row);
                 });
             });
-            
+
             tbody.querySelectorAll('.relation-value-input').forEach(input => {
                 input.addEventListener('input', () => {
                     const v = parseInt(input.value) || 0;
                     input.style.color = v > 0 ? '#03fb8d' : v < 0 ? '#ff3333' : 'inherit';
+                    this.markDirty(input);
+                });
+            });
+
+            // Клик по строке пользователя раскрывает список его пилотов
+            tbody.querySelectorAll('.rel-user-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('input, button, label')) return;
+                    this.toggleUserPilots(row);
+                });
+                row.querySelector('.rel-toggle')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleUserPilots(row);
                 });
             });
         } catch (err) {
@@ -486,35 +518,144 @@ class CharacterCatalog {
             document.getElementById('relations-content').style.display = 'block';
         }
     }
-    
+
+    // Раскрыть/свернуть список пилотов пользователя в модалке отношений.
+    async toggleUserPilots(userRow) {
+        const userId = userRow.dataset.userId;
+        const gcId = userRow.dataset.gcId;
+        const pilotsRow = userRow.nextElementSibling;
+        if (!pilotsRow || !pilotsRow.classList.contains('rel-pilots-row')) return;
+        const cell = pilotsRow.querySelector('.rel-pilots-cell');
+        const toggle = userRow.querySelector('.rel-toggle');
+
+        if (pilotsRow.style.display !== 'none') {
+            pilotsRow.style.display = 'none';
+            if (toggle) toggle.textContent = '▸';
+            return;
+        }
+
+        if (cell.dataset.loaded === '1') {
+            pilotsRow.style.display = 'table-row';
+            if (toggle) toggle.textContent = '▾';
+            return;
+        }
+
+        cell.innerHTML = '<span style="font-size:11px;color:#888;">Загрузка пилотов...</span>';
+        pilotsRow.style.display = 'table-row';
+        if (toggle) toggle.textContent = '▾';
+
+        try {
+            const res = await fetch(`${API_URL}/editor/users/${userId}/pilots`, {
+                credentials: 'include',
+                headers: CACHE_HEADERS
+            });
+            if (!res.ok) throw new Error(res.status);
+            const data = await res.json();
+            const pilots = data.pilots || [];
+
+            if (pilots.length === 0) {
+                cell.innerHTML = '<span style="font-size:11px;color:#888;">У пользователя нет пилотов.</span>';
+                cell.dataset.loaded = '1';
+                return;
+            }
+
+            const baseValue = parseInt(userRow.querySelector('.relation-value-input')?.value) || 0;
+            const rows = pilots.map(p => {
+                const rel = this._relPilotMap[`${userId}_${p.id}`];
+                const value = rel ? rel.relation_value : baseValue;
+                const color = value > 0 ? '#03fb8d' : value < 0 ? '#ff3333' : 'inherit';
+                const activeMark = p.is_active ? ' <span style="color:var(--primary-color);font-size:10px;">● активен</span>' : '';
+                return `
+                    <div class="rel-pilot-item" data-user-id="${escapeAttr(userId)}" data-gc-id="${escapeAttr(gcId)}"
+                         data-pilot-id="${escapeAttr(p.id)}" style="display:flex;align-items:center;gap:8px;padding:4px 0 4px 16px;border-bottom:1px dashed var(--primary-border);">
+                        <span style="min-width:150px;font-size:12px;">${this.escapeHtml(p.callsign || ('Пилот ' + p.slot_number))}${activeMark}</span>
+                        <input type="number" class="form-input rel-pilot-value-input" value="${escapeAttr(value)}"
+                               min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;color:${color};text-align:center;">
+                        <button class="btn btn-small rel-pilot-save-btn" style="font-size:11px;padding:3px 8px;">✓</button>
+                    </div>
+                `;
+            }).join('');
+            cell.innerHTML = rows;
+
+            cell.querySelectorAll('.rel-pilot-value-input').forEach(input => {
+                input.addEventListener('input', () => {
+                    const v = parseInt(input.value) || 0;
+                    input.style.color = v > 0 ? '#03fb8d' : v < 0 ? '#ff3333' : 'inherit';
+                    this.markDirty(input);
+                });
+            });
+            cell.querySelectorAll('.rel-pilot-save-btn').forEach(btn => {
+                btn.addEventListener('click', () => this.savePilotRelationValue(btn.closest('.rel-pilot-item')));
+            });
+            cell.dataset.loaded = '1';
+        } catch (err) {
+            console.error('Error loading pilots:', err);
+            cell.innerHTML = '<span style="font-size:11px;color:#ff3333;">Ошибка загрузки пилотов</span>';
+        }
+    }
+
+    // Сохранить отношение конкретного пилота.
+    async savePilotRelationValue(item) {
+        const userId = item.dataset.userId;
+        const gcId = item.dataset.gcId;
+        const pilotId = item.dataset.pilotId;
+        const input = item.querySelector('.rel-pilot-value-input');
+        const value = Math.max(-100, Math.min(100, parseInt(input.value) || 0));
+        input.value = value;
+
+        try {
+            const res = await fetch(`${API_URL}/editor/global-characters/${gcId}/user/${userId}/relation`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', ...CACHE_HEADERS },
+                body: JSON.stringify({ relationValue: value, pilotProfileId: pilotId })
+            });
+            if (!res.ok) throw new Error(res.status);
+
+            this.markClean(input);
+
+            const btn = item.querySelector('.rel-pilot-save-btn');
+            const origText = btn.textContent;
+            btn.textContent = '✓';
+            btn.style.color = '#03fb8d';
+            setTimeout(() => { btn.textContent = origText; btn.style.color = ''; }, 1000);
+        } catch (err) {
+            console.error('Error saving pilot relation:', err);
+            alert('Ошибка сохранения');
+        }
+    }
+
+    // Подсветка несохранённых изменений (жёлтый) и снятие её после сохранения.
+    markDirty(input) {
+        input.style.borderColor = '#ffcc00';
+        input.style.boxShadow = '0 0 5px rgba(255, 204, 0, 0.6)';
+    }
+
+    markClean(input) {
+        input.style.borderColor = '';
+        input.style.boxShadow = '';
+    }
+
     async saveRelationValue(row) {
-        const relId = row.dataset.relId;
         const userId = row.dataset.userId;
         const gcId = row.dataset.gcId;
         const input = row.querySelector('.relation-value-input');
         const value = Math.max(-100, Math.min(100, parseInt(input.value) || 0));
         input.value = value;
-        
+
         try {
-            if (relId && relId !== 'null') {
-                const res = await fetch(`${API_URL}/editor/global-characters/relation/${relId}`, {
-                    method: 'PUT',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json', ...CACHE_HEADERS },
-                    body: JSON.stringify({ relationValue: value })
-                });
-                if (!res.ok) throw new Error(res.status);
-            } else {
-                const res = await fetch(`${API_URL}/editor/global-characters/init-relations`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: CACHE_HEADERS
-                });
-                if (!res.ok) throw new Error(res.status);
-                this.openRelationsModal(parseInt(gcId), document.getElementById('relations-modal-title').textContent.replace('Отношения: ', ''));
-                return;
-            }
-            
+            // Базовое отношение пользователя: по умолчанию перезаписывается
+            // у всех пилотов аккаунта (глобальное применение).
+            const res = await fetch(`${API_URL}/editor/global-characters/${gcId}/user/${userId}/relation`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', ...CACHE_HEADERS },
+                body: JSON.stringify({ relationValue: value, global: true })
+            });
+            if (!res.ok) throw new Error(res.status);
+
+            this.markClean(input);
+
             const btn = row.querySelector('.save-relation-btn');
             const origText = btn.textContent;
             btn.textContent = '✓';

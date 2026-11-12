@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pilot Profile - AC6 Briefing</title>
+  <title>Досье пилотов</title>
   <style>
     @font-face {
       font-family: 'Orbitron';
@@ -688,6 +688,23 @@
       color: var(--success);
     }
 
+    .mandatory-banner {
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      background: rgba(255, 107, 53, 0.12);
+      border: 1px solid var(--accent);
+      color: var(--text);
+      font-size: 0.85rem;
+      line-height: 1.6;
+      letter-spacing: 0.04em;
+      box-shadow: inset 0 0 18px rgba(255, 107, 53, 0.06);
+    }
+
+    .mandatory-banner b {
+      color: var(--accent);
+      letter-spacing: 2px;
+    }
+
     .back-link {
       position: fixed;
       bottom: 20px;
@@ -707,34 +724,37 @@
   </style>
 </head>
 <body>
+  <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
   <div class="bg-grid"></div>
   <div class="code-overlay" id="codeOverlay"></div>
   <div class="vignette"></div>
   <div class="scanlines"></div>
 
   <header class="header">
-    <div class="header-title">◈ PILOT PROFILE ◈</div>
+    <div class="header-title">◈ ДОСЬЕ ПИЛОТОВ ◈</div>
     <div class="header-user">
       <span id="usernameDisplay"></span>
-      <button class="btn-logout" onclick="logout()">Logout</button>
+      <button class="btn-logout" onclick="logout()">Выйти</button>
     </div>
   </header>
 
   <div class="container">
-    <h1 class="page-title">Mission Pilot Selection</h1>
+    <h1 class="page-title">Список досье</h1>
+
+    <div id="mandatoryBanner" class="mandatory-banner hidden"></div>
 
     <div class="theme-selector">
       <div class="theme-option" data-theme="yellow" onclick="setTheme('yellow')">
         <div class="theme-color yellow"></div>
-        <span>Yellow Theme</span>
+        <span>IPS-N</span>
       </div>
       <div class="theme-option" data-theme="green" onclick="setTheme('green')">
         <div class="theme-color green"></div>
-        <span>Green Theme</span>
+        <span>GMS</span>
       </div>
       <div class="theme-option ktb" data-theme="ktb" onclick="setTheme('ktb')" role="button" tabindex="0" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setTheme('ktb'); }">
         <div class="theme-color ktb"></div>
-        <span>КТБ</span>
+        <span>KTB</span>
       </div>
     </div>
 
@@ -826,13 +846,18 @@
     </div>
   </div>
 
-  <a href="index.html" class="back-link">← Вернуться в терминал</a>
+  <a href="index.html" class="back-link" id="backLink">← Вернуться в терминал</a>
 
   <script>
     let API_URL = 'https://' + window.location.hostname + ':3000/api';
     let currentProfiles = [];
     let selectedSlot = null;
     let uploadedAvatarPath = null;
+
+    // Режим обязательной настройки: после регистрации (?first=1) или когда
+    // у пользователя нет активного пилота терминал остаётся недоступен.
+    const urlParams = new URLSearchParams(window.location.search);
+    const FIRST_SETUP = urlParams.has('first');
 
     function getAvatarUrl(path) {
       if (!path) return null;
@@ -914,6 +939,7 @@
     }
 
     function applyTheme(theme) {
+      try { localStorage.setItem('userTheme', theme); } catch (e) {}
       document.body.classList.remove('theme-green', 'theme-ktb');
       if (theme === 'green' || theme === 'ktb') {
         document.body.classList.add(`theme-${theme}`);
@@ -949,8 +975,33 @@
         
         currentProfiles = data.profiles;
         renderSlots();
+        updateMandatoryState();
       } catch (e) {
         console.error('Failed to load profiles:', e);
+      }
+    }
+
+    function updateMandatoryState() {
+      const hasAnyProfile = currentProfiles.some(p => p.callsign);
+      const hasActiveProfile = currentProfiles.some(p => p.callsign && Number(p.is_active) === 1);
+      const backLink = document.getElementById('backLink');
+      const banner = document.getElementById('mandatoryBanner');
+
+      // Ссылка в терминал доступна только при активном пилоте.
+      backLink.style.display = hasActiveProfile ? '' : 'none';
+
+      if (hasActiveProfile) {
+        banner.classList.add('hidden');
+        return;
+      }
+
+      banner.innerHTML = FIRST_SETUP
+        ? '<b>ПЕРВИЧНАЯ НАСТРОЙКА.</b> Создайте первого пилота: заполните позывной и название меха, затем нажмите «Save Profile». Первый сохранённый пилот будет автоматически назначен активным — до этого терминал связи недоступен.'
+        : '<b>НЕТ АКТИВНОГО ПИЛОТА.</b> Создайте профиль пилота и назначьте его активным, чтобы вернуться в терминал.';
+
+      // В обязательном режиме сразу открываем редактор первого пустого слота.
+      if (!hasAnyProfile && selectedSlot === null) {
+        selectSlot(1);
       }
     }
 
@@ -1077,7 +1128,7 @@
         const data = await response.json();
         
         if (response.ok) {
-          showMessage('Profile saved successfully', 'success');
+          showMessage(data.message || 'Profile saved successfully', 'success');
           loadProfiles();
         } else {
           showMessage(data.message || 'Failed to save profile', 'error');
@@ -1173,5 +1224,6 @@
       }
     }
   </script>
+  <script type="module" src="scripts/music-player.js"></script>
 </body>
 </html>

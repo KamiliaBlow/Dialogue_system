@@ -32,6 +32,34 @@ async function loadConfig() {
     }
 }
 
+// Применяет тему оформления заставки (green — базовая, класс не нужен).
+async function loadTheme() {
+    if (!API_URL) await loadConfig();
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const response = await fetch(`${API_URL}/user-settings`, {
+            credentials: 'include',
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        try { localStorage.setItem('userTheme', data.theme === 'ktb' ? 'ktb' : 'yellow'); } catch (e) {}
+        document.body.classList.remove('theme-yellow', 'theme-ktb');
+        if (data.theme === 'yellow') {
+            document.body.classList.add('theme-yellow');
+        } else if (data.theme === 'ktb') {
+            document.body.classList.add('theme-ktb');
+        }
+    } catch (error) {
+        console.warn('Failed to load theme:', error);
+    }
+}
+
 async function loadUsername() {
     if (!API_URL) await loadConfig();
     
@@ -290,7 +318,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Показываем кнопку "Пропустить запуск"
     elements.skipButton.hidden = false;
 
-    // Загружаем имя пользователя
+    // Загружаем тему оформления и имя пользователя
+    loadTheme();
     loadUsername();
 
     // Инициализируем обработчики событий

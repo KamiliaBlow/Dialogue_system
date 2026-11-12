@@ -827,13 +827,27 @@ router.post('/conversations', (req, res) => {
 
     router.get('/global-characters/relations', (req, res) => {
         db.all(`SELECT ur.id, ur.user_id, u.username, ur.global_character_id,
-                       gc.name as character_name, gc.image as character_image, ur.relation_value
+                       gc.name as character_name, gc.image as character_image,
+                       ur.relation_value, ur.pilot_profile_id
                 FROM user_relations ur
                 JOIN users u ON ur.user_id = u.id
                 JOIN global_characters gc ON ur.global_character_id = gc.id
-                ORDER BY u.username, gc.name`, (err, rows) => {
+                ORDER BY u.username, gc.name, ur.pilot_profile_id`, (err, rows) => {
             if (err) return res.status(500).json({ message: 'Ошибка получения отношений' });
-            res.json({ relations: rows });
+            db.all('SELECT id, username FROM users ORDER BY username', [], (err, users) => {
+                if (err) return res.status(500).json({ message: 'Ошибка' });
+                res.json({ relations: rows, users: users || [] });
+            });
+        });
+    });
+
+    // Пилоты конкретного пользователя (для админских представлений отношений).
+    router.get('/users/:userId/pilots', (req, res) => {
+        const { userId } = req.params;
+        db.all(`SELECT id, slot_number, callsign, full_name, is_active
+                FROM pilot_profiles WHERE user_id = ? ORDER BY slot_number`, [userId], (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения пилотов' });
+            res.json({ pilots: rows || [] });
         });
     });
 
@@ -843,11 +857,11 @@ router.post('/conversations', (req, res) => {
             if (err) return res.status(500).json({ message: 'Ошибка' });
             if (!gc) return res.status(404).json({ message: 'Персонаж не найден' });
 
-            db.all(`SELECT ur.id, ur.user_id, u.username, ur.relation_value
+            db.all(`SELECT ur.id, ur.user_id, u.username, ur.relation_value, ur.pilot_profile_id
                     FROM user_relations ur
                     JOIN users u ON ur.user_id = u.id
                     WHERE ur.global_character_id = ?
-                    ORDER BY u.username`, [id], (err, rows) => {
+                    ORDER BY u.username, ur.pilot_profile_id`, [id], (err, rows) => {
                 if (err) return res.status(500).json({ message: 'Ошибка получения отношений' });
 
                 db.all('SELECT id, username FROM users ORDER BY username', [], (err, allUsers) => {
@@ -868,6 +882,78 @@ router.post('/conversations', (req, res) => {
                 if (this.changes === 0) return res.status(404).json({ message: 'Запись не найдена' });
                 res.json({ message: 'Отношение обновлено' });
             });
+    });
+
+    // Задать отношение пользователя с персонажем.
+    // По умолчанию пишется стартовое значение (строка пилота 0);
+    // global=true — значение дополнительно перезаписывается у всех пилотов аккаунта;
+    // pilotProfileId>0 — записывается только отношение указанного пилота.
+    router.put('/global-characters/:gcId/user/:userId/relation', (req, res) => {
+        const { gcId, userId } = req.params;
+        const val = Math.max(-100, Math.min(100, parseInt(req.body.relationValue) || 0));
+        const isGlobal = req.body.global === true || req.body.global === 1 || req.body.global === '1';
+        const pilotProfileId = parseInt(req.body.pilotProfileId) || 0;
+
+        db.get('SELECT id FROM global_characters WHERE id = ?', [gcId], (err, gc) => {
+            if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+            if (!gc) return res.status(404).json({ message: 'Персонаж не найден' });
+
+            db.get('SELECT id FROM users WHERE id = ?', [userId], (err, user) => {
+                if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+                if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
+
+                // Отношение конкретного пилота — отдельная запись, без глобальной перезаписи.
+                if (pilotProfileId > 0) {
+                    db.get('SELECT id FROM pilot_profiles WHERE id = ? AND user_id = ?',
+                        [pilotProfileId, userId], (err, pilot) => {
+                            if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+                            if (!pilot) return res.status(404).json({ message: 'Пилот не найден' });
+                            db.run(`INSERT INTO user_relations (user_id, global_character_id, pilot_profile_id, relation_value)
+                                    VALUES (?, ?, ?, ?)
+                                    ON CONFLICT(user_id, global_character_id, pilot_profile_id)
+                                    DO UPDATE SET relation_value = excluded.relation_value, updated_at = CURRENT_TIMESTAMP`,
+                                [userId, gcId, pilotProfileId, val], (err) => {
+                                    if (err) return res.status(500).json({ message: 'Ошибка сохранения отношения' });
+                                    res.json({ message: 'Отношение пилота сохранено', pilot_profile_id: pilotProfileId });
+                                });
+                        });
+                    return;
+                }
+
+                db.serialize(() => {
+                    db.run('BEGIN TRANSACTION');
+
+                    // Стартовое (общее) значение аккаунта — строка пилота 0.
+                    db.run(`INSERT INTO user_relations (user_id, global_character_id, pilot_profile_id, relation_value)
+                            VALUES (?, ?, 0, ?)
+                            ON CONFLICT(user_id, global_character_id, pilot_profile_id)
+                            DO UPDATE SET relation_value = excluded.relation_value, updated_at = CURRENT_TIMESTAMP`,
+                        [userId, gcId, val], (err) => {
+                            if (err) {
+                                db.run('ROLLBACK');
+                                return res.status(500).json({ message: 'Ошибка сохранения отношения' });
+                            }
+
+                            if (!isGlobal) {
+                                db.run('COMMIT');
+                                return res.json({ message: 'Начальное отношение сохранено', global: false });
+                            }
+
+                            // Глобальное значение: перезаписываем отношение у всех пилотов аккаунта.
+                            db.run(`UPDATE user_relations SET relation_value = ?, updated_at = CURRENT_TIMESTAMP
+                                    WHERE user_id = ? AND global_character_id = ? AND pilot_profile_id != 0`,
+                                [val, userId, gcId], (err) => {
+                                    if (err) {
+                                        db.run('ROLLBACK');
+                                        return res.status(500).json({ message: 'Ошибка обновления пилотов' });
+                                    }
+                                    db.run('COMMIT');
+                                    res.json({ message: 'Отношение установлено для всех пилотов аккаунта', global: true });
+                                });
+                        });
+                });
+            });
+        });
     });
 
     // ==================== ФАЙЛЫ ====================

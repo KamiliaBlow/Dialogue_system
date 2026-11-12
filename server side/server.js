@@ -117,6 +117,78 @@ const uploadAvatar = multer({
     fileFilter: imageFileFilter
 });
 
+// Загрузка музыки для плейлистов тем.
+const musicStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, 'assets/sounds/music');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'music_' + uniqueSuffix + path.extname(file.originalname).toLowerCase());
+    }
+});
+
+const uploadMusic = multer({
+    storage: musicStorage,
+    limits: { fileSize: 100 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        // Расширение ИЛИ mime-тип: Windows/браузеры часто шлют application/octet-stream
+        // или специфичные варианты (audio/x-pn-wav, audio/mp4 и т.п.).
+        const allowedExts = /\.(wav|mp3|ogg|m4a|flac|opus|oga)$/i;
+        const mimeOk = /^(audio|video)\//i.test(file.mimetype || '')
+            || (file.mimetype || '') === 'application/octet-stream';
+        if (allowedExts.test(path.extname(file.originalname).toLowerCase()) && mimeOk) {
+            return cb(null, true);
+        }
+        const filterError = new Error('Только аудиофайлы (mp3, wav, ogg, m4a, flac, opus) разрешены');
+        filterError.status = 400;
+        cb(filterError);
+    }
+});
+
+// Определение типа аудио по сигнатуре (magic bytes).
+function detectAudioMime(buf) {
+    if (!buf || buf.length < 12) return null;
+    // MP3: ID3v2-тег или MPEG-аудиофрейм (0xFF FB/FA/F3/F2)
+    if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return 'audio/mp3';
+    if (buf[0] === 0xFF && (buf[1] === 0xFB || buf[1] === 0xFA || buf[1] === 0xF3 || buf[1] === 0xF2)) return 'audio/mp3';
+    // OGG (vorbis/opus)
+    if (buf[0] === 0x4F && buf[1] === 0x67 && buf[2] === 0x67 && buf[3] === 0x53) return 'audio/ogg';
+    // WAV/RIFF
+    if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
+        && buf[8] === 0x57 && buf[9] === 0x41 && buf[10] === 0x56 && buf[11] === 0x45) return 'audio/wav';
+    // FLAC
+    if (buf[0] === 0x66 && buf[1] === 0x4C && buf[2] === 0x61 && buf[3] === 0x43) return 'audio/flac';
+    // MP4/M4A: ....ftyp
+    if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return 'audio/mp4';
+    // WebM/Matroska: 0x1A45DFA3
+    if (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) return 'audio/webm';
+    return null;
+}
+
+// Проверка содержимого музыкального файла по сигнатурам (magic bytes).
+function validateMusicMagicBytes(file) {
+    if (!file || !file.path) return false;
+    try {
+        const fd = fs.openSync(file.path, 'r');
+        const buf = Buffer.alloc(16);
+        const bytes = fs.readSync(fd, buf, 0, 16, 0);
+        fs.closeSync(fd);
+        const detected = detectAudioMime(buf.slice(0, bytes));
+        if (!detected) {
+            Logger.warn(`validateMusicMagicBytes: неизвестная сигнатура файла ${file.originalname} (${bytes} байт)`);
+        }
+        return !!detected;
+    } catch (e) {
+        Logger.warn('validateMusicMagicBytes ошибка чтения:', e.message);
+        return false;
+    }
+}
+
 config.validate();
 
 const sslKeyPath = path.join(__dirname, config.SSL_KEY_PATH);
@@ -427,14 +499,25 @@ function initDatabase() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             global_character_id INTEGER NOT NULL,
+            pilot_profile_id INTEGER NOT NULL DEFAULT 0,
             relation_value INTEGER DEFAULT 0,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (global_character_id) REFERENCES global_characters(id) ON DELETE CASCADE,
-            UNIQUE(user_id, global_character_id)
+            FOREIGN KEY (pilot_profile_id) REFERENCES pilot_profiles(id) ON DELETE CASCADE,
+            UNIQUE(user_id, global_character_id, pilot_profile_id)
+        )`,
+        `CREATE TABLE IF NOT EXISTS music_playlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            theme TEXT NOT NULL DEFAULT 'yellow',
+            title TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            volume INTEGER NOT NULL DEFAULT 100,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`
     ];
-    
+
 tables.forEach(sql => db.run(sql));
     
     db.run(`ALTER TABLE characters ADD COLUMN voice_mode TEXT DEFAULT 'none'`, (err) => {
@@ -570,11 +653,13 @@ tables.forEach(sql => db.run(sql));
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             user_id INTEGER NOT NULL,
                             global_character_id INTEGER NOT NULL,
+                            pilot_profile_id INTEGER NOT NULL DEFAULT 0,
                             relation_value INTEGER DEFAULT 0,
                             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                             FOREIGN KEY (global_character_id) REFERENCES global_characters(id) ON DELETE CASCADE,
-                            UNIQUE(user_id, global_character_id)
+                            FOREIGN KEY (pilot_profile_id) REFERENCES pilot_profiles(id) ON DELETE CASCADE,
+                            UNIQUE(user_id, global_character_id, pilot_profile_id)
                         )`, (err) => {
                             if (err) Logger.error('Failed to recreate user_relations:', err.message);
                             else Logger.info('user_relations migrated successfully');
@@ -584,8 +669,74 @@ tables.forEach(sql => db.run(sql));
             }
         }
     });
+
+    // ====== Миграция user_relations: репутация ведётся отдельно для каждого пилота ======
+    // Добавляем pilot_profile_id (0 = общая репутация, до введения пилотов) и заменяем
+    // старый UNIQUE(user_id, global_character_id) на тройной, разрешающий строки по пилотам.
+    db.run(`ALTER TABLE user_relations ADD COLUMN pilot_profile_id INTEGER NOT NULL DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (user_relations.pilot_profile_id):', err.message);
+            return;
+        }
+
+        db.all("PRAGMA index_list(user_relations)", [], (err, indexes) => {
+            if (err) {
+                Logger.error('Migration error (index_list):', err.message);
+                return;
+            }
+            const uniqueIndexes = (indexes || []).filter(ix => ix.origin === 'u');
+            const checkUniqueIndexes = (i, needRecreate) => {
+                if (i >= uniqueIndexes.length) {
+                    if (needRecreate) recreateUserRelationsTable();
+                    return;
+                }
+                db.all(`PRAGMA index_info("${uniqueIndexes[i].name}")`, [], (err, cols) => {
+                    if (err) {
+                        checkUniqueIndexes(i + 1, true);
+                        return;
+                    }
+                    const hasPilotColumn = (cols || []).some(c => c.name === 'pilot_profile_id');
+                    checkUniqueIndexes(i + 1, needRecreate || !hasPilotColumn);
+                });
+            };
+            checkUniqueIndexes(0, false);
+        });
+    });
     });
 }
+
+// Пересоздание user_relations с UNIQUE(user_id, global_character_id, pilot_profile_id).
+// Старые строки сохраняются с pilot_profile_id = 0 (общая репутация).
+function recreateUserRelationsTable() {
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        db.run(`CREATE TABLE IF NOT EXISTS user_relations_v2 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            global_character_id INTEGER NOT NULL,
+            pilot_profile_id INTEGER NOT NULL DEFAULT 0,
+            relation_value INTEGER DEFAULT 0,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (global_character_id) REFERENCES global_characters(id) ON DELETE CASCADE,
+            FOREIGN KEY (pilot_profile_id) REFERENCES pilot_profiles(id) ON DELETE CASCADE,
+            UNIQUE(user_id, global_character_id, pilot_profile_id)
+        )`);
+        db.run(`INSERT OR IGNORE INTO user_relations_v2 (id, user_id, global_character_id, pilot_profile_id, relation_value, updated_at)
+                SELECT id, user_id, global_character_id, pilot_profile_id, relation_value, updated_at FROM user_relations`);
+        db.run('DROP TABLE user_relations');
+        db.run('ALTER TABLE user_relations_v2 RENAME TO user_relations');
+        db.run('COMMIT', (err) => {
+            if (err) {
+                db.run('ROLLBACK');
+                Logger.error('Migration failed (user_relations recreate):', err.message);
+            } else {
+                Logger.info('user_relations: репутация переведена на раздельный учёт по пилотам');
+            }
+        });
+    });
+}
+
 
 const authRoutes = express.Router();
 
@@ -820,7 +971,21 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
 
             db.get('SELECT * FROM pilot_profiles WHERE user_id = ? AND slot_number = ?', [userId, slot_number], (err, profile) => {
                 if (err) return res.status(500).json({ message: 'Ошибка получения профиля' });
-                res.json({ message: 'Профиль сохранен', profile });
+
+                // Если у пользователя ещё нет активного пилота — назначаем сохранённый.
+                db.get('SELECT id FROM pilot_profiles WHERE user_id = ? AND is_active = 1', [userId], (err, active) => {
+                    if (err) return res.status(500).json({ message: 'Ошибка проверки активного профиля' });
+
+                    if (active) {
+                        return res.json({ message: 'Профиль сохранен', profile, activated: false });
+                    }
+
+                    db.run('UPDATE pilot_profiles SET is_active = 1 WHERE user_id = ? AND slot_number = ?', [userId, slot_number], (err) => {
+                        if (err) return res.status(500).json({ message: 'Ошибка назначения активного профиля' });
+                        profile.is_active = 1;
+                        res.json({ message: 'Профиль сохранен и назначен активным', profile, activated: true });
+                    });
+                });
             });
         });
 });
@@ -892,6 +1057,16 @@ pilotRoutes.post('/pilot-profiles/upload-avatar/:slot_number', requireAuth, uplo
 
 app.use('/api', pilotRoutes);
 
+// Плейлист темы для авторизованных пользователей (воспроизведение в терминале).
+app.get('/api/music-playlist/:theme', requireAuth, (req, res) => {
+    const theme = ['yellow', 'green', 'ktb'].includes(req.params.theme) ? req.params.theme : 'yellow';
+    db.all('SELECT id, title, file_path, volume, sort_order FROM music_playlist WHERE theme = ? ORDER BY sort_order, id',
+        [theme], (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения плейлиста' });
+            res.json({ tracks: rows });
+        });
+});
+
 const progressRoutes = express.Router();
 
 progressRoutes.get('/dialogue-progress', requireAuth, (req, res) => {
@@ -961,12 +1136,13 @@ progressRoutes.post('/user-choice', requireAuth, (req, res) => {
         
         db.get('SELECT id FROM global_characters WHERE name = ?', [relationNpcName], (err, gc) => {
             if (err || !gc) return callback();
-            
-            db.run(`INSERT INTO user_relations (user_id, global_character_id, relation_value)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(user_id, global_character_id)
+
+            // Изменение репутации записывается на счёт активного пилота (0 — общая, если пилота нет).
+            db.run(`INSERT INTO user_relations (user_id, global_character_id, pilot_profile_id, relation_value)
+                    VALUES (?, ?, COALESCE((SELECT id FROM pilot_profiles WHERE user_id = ? AND is_active = 1), 0), ?)
+                    ON CONFLICT(user_id, global_character_id, pilot_profile_id)
                     DO UPDATE SET relation_value = MAX(-100, MIN(100, relation_value + ?)), updated_at = CURRENT_TIMESTAMP`,
-                [userId, gc.id, relationEffect, relationEffect],
+                [userId, gc.id, userId, relationEffect, relationEffect],
                 (err) => {
                     if (err) Logger.error('Error updating relation:', err.message);
                     callback();
@@ -1412,6 +1588,100 @@ adminRoutes.post('/set-dialogue-access', adminMiddleware, (req, res) => {
     });
 });
 
+// ==================== МУЗЫКА (плейлисты тем) ====================
+
+// Список всех треков (все темы).
+adminRoutes.get('/music', adminMiddleware, (req, res) => {
+    db.all('SELECT * FROM music_playlist ORDER BY theme, sort_order, id', [], (err, rows) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения треков' });
+        res.json({ tracks: rows });
+    });
+});
+
+// Загрузка трека в плейлист темы.
+adminRoutes.post('/music/upload', adminMiddleware, uploadMusic.single('music'), (req, res) => {
+    const theme = ['yellow', 'green', 'ktb'].includes(req.body.theme) ? req.body.theme : 'yellow';
+
+    if (!req.file) {
+        Logger.warn('Music upload: файл не получен (поле "music" отсутствует или отклонено фильтром)');
+        return res.status(400).json({ message: 'Файл не загружен' });
+    }
+
+    if (!validateMusicMagicBytes(req.file)) {
+        Logger.warn(`Music upload: отклонён по сигнатуре: ${req.file.originalname} (${req.file.mimetype})`);
+        try { fs.unlinkSync(req.file.path); } catch {}
+        return res.status(400).json({ message: `Файл "${req.file.originalname}" не распознан как аудио (mp3, wav, ogg, m4a, flac, opus)` });
+    }
+
+    const title = (req.body.title || '').toString().trim().slice(0, 120)
+        || path.basename(req.file.originalname, path.extname(req.file.originalname)).slice(0, 120)
+        || 'Трек';
+    const filePath = `/assets/sounds/music/${req.file.filename}`;
+
+    db.get('SELECT COALESCE(MAX(sort_order), 0) as max_sort FROM music_playlist WHERE theme = ?', [theme], (err, row) => {
+        if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+        db.run('INSERT INTO music_playlist (theme, title, file_path, volume, sort_order) VALUES (?, ?, ?, 100, ?)',
+            [theme, title, filePath, (row?.max_sort || 0) + 1],
+            function(err) {
+                if (err) return res.status(500).json({ message: 'Ошибка сохранения трека' });
+                res.status(201).json({ message: 'Трек добавлен', trackId: this.lastID, file_path: filePath });
+            });
+    });
+});
+
+// Обновление названия/громкости трека.
+adminRoutes.put('/music/:id', adminMiddleware, (req, res) => {
+    const { id } = req.params;
+    const { title, volume } = req.body;
+
+    db.get('SELECT * FROM music_playlist WHERE id = ?', [id], (err, track) => {
+        if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+        if (!track) return res.status(404).json({ message: 'Трек не найден' });
+
+        let newVolume = track.volume;
+        if (volume !== undefined) {
+            newVolume = Math.max(0, Math.min(100, parseInt(volume)));
+            if (Number.isNaN(newVolume)) newVolume = track.volume;
+        }
+
+        let newTitle = track.title;
+        if (title !== undefined) {
+            const t = title.toString().trim().slice(0, 120);
+            if (t) newTitle = t;
+        }
+
+        db.run('UPDATE music_playlist SET title = ?, volume = ? WHERE id = ?', [newTitle, newVolume, id], (err) => {
+            if (err) return res.status(500).json({ message: 'Ошибка обновления трека' });
+            res.json({ message: 'Трек обновлен', title: newTitle, volume: newVolume });
+        });
+    });
+});
+
+// Удаление трека (вместе с файлом).
+adminRoutes.delete('/music/:id', adminMiddleware, (req, res) => {
+    const { id } = req.params;
+    db.get('SELECT * FROM music_playlist WHERE id = ?', [id], (err, track) => {
+        if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+        if (!track) return res.status(404).json({ message: 'Трек не найден' });
+
+        db.run('DELETE FROM music_playlist WHERE id = ?', [id], (err) => {
+            if (err) return res.status(500).json({ message: 'Ошибка удаления трека' });
+
+            // Удаляем файл, только если он лежит в директории музыки (защита от path traversal).
+            if (track.file_path && track.file_path.startsWith('/assets/sounds/music/')) {
+                const rel = track.file_path.replace('/assets/sounds/music/', '').replace(/\.\./g, '');
+                const full = path.resolve(path.join(__dirname, 'assets/sounds/music'), rel);
+                const base = path.resolve(path.join(__dirname, 'assets/sounds/music'));
+                if (full.startsWith(base + path.sep) && fs.existsSync(full)) {
+                    try { fs.unlinkSync(full); } catch {}
+                }
+            }
+
+            res.json({ message: 'Трек удален' });
+        });
+    });
+});
+
 app.use('/api/admin', adminRoutes);
 
 // Роуты редактора диалогов
@@ -1507,15 +1777,24 @@ app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
                 const globalCharMap = {};
                 allGlobalChars.forEach(gc => { globalCharMap[gc.id] = gc; });
                 
-                db.all(`SELECT ur.*, gc.name as char_name
+                // Репутация читается для активного пилота: строки с pilot_profile_id = 0 —
+                // общее наследие (до введения пилотов), строки конкретного пилота приоритетнее.
+                db.all(`SELECT ur.*, gc.name as char_name,
+                        CASE WHEN ur.pilot_profile_id = COALESCE((SELECT id FROM pilot_profiles WHERE user_id = ? AND is_active = 1), 0)
+                             THEN 0 ELSE 1 END AS pilot_priority
                         FROM user_relations ur
                         JOIN global_characters gc ON ur.global_character_id = gc.id
-                        WHERE ur.user_id = ?`,
-                    [userId], (err, userRels) => {
+                        WHERE ur.user_id = ?
+                          AND (ur.pilot_profile_id = 0
+                               OR ur.pilot_profile_id = (SELECT id FROM pilot_profiles WHERE user_id = ? AND is_active = 1))
+                        ORDER BY pilot_priority`,
+                    [userId, userId, userId], (err, userRels) => {
                     if (err) return res.status(500).json({ message: 'Ошибка' });
-                    
+
                     const relMap = {};
-                    userRels.forEach(r => { relMap[r.char_name] = r.relation_value; });
+                    userRels.forEach(r => {
+                        if (relMap[r.char_name] === undefined) relMap[r.char_name] = r.relation_value;
+                    });
                     
                     db.all(`SELECT * FROM conversations WHERE dialogue_id = ? ORDER BY branch_id, sort_order`, 
                         [dialogueId], (err, conversations) => {
@@ -1685,7 +1964,11 @@ app.use((err, req, res, next) => {
     }
     // Ошибки загрузки файлов (multer) — отдаём 400.
     if (err && err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ message: 'Файл слишком большой' });
+        return res.status(400).json({ message: 'Файл слишком большой (максимум 100 МБ)' });
+    }
+    // Ошибки с явным HTTP-статусом (например, отказ fileFilter).
+    if (err && err.status) {
+        return res.status(err.status).json({ message: err.message });
     }
     Logger.error('Unhandled error:', err);
     res.status(500).json({ message: 'Внутренняя ошибка сервера' });

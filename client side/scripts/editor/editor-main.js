@@ -2,6 +2,7 @@ import AppConfig from '../config.js';
 import DialogueTreeVisualizer from './dialogue-tree-visualizer.js';
 import debug from '../debug.js';
 import { escapeHtml, escapeAttr, safeNumber } from '../escape-utils.js';
+import { applyAdminTheme } from '../admin-theme.js';
 
 const { API_URL, ASSETS_URL } = AppConfig;
 
@@ -41,6 +42,7 @@ class DialogueEditor {
 async init() {
         try {
             await this.checkAuth();
+            applyAdminTheme();
             await this.loadDialogues();
             await this.loadFiles();
             await this.loadUsers();

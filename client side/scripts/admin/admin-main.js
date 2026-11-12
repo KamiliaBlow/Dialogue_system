@@ -3,6 +3,7 @@ import AdminAPI from './admin-api.js';
 import ChartManager from './admin-charts.js';
 import AdminUtils from './admin-utils.js';
 import { escapeHtml, escapeAttr } from '../escape-utils.js';
+import { applyAdminTheme } from '../admin-theme.js';
 
 const { ITEMS_PER_PAGE } = AppConfig;
 
@@ -34,6 +35,7 @@ class AdminApp {
             }
             
             this.initTabs();
+            applyAdminTheme();
             await this.updateFrequencyTabs();
             this.loadStatisticsData();
             this.initEventListeners();
@@ -64,6 +66,7 @@ class AdminApp {
     initEventListeners() {
         document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
         this.initModals();
+        this.initMusicTab();
     }
     
     initTabs() {
@@ -94,7 +97,8 @@ class AdminApp {
                 this.loadChoicesData();
             },
             progress: () => this.loadProgressData(),
-            relations: () => this.loadRelationsData()
+            relations: () => this.loadRelationsData(),
+            music: () => this.loadMusicData()
         };
         
         await loaders[tabName]?.();
@@ -722,11 +726,22 @@ class AdminApp {
         }
     }
 
+    // Подсветка несохранённых изменений (жёлтый) и снятие её после сохранения.
+    markRelDirty(input) {
+        input.style.borderColor = '#ffcc00';
+        input.style.boxShadow = '0 0 5px rgba(255, 204, 0, 0.6)';
+    }
+
+    markRelClean(input) {
+        input.style.borderColor = '';
+        input.style.boxShadow = '';
+    }
+
     async loadRelationsData() {
         const loading = document.getElementById('relations-loading');
-        const tbody = document.getElementById('relations-table-body');
+        const userList = document.getElementById('relations-user-list');
         if (loading) loading.style.display = 'flex';
-        tbody.innerHTML = '';
+        if (userList) userList.innerHTML = '';
 
         try {
             const response = await fetch(`${AppConfig.API_URL}/editor/global-characters/relations`, {
@@ -734,67 +749,399 @@ class AdminApp {
                 headers: AppConfig.CACHE_HEADERS
             });
             const data = await response.json();
+            this._relationsData = data;
 
-            if (!data?.relations || data.relations.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Нет данных об отношениях</td></tr>';
-            } else {
-                tbody.innerHTML = data.relations.map(r => {
-                    const val = r.relation_value;
-                    let color = '#03FB8D';
-                    if (val < -30) color = '#ff4444';
-                    else if (val < 0) color = '#ff9500';
-                    else if (val > 50) color = '#03FB8D';
-
-                    const barPercent = ((val + 100) / 200) * 100;
-                    const barStyle = val >= 0
-                        ? `left:50%;width:${barPercent - 50}%;background-color:${color};`
-                        : `left:${barPercent}%;width:${50 - barPercent}%;background-color:${color};`;
-
-                    return `<tr data-relation-id="${escapeAttr(r.id)}">
-                        <td>${escapeHtml(r.username)}</td>
-                        <td>${escapeHtml(r.character_name)}</td>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:8px;">
-                                <input type="number" class="form-input rel-edit-input" value="${val}" min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;">
-                                <div style="flex:1;height:6px;background:#333;border-radius:3px;position:relative;overflow:hidden;min-width:60px;">
-                                    <div style="height:100%;position:absolute;top:0;${barStyle}"></div>
-                                </div>
-                                <span style="font-size:11px;min-width:30px;text-align:right;color:${color};">${val > 0 ? '+' : ''}${val}</span>
-                            </div>
-                        </td>
-                        <td>
-                            <button class="btn rel-save-btn" data-id="${r.id}" style="font-size:11px;padding:3px 8px;">Сохранить</button>
-                        </td>
-                    </tr>`;
-                }).join('');
-
-                tbody.querySelectorAll('.rel-save-btn').forEach(btn => {
-                    btn.addEventListener('click', async () => {
-                        const row = btn.closest('tr');
-                        const id = btn.dataset.id;
-                        const input = row.querySelector('.rel-edit-input');
-                        const val = parseInt(input.value) || 0;
-                        try {
-                            await fetch(`${AppConfig.API_URL}/editor/global-characters/relation/${id}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                credentials: 'include',
-                                body: JSON.stringify({ relationValue: val })
-                            });
-                            btn.textContent = 'OK';
-                            setTimeout(() => { btn.textContent = 'Сохранить'; }, 1000);
-                            this.loadRelationsData();
-                        } catch (e) {
-                            alert('Ошибка сохранения');
-                        }
+            const users = data?.users || [];
+            const empty = document.getElementById('relations-user-empty');
+            if (!users.length) {
+                if (empty) empty.style.display = 'block';
+            } else if (userList) {
+                userList.innerHTML = users.map(u => `
+                    <button class="btn relations-user-btn" data-user-id="${escapeAttr(u.id)}"
+                            style="display:block;width:100%;text-align:left;margin:0 0 4px 0;border:none;border-bottom:1px solid var(--primary-border);padding:7px 10px;font-size:12px;">
+                        ${escapeHtml(u.username)}
+                    </button>
+                `).join('');
+                userList.querySelectorAll('.relations-user-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        userList.querySelectorAll('.relations-user-btn').forEach(b => {
+                            b.style.backgroundColor = '';
+                            b.style.color = '';
+                        });
+                        btn.style.backgroundColor = 'var(--primary-bg)';
+                        btn.style.color = 'var(--primary-color)';
+                        this.renderRelationsForUser(parseInt(btn.dataset.userId));
                     });
                 });
             }
         } catch (error) {
             console.error('Relations error:', error);
+            if (userList) userList.innerHTML = '<div style="color:#ff3333;font-size:12px;">Ошибка загрузки</div>';
+        }
+        if (loading) loading.style.display = 'none';
+    }
+
+    // Отношения выбранного пользователя с NPC: строка на NPC, клик раскрывает пилотов.
+    renderRelationsForUser(userId) {
+        const data = this._relationsData || { relations: [] };
+        const tbody = document.getElementById('relations-table-body');
+        const table = document.getElementById('relations-table');
+        const placeholder = document.getElementById('relations-placeholder');
+        if (!tbody) return;
+
+        // Группируем отношения пользователя по персонажу; стартовое значение — строка пилота 0
+        const byChar = {};
+        data.relations.filter(r => r.user_id === userId).forEach(r => {
+            if (!byChar[r.global_character_id] || r.pilot_profile_id === 0) {
+                byChar[r.global_character_id] = r;
+            }
+        });
+        const rows = Object.values(byChar);
+
+        if (placeholder) placeholder.style.display = 'none';
+        if (table) table.style.display = 'table';
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">У игрока пока нет записей об отношениях (задайте их через каталог персонажей).</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(r => {
+            const val = r.relation_value;
+            const color = val < -30 ? '#ff4444' : val < 0 ? '#ff9500' : 'var(--primary-color)';
+            const barPercent = ((val + 100) / 200) * 100;
+            const barStyle = val >= 0
+                ? `left:50%;width:${barPercent - 50}%;background-color:${color};`
+                : `left:${barPercent}%;width:${50 - barPercent}%;background-color:${color};`;
+
+            return `<tr class="rel-char-row" data-user-id="${escapeAttr(userId)}" data-gc-id="${escapeAttr(r.global_character_id)}" style="cursor:pointer;">
+                <td>
+                    <span class="rel-toggle" style="display:inline-block;width:14px;color:var(--primary-color);">▸</span>
+                    ${escapeHtml(r.character_name)}
+                </td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" class="form-input rel-edit-input" value="${val}" min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;">
+                        <div style="flex:1;height:6px;background:#333;border-radius:3px;position:relative;overflow:hidden;min-width:60px;">
+                            <div style="height:100%;position:absolute;top:0;${barStyle}"></div>
+                        </div>
+                        <span style="font-size:11px;min-width:30px;text-align:right;color:${color};">${val > 0 ? '+' : ''}${val}</span>
+                    </div>
+                    <div style="font-size:10px;color:#888;margin-top:3px;">Применяется ко всем пилотам аккаунта</div>
+                </td>
+                <td>
+                    <button class="btn rel-save-btn" style="font-size:11px;padding:3px 8px;">Сохранить</button>
+                </td>
+            </tr>
+            <tr class="rel-pilots-row" data-user-id="${escapeAttr(userId)}" style="display:none;">
+                <td colspan="3" class="rel-pilots-cell" style="padding:4px 10px;background:rgba(128,128,128,0.06);"></td>
+            </tr>`;
+        }).join('');
+
+        // Сохранение стартового / глобального значения
+        tbody.querySelectorAll('.rel-save-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const row = btn.closest('tr');
+                const uid = row.dataset.userId;
+                const gcId = row.dataset.gcId;
+                const input = row.querySelector('.rel-edit-input');
+                const val = Math.max(-100, Math.min(100, parseInt(input.value) || 0));
+                input.value = val;
+                try {
+                    await fetch(`${AppConfig.API_URL}/editor/global-characters/${gcId}/user/${uid}/relation`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ relationValue: val, global: true })
+                    });
+                    this.markRelClean(input);
+                    btn.textContent = 'OK';
+                    setTimeout(() => { btn.textContent = 'Сохранить'; }, 1000);
+                } catch (err) {
+                    alert('Ошибка сохранения');
+                }
+            });
+        });
+
+        // Жёлтая подсветка несохранённых изменений
+        tbody.querySelectorAll('.rel-edit-input').forEach(input => {
+            input.addEventListener('input', () => this.markRelDirty(input));
+        });
+
+        // Раскрытие пилотов по клику на строку NPC
+        tbody.querySelectorAll('.rel-char-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('input, button, label')) return;
+                this.toggleAdminRelationsPilots(row);
+            });
+            row.querySelector('.rel-toggle')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleAdminRelationsPilots(row);
+            });
+        });
+    }
+
+    // Раскрыть/свернуть список пилотов для строки NPC во вкладке «Отношения».
+    async toggleAdminRelationsPilots(charRow) {
+        const userId = parseInt(charRow.dataset.userId);
+        const gcId = charRow.dataset.gcId;
+        const pilotsRow = charRow.nextElementSibling;
+        if (!pilotsRow || !pilotsRow.classList.contains('rel-pilots-row')) return;
+        const cell = pilotsRow.querySelector('.rel-pilots-cell');
+        const toggle = charRow.querySelector('.rel-toggle');
+
+        if (pilotsRow.style.display !== 'none') {
+            pilotsRow.style.display = 'none';
+            if (toggle) toggle.textContent = '▸';
+            return;
+        }
+        if (cell.dataset.loaded === '1') {
+            pilotsRow.style.display = 'table-row';
+            if (toggle) toggle.textContent = '▾';
+            return;
+        }
+
+        cell.innerHTML = '<span style="font-size:11px;color:#888;">Загрузка пилотов...</span>';
+        pilotsRow.style.display = 'table-row';
+        if (toggle) toggle.textContent = '▾';
+
+        try {
+            const [pilotsRes] = await Promise.all([
+                fetch(`${AppConfig.API_URL}/editor/users/${userId}/pilots`, {
+                    credentials: 'include',
+                    headers: AppConfig.CACHE_HEADERS
+                })
+            ]);
+            const pilotsData = await pilotsRes.json();
+            const pilots = pilotsData.pilots || [];
+            const rels = (this._relationsData?.relations || []).filter(r =>
+                r.user_id === userId && r.global_character_id === gcId);
+
+            if (pilots.length === 0) {
+                cell.innerHTML = '<span style="font-size:11px;color:#888;">У игрока нет пилотов.</span>';
+                cell.dataset.loaded = '1';
+                return;
+            }
+
+            const baseVal = parseInt(charRow.querySelector('.rel-edit-input')?.value) || 0;
+            cell.innerHTML = pilots.map(p => {
+                const rel = rels.find(r => r.pilot_profile_id === p.id);
+                const value = rel ? rel.relation_value : baseVal;
+                const color = value > 0 ? 'var(--primary-color)' : value < 0 ? '#ff3333' : 'inherit';
+                const activeMark = p.is_active ? ' <span style="color:var(--primary-color);font-size:10px;">● активен</span>' : '';
+                return `
+                    <div class="rel-pilot-item" data-user-id="${escapeAttr(userId)}" data-gc-id="${escapeAttr(gcId)}"
+                         data-pilot-id="${escapeAttr(p.id)}" style="display:flex;align-items:center;gap:8px;padding:4px 0 4px 16px;border-bottom:1px dashed var(--primary-border);">
+                        <span style="min-width:150px;font-size:12px;">${escapeHtml(p.callsign || ('Пилот ' + p.slot_number))}${activeMark}</span>
+                        <input type="number" class="form-input rel-pilot-value-input" value="${escapeAttr(value)}"
+                               min="-100" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;color:${color};text-align:center;">
+                        <button class="btn btn-small rel-pilot-save-btn" style="font-size:11px;padding:3px 8px;">✓</button>
+                    </div>
+                `;
+            }).join('');
+
+            cell.querySelectorAll('.rel-pilot-value-input').forEach(input => {
+                input.addEventListener('input', () => this.markRelDirty(input));
+            });
+            cell.querySelectorAll('.rel-pilot-save-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const item = btn.closest('.rel-pilot-item');
+                    const input = item.querySelector('.rel-pilot-value-input');
+                    const val = Math.max(-100, Math.min(100, parseInt(input.value) || 0));
+                    input.value = val;
+                    try {
+                        await fetch(`${AppConfig.API_URL}/editor/global-characters/${item.dataset.gcId}/user/${item.dataset.userId}/relation`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ relationValue: val, pilotProfileId: parseInt(item.dataset.pilotId) })
+                        });
+                        this.markRelClean(input);
+                        btn.textContent = '✓';
+                        btn.style.color = 'var(--primary-color)';
+                        setTimeout(() => { btn.textContent = '✓'; btn.style.color = ''; }, 1000);
+                    } catch (err) {
+                        alert('Ошибка сохранения');
+                    }
+                });
+            });
+            cell.dataset.loaded = '1';
+        } catch (err) {
+            console.error('Error loading pilots:', err);
+            cell.innerHTML = '<span style="font-size:11px;color:#ff3333;">Ошибка загрузки пилотов</span>';
+        }
+    }
+
+    // ===== Вкладка «Музыка» =====
+    get musicTheme() {
+        return document.getElementById('music-theme-select')?.value || 'yellow';
+    }
+
+    get musicServerOrigin() {
+        return AppConfig.API_URL.replace(/\/api$/, '');
+    }
+
+    async loadMusicData() {
+        const loading = document.getElementById('music-loading');
+        const tbody = document.getElementById('music-table-body');
+        const empty = document.getElementById('music-empty');
+        if (!tbody) return;
+        if (loading) loading.style.display = 'flex';
+        tbody.innerHTML = '';
+
+        try {
+            const response = await fetch(`${AppConfig.API_URL}/admin/music`, {
+                credentials: 'include',
+                headers: AppConfig.CACHE_HEADERS
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const tracks = (data?.tracks || []).filter(t => t.theme === this.musicTheme);
+            this._musicTracks = tracks;
+            if (empty) empty.style.display = tracks.length ? 'none' : 'block';
+            this.renderMusicTable(tracks);
+        } catch (error) {
+            console.error('Music error:', error);
             tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Ошибка загрузки</td></tr>';
         }
         if (loading) loading.style.display = 'none';
+    }
+
+    renderMusicTable(tracks) {
+        const tbody = document.getElementById('music-table-body');
+        if (!tbody) return;
+
+        tbody.innerHTML = tracks.map(t => `
+            <tr data-track-id="${escapeAttr(t.id)}">
+                <td>${escapeHtml(t.title)}</td>
+                <td>
+                    <input type="number" class="form-input music-vol-input" value="${Number(t.volume)}" min="0" max="100" step="5" style="width:70px;font-size:12px;padding:3px 6px;">
+                    <span style="font-size:11px;color:#888;">%</span>
+                </td>
+                <td>
+                    <button class="btn music-preview-btn" style="font-size:11px;padding:3px 8px;">▶</button>
+                </td>
+                <td>
+                    <button class="btn music-del-btn" style="font-size:11px;padding:3px 8px;">Удалить</button>
+                </td>
+            </tr>
+        `).join('');
+
+        // Автосохранение громкости
+        tbody.querySelectorAll('.music-vol-input').forEach(input => {
+            input.addEventListener('change', async () => {
+                const row = input.closest('tr');
+                const id = row.dataset.trackId;
+                let vol = Math.max(0, Math.min(100, parseInt(input.value) || 0));
+                input.value = vol;
+                try {
+                    await fetch(`${AppConfig.API_URL}/admin/music/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ volume: vol })
+                    });
+                    input.style.borderColor = '#03FB8D';
+                    setTimeout(() => { input.style.borderColor = ''; }, 800);
+                } catch (e) {
+                    alert('Ошибка сохранения громкости');
+                }
+            });
+        });
+
+        // Прослушка / остановка (один общий аудио-объект)
+        if (!this._previewAudio) this._previewAudio = new Audio();
+        tbody.querySelectorAll('.music-preview-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const row = btn.closest('tr');
+                const id = row.dataset.trackId;
+                const track = (this._musicTracks || []).find(t => String(t.id) === String(id));
+                if (!track) return;
+                const url = /^https?:/.test(track.file_path)
+                    ? track.file_path
+                    : this.musicServerOrigin + track.file_path;
+
+                // Обновляем иконки всех кнопок
+                const resetIcons = () => {
+                    tbody.querySelectorAll('.music-preview-btn').forEach(b => { b.textContent = '▶'; });
+                };
+
+                if (this._previewAudio.src === url && !this._previewAudio.paused) {
+                    this._previewAudio.pause();
+                    this._previewAudio.currentTime = 0;
+                    resetIcons();
+                    return;
+                }
+
+                this._previewAudio.pause();
+                this._previewAudio.src = url;
+                this._previewAudio.volume = Math.max(0, Math.min(100, Number(track.volume) || 100)) / 100;
+                this._previewAudio.play().catch(e => alert('Не удалось воспроизвести: ' + e.message));
+                resetIcons();
+                btn.textContent = '⏹';
+            });
+        });
+        this._previewAudio?.addEventListener('ended', () => {
+            tbody.querySelectorAll('.music-preview-btn').forEach(b => { b.textContent = '▶'; });
+        });
+
+        // Удаление трека
+        tbody.querySelectorAll('.music-del-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const row = btn.closest('tr');
+                const id = row.dataset.trackId;
+                if (!confirm('Удалить трек из плейлиста?')) return;
+                try {
+                    await fetch(`${AppConfig.API_URL}/admin/music/${id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    this.loadMusicData();
+                } catch (e) {
+                    alert('Ошибка удаления');
+                }
+            });
+        });
+    }
+
+    initMusicTab() {
+        const themeSelect = document.getElementById('music-theme-select');
+        const fileInput = document.getElementById('music-file-input');
+        const uploadBtn = document.getElementById('music-upload-btn');
+        const status = document.getElementById('music-upload-status');
+
+        themeSelect?.addEventListener('change', () => this.loadMusicData());
+
+        uploadBtn?.addEventListener('click', () => fileInput?.click());
+
+        fileInput?.addEventListener('change', async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+            if (status) status.textContent = 'Загрузка...';
+            try {
+                const title = file.name.replace(/\.[^.]+$/, '');
+                const formData = new FormData();
+                formData.append('music', file);
+                formData.append('theme', this.musicTheme);
+                formData.append('title', title);
+                const response = await fetch(`${AppConfig.API_URL}/admin/music/upload`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || err.error || `HTTP ${response.status}`);
+                }
+                if (status) status.textContent = 'Трек загружен.';
+                fileInput.value = '';
+                this.loadMusicData();
+            } catch (e) {
+                if (status) status.textContent = 'Ошибка: ' + e.message;
+            }
+            setTimeout(() => { if (status) status.textContent = ''; }, 5000);
+        });
     }
 }
 

@@ -7,6 +7,7 @@
 
 </head>
 <body>
+<script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
 <!-- partial:index.partial.html -->
 <html lang="ru">
 <head>
@@ -98,159 +99,7 @@
 	</div>
 </div>
 
-<!-- Кнопка для вызова плеера -->
-<div id="music-float-btn">P</div>
-
-<!-- Кнопка перехода в админ-панель -->
-<a id="admin-float-btn" href="admin.html" style="display:none;">A</a>
-
-<!-- Всплывающее окно плеера -->
-<div id="music-popup">
-    <audio id="background-music" loop>
-        <source src="assets/sounds/terminal.mp3" type="audio/mpeg">
-    </audio>
-
-    <div class="controls">
-        <button id="play-pause-btn">▶️</button>
-        <span id="track-name">Трек: Название</span>
-    </div>
-
-    <input type="range" id="volume-control" min="0" max="1" step="0.1" value="0.2">
-</div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const floatBtn = document.getElementById('music-float-btn');
-        const musicPopup = document.getElementById('music-popup');
-        const music = document.getElementById('background-music');
-        
-        // Динамически определяем API_URL из текущего хоста
-        const API_URL = `${window.location.protocol}//${window.location.host}/api`;
-        
-        let autoPlayMusic = true;
-        let musicAutoPlayHandled = false;
-        
-        const playPauseBtn = document.getElementById('play-pause-btn');
-        const volumeControl = document.getElementById('volume-control');
-        const trackName = document.getElementById('track-name');
-        
-        function updatePlayPauseButton() {
-            if (music.paused) {
-                playPauseBtn.textContent = '▶️';
-            } else {
-                playPauseBtn.textContent = '⏸️';
-            }
-        }
-        
-        // Инициализируем кнопку play/pause сразу при загрузке
-        const savedSetting = localStorage.getItem('autoPlayMusic');
-        if (savedSetting !== null) {
-            autoPlayMusic = savedSetting === '1';
-        }
-        updatePlayPauseButton();
-        
-        async function loadMusicSettings() {
-            try {
-                const response = await fetch(`${API_URL}/user-settings`, {
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    autoPlayMusic = data.auto_play_music !== 0;
-                    localStorage.setItem('autoPlayMusic', autoPlayMusic ? '1' : '0');
-                    console.log('Авто-проигрывание музыки:', autoPlayMusic);
-                }
-            } catch (e) {
-                const saved = localStorage.getItem('autoPlayMusic');
-                if (saved !== null) {
-                    autoPlayMusic = saved === '1';
-                } else {
-                    autoPlayMusic = true;
-                }
-                console.log('Не удалось загрузить настройки, используем сохранённые:', autoPlayMusic);
-            }
-        }
-        
-        async function checkAndPlayMusic() {
-            if (musicAutoPlayHandled) return;
-            musicAutoPlayHandled = true;
-            
-            await loadMusicSettings();
-            
-            if (autoPlayMusic) {
-                music.play().catch(error => {
-                    console.log('Autoplay was prevented:', error);
-                });
-            }
-            updatePlayPauseButton();
-            
-            document.removeEventListener('click', checkAndPlayMusic);
-        }
-        
-        document.addEventListener('click', checkAndPlayMusic);
-        
-        // Список треков
-        const tracks = [
-            { 
-                src: 'assets/sounds/terminal.mp3', 
-                name: 'Aliens Signal' 
-            }
-        ];
-        let currentTrackIndex = 0;
-
-        // Инициализация музыки
-        music.volume = 0.2;
-        volumeControl.value = 0.2;
-
-        // Переключение видимости плеера
-        floatBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (musicPopup.style.display === 'none' || musicPopup.style.display === '') {
-                musicPopup.style.display = 'flex';
-            } else {
-                musicPopup.style.display = 'none';
-            }
-        });
-
-        // Управление воспроизведением
-        playPauseBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (music.paused) {
-                music.play();
-                playPauseBtn.textContent = '⏸️';
-            } else {
-                music.pause();
-                playPauseBtn.textContent = '▶️';
-            }
-        });
-        
-        // Также обрабатываем клик на сам popup, чтобы не закрывался при клике внутри
-        musicPopup.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-
-        // Контроль громкости
-        volumeControl.addEventListener('input', () => {
-            music.volume = volumeControl.value;
-        });
-
-        // Смена трека при окончании
-        music.addEventListener('ended', () => {
-            currentTrackIndex = (currentTrackIndex + 1) % tracks.length;
-            loadTrack(currentTrackIndex);
-        });
-
-        // Загрузка трека
-        function loadTrack(index) {
-            music.src = tracks[index].src;
-            trackName.textContent = `Трек: ${tracks[index].name}`;
-            playPauseBtn.textContent = '⏸️';
-        }
-
-        // Первоначальная загрузка трека
-        loadTrack(0);
-    });
-</script>
+<script type="module" src="scripts/music-player.js"></script>
 
 <!-- Сообщения пилотов </body> -->
 
@@ -799,6 +648,23 @@
 
 		document.addEventListener('DOMContentLoaded', () => {
 			const adminBtn = document.getElementById('admin-float-btn');
+
+			// Шлагбаум пилота: без авторизации — на страницу входа,
+			// без активного пилот-профиля — на обязательную первичную настройку.
+			fetch(`${AppConfig.API_URL}/pilot-profiles/active`, { credentials: 'include' })
+				.then(resp => {
+					if (resp.status === 401) {
+						window.location.href = 'login.html';
+						return null;
+					}
+					return resp.json();
+				})
+				.then(data => {
+					if (data && !data.profile) {
+						window.location.href = 'pilot_profile.html?first=1';
+					}
+				})
+				.catch(() => {});
 
 			fetch(`${AppConfig.API_URL}/admin/check`, { credentials: 'include' })
 				.then(resp => { if (!resp.ok) throw new Error(); return resp.json(); })

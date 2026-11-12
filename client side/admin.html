@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
     <div class="background-code" id="bgCode"></div>
     
     <div class="container">
@@ -23,8 +24,10 @@
             <button class="admin-tab" data-tab="choices">Выборы</button>
             <button class="admin-tab" data-tab="progress">Прогресс диалогов</button>
             <button class="admin-tab" data-tab="relations">Отношения</button>
+            <button class="admin-tab" data-tab="music">Музыка</button>
             <a href="editor.html" class="admin-tab" style="text-decoration: none;">Редактор диалогов</a>
             <a href="catalog.html" class="admin-tab" style="text-decoration: none;">Каталог персонажей</a>
+            <a href="index.html" class="admin-tab" style="text-decoration: none;">Терминал</a>
         </nav>
         
         <main class="admin-content">
@@ -150,33 +153,73 @@
             <section id="relations" class="tab-content">
                 <div class="admin-card">
                     <div class="admin-card-title">Отношения игроков с NPC персонажами</div>
+                    <div style="display:flex;gap:20px;align-items:flex-start;">
+                        <div style="width:230px;flex-shrink:0;">
+                            <div class="form-group" style="margin-bottom:8px;">
+                                <label>Игрок:</label>
+                            </div>
+                            <div id="relations-loading" class="loading" style="display:none;">
+                                <div class="loading-spinner"></div>
+                            </div>
+                            <div id="relations-user-list" style="max-height:520px;overflow-y:auto;border:1px solid var(--primary-border);"></div>
+                            <div id="relations-user-empty" style="display:none;color:#888;font-size:12px;margin-top:8px;">Нет пользователей</div>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div id="relations-content">
+                                <div id="relations-placeholder" style="color:#888;font-size:13px;padding:20px 0;text-align:center;">Выберите игрока слева, чтобы увидеть его отношения с NPC.<br>Клик по NPC раскрывает отношения по его пилотам.</div>
+                                <table class="user-table" id="relations-table" style="display:none;">
+                                    <thead>
+                                        <tr>
+                                            <th>Персонаж (NPC)</th>
+                                            <th>Отношение</th>
+                                            <th>Действия</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="relations-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Music Tab -->
+            <section id="music" class="tab-content">
+                <div class="admin-card">
+                    <div class="admin-card-title">Плейлисты тем (фоновая музыка терминала)</div>
                     <div class="form-group" style="margin-bottom:15px;">
-                        <label>Выберите диалог:</label>
-                        <select id="relations-dialogue-select" class="form-input" style="max-width:300px;">
-                            <option value="">Загрузка...</option>
+                        <label>Тема оформления:</label>
+                        <select id="music-theme-select" class="form-input" style="max-width:300px;">
+                            <option value="yellow">Жёлтая (терминал)</option>
+                            <option value="green">Зелёная</option>
+                            <option value="ktb">КТБ (аристократия)</option>
                         </select>
                     </div>
-                    <div id="relations-loading" class="loading" style="display:none;">
+                    <div style="margin-bottom:15px;">
+                        <input type="file" id="music-file-input" accept="audio/*,.m4a,.flac,.opus" style="display:none;">
+                        <button id="music-upload-btn" class="btn">+ Загрузить трек</button>
+                        <span id="music-upload-status" style="margin-left:10px;"></span>
+                    </div>
+                    <div id="music-loading" class="loading" style="display:none;">
                         <div class="loading-spinner"></div>
                     </div>
-                    <div id="relations-content">
-                        <table class="user-table" id="relations-table">
-                            <thead>
-                                <tr>
-                                    <th>Игрок</th>
-                                    <th>Персонаж (NPC)</th>
-                                    <th>Отношение</th>
-                                    <th>Действия</th>
-                                </tr>
-                            </thead>
-                            <tbody id="relations-table-body"></tbody>
-                        </table>
-                    </div>
+                    <table class="user-table" id="music-table">
+                        <thead>
+                            <tr>
+                                <th>Трек</th>
+                                <th>Громкость, %</th>
+                                <th>Прослушка</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="music-table-body"></tbody>
+                    </table>
+                    <div id="music-empty" style="display:none; margin-top:10px;">Для выбранной темы пока нет треков.</div>
                 </div>
             </section>
         </main>
     </div>
-    
+
     <!-- Password Modal -->
     <div id="password-modal" class="modal">
         <div class="modal-content">
@@ -290,5 +333,6 @@
     </div>
     
     <script type="module" src="scripts/admin/admin-main.js"></script>
+    <script type="module" src="scripts/music-player.js"></script>
 </body>
 </html>

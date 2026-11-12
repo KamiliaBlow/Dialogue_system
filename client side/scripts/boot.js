@@ -32,6 +32,7 @@
     }
 
     function applyTheme(theme) {
+        try { localStorage.setItem('userTheme', theme); } catch (e) {}
         document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
         document.body.classList.add(`theme-${theme}`);
     }
@@ -168,6 +169,10 @@
             requestAnimationFrame(() => greeting.classList.add('visible'));
             await delay(2400);
         }
+        // Пауза на чтение напечатанного текста перед появлением кнопки подтверждения.
+        if (scenario.holdMs) {
+            await delay(scenario.holdMs);
+        }
     }
 
     async function waitForIdentityConfirm(container, scenario) {
@@ -260,7 +265,8 @@
             glitchOverlay.classList.add('active');
             bootText.classList.remove('visible');
             bootText.classList.add('fade-out');
-            await delay(400);
+            // Текст исчезает ~2 секунды — не снимаем его с экрана раньше анимации.
+            await delay(2000);
             overlay.classList.add('alien-flicker-subtle');
             await delay(150);
             overlay.classList.remove('alien-flicker-subtle');

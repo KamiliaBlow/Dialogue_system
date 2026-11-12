@@ -109,6 +109,7 @@ async function loadTheme() {
         const data = await response.json();
         const theme = ['yellow', 'green', 'ktb'].includes(data.theme) ? data.theme : 'yellow';
         state.theme = theme;
+        try { localStorage.setItem('userTheme', theme); } catch (e) {}
         document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
         document.body.classList.add(`theme-${theme}`);
     } catch (e) {

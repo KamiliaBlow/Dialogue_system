@@ -1645,7 +1645,7 @@ body.theme-yellow .toggle-switch input:checked + .toggle-slider {
 }
 
 #alien-boot-text.visible {
-  animation: bootTextFadeIn 0.5s ease-out forwards;
+  animation: bootTextFadeIn 5s ease-out forwards;
 }
 
 @keyframes bootTextFadeIn {
@@ -1654,7 +1654,7 @@ body.theme-yellow .toggle-switch input:checked + .toggle-slider {
 }
 
 #alien-boot-text.fade-out {
-  animation: bootTextFadeOut 0.8s ease-in forwards;
+  animation: bootTextFadeOut 2s ease-in forwards;
 }
 
 @keyframes bootTextFadeOut {
@@ -1774,6 +1774,27 @@ body.theme-yellow .toggle-switch input:checked + .toggle-slider {
   pointer-events: none;
 }
 
+/* Полоса помех принимает цвет активной темы (базовая — зелёная). */
+body.theme-yellow #alien-scanline-sweep {
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(255, 107, 53, 0.15) 30%,
+    rgba(255, 107, 53, 0.6) 50%,
+    rgba(255, 107, 53, 0.15) 70%,
+    transparent 100%
+  );
+}
+
+body.theme-ktb #alien-scanline-sweep {
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(212, 175, 55, 0.15) 30%,
+    rgba(212, 175, 55, 0.6) 50%,
+    rgba(212, 175, 55, 0.15) 70%,
+    transparent 100%
+  );
+}
+
 #alien-scanline-sweep.sweep {
   animation: scanlineSweep 2s ease-in-out forwards;
 }
@@ -1848,6 +1869,115 @@ body.theme-yellow .toggle-switch input:checked + .toggle-slider {
       transparent 5px,
       rgba(3, 251, 141, 0.03) 5px,
       rgba(3, 251, 141, 0.03) 10px
+    );
+  }
+  70% {
+    opacity: 0.3;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+}
+
+/* Тематизированные вспышки помех (базовая — зелёная). */
+body.theme-yellow #alien-glitch-overlay.active {
+  animation-name: glitchBurstYellow;
+}
+
+@keyframes glitchBurstYellow {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 107, 53, 0.05) 2px,
+      rgba(255, 107, 53, 0.05) 4px
+    );
+  }
+  25% {
+    opacity: 0.8;
+    transform: translateX(-5px);
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 107, 53, 0.08) 3px,
+      rgba(255, 107, 53, 0.08) 6px
+    );
+  }
+  40% {
+    opacity: 1;
+    transform: translateX(3px);
+  }
+  55% {
+    opacity: 0.6;
+    transform: translateX(-2px);
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 5px,
+      rgba(255, 107, 53, 0.03) 5px,
+      rgba(255, 107, 53, 0.03) 10px
+    );
+  }
+  70% {
+    opacity: 0.3;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+}
+
+body.theme-ktb #alien-glitch-overlay.active {
+  animation-name: glitchBurstKtb;
+}
+
+@keyframes glitchBurstKtb {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(212, 175, 55, 0.05) 2px,
+      rgba(212, 175, 55, 0.05) 4px
+    );
+  }
+  25% {
+    opacity: 0.8;
+    transform: translateX(-5px);
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(212, 175, 55, 0.08) 3px,
+      rgba(212, 175, 55, 0.08) 6px
+    );
+  }
+  40% {
+    opacity: 1;
+    transform: translateX(3px);
+  }
+  55% {
+    opacity: 0.6;
+    transform: translateX(-2px);
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 5px,
+      rgba(212, 175, 55, 0.03) 5px,
+      rgba(212, 175, 55, 0.03) 10px
     );
   }
   70% {
@@ -2466,13 +2596,20 @@ body.theme-ktb {
   color: var(--ktb-light);
 }
 
+/* Аристократичный фон КТБ: тёмное дерево, дамасский узор, золотое сияние. */
 body.theme-ktb .bg-grid {
   display: block;
+  background-color: #0b0805;
   background-image:
-    linear-gradient(rgba(197, 160, 73, 0.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(197, 160, 73, 0.075) 1px, transparent 1px),
-    radial-gradient(circle at 50% 10%, rgba(212, 175, 55, 0.08), transparent 58%);
-  background-size: 150px 150px, 150px 150px, 100% 100%;
+    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(212, 175, 55, 0.07), transparent 62%),
+    repeating-linear-gradient(45deg, rgba(212, 175, 55, 0.024) 0 1px, transparent 1px 42px),
+    repeating-linear-gradient(-45deg, rgba(212, 175, 55, 0.024) 0 1px, transparent 1px 42px),
+    repeating-linear-gradient(90deg,
+      rgba(54, 38, 20, 0.20) 0px,
+      rgba(38, 26, 14, 0.20) 88px,
+      rgba(18, 12, 6, 0.26) 90px,
+      rgba(38, 26, 14, 0.20) 92px);
+  background-size: 100% 100%, auto, auto, auto;
 }
 
 body.theme-ktb .vignette {

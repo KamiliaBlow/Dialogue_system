@@ -104,7 +104,7 @@ async function handleRegister() {
         document.getElementById('registerUsernameError').style.display = 'none';
     }
 
-    if (!password || password.length < 8) {
+    if (!password || password.length < 6) {
         document.getElementById('registerPasswordError').style.display = 'block';
         hasErrors = true;
     } else {
@@ -131,7 +131,8 @@ async function handleRegister() {
 
         localStorage.setItem('username', data.username);
 
-        window.location.href = 'index.html';
+        // После регистрации — обязательная первичная настройка пилота.
+        window.location.href = 'pilot_profile.html?first=1';
     } catch (error) {
         console.error('Ошибка:', error);
         document.getElementById('registerError').textContent = 'Проблемы с соединением';
@@ -154,30 +155,7 @@ async function checkExistingAuth() {
         console.error('Ошибка при проверке авторизации:', error);
     }
 
-    generateBackgroundCode();
 }
 
-function generateBackgroundCode() {
-    const bgCode = document.getElementById('bgCode');
-    const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()_+{}[]|:;<>,.?/~`";
-
-    for (let i = 0; i < 20; i++) {
-        const line = document.createElement('div');
-        line.className = 'code-line';
-        
-        let content = '';
-        const len = Math.floor(Math.random() * 30) + 10;
-        for (let j = 0; j < len; j++) {
-            content += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        
-        line.textContent = content;
-        line.style.left = `${Math.random() * 100}%`;
-        line.style.animationDuration = `${Math.random() * 15 + 5}s`;
-        line.style.animationDelay = `${Math.random() * 5}s`;
-        
-        bgCode.appendChild(line);
-    }
-}
 
 document.addEventListener('DOMContentLoaded', initLogin);
