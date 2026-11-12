@@ -86,23 +86,7 @@ async function loadConfig() {
         
     } catch (error) {
         console.error('Failed to load config from API:', error);
-        
-        try {
-            const configModule = await import('../Config.js');
-            games = configModule.default;
-            const appConfigModule = await import('./config.js');
-            API_URL = appConfigModule.default.API_URL;
-            ASSETS_URL = appConfigModule.default.ASSETS_URL;
-            
-            const preloaderModule = await import('./asset-preloader.js');
-            assetPreloader = preloaderModule.default;
-            assetPreloader.setUrlTransformer(getAssetUrl);
-            
-            debug('Config loaded from Config.js (fallback)');
-        } catch (fallbackError) {
-            console.error('Critical: Failed to load config:', fallbackError);
-            throw new Error('Не удалось загрузить конфигурацию');
-        }
+        throw new Error(`Не удалось подключиться к API (${API_URL || 'адрес не задан'}). Запустите Node.js-сервер и проверьте доступность порта 3000.`);
     }
 }
 
@@ -123,14 +107,23 @@ async function loadTheme() {
     try {
         const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
         const data = await response.json();
-        
-        if (data.theme === 'yellow') {
-            document.body.classList.add('theme-yellow');
-        } else {
-            document.body.classList.remove('theme-yellow');
-        }
+        const theme = ['yellow', 'green', 'ktb'].includes(data.theme) ? data.theme : 'yellow';
+        state.theme = theme;
+        document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
+        document.body.classList.add(`theme-${theme}`);
     } catch (e) {
         console.warn('Failed to load theme:', e);
+    }
+}
+
+async function loadActiveProfile() {
+    try {
+        const response = await fetch(`${API_URL}/pilot-profiles/active`, { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        state.pilotProfile = window.BootScenarios.normalizeProfile(data.profile);
+    } catch (e) {
+        console.warn('Failed to load active pilot profile:', e);
     }
 }
 
@@ -152,6 +145,11 @@ async function loadDialogueFromDB(frequency) {
         });
         
         if (!response.ok) {
+            if (response.status === 401 && window.KtbDrama?.showHttpError(response.status, state.pilotProfile)) {
+                setTimeout(() => { window.location.href = 'login.html'; }, 4000);
+            } else if (response.status >= 500) {
+                window.KtbDrama?.showHttpError(response.status, state.pilotProfile);
+            }
             return null;
         }
         
@@ -213,7 +211,10 @@ const state = {
         window1: null,
         window2: null
     },
-    autoPlayMusic: true
+    autoPlayMusic: true,
+    skipBoot: false,
+    theme: 'yellow',
+    pilotProfile: window.BootScenarios.normalizeProfile(null)
 };
 
 /**
@@ -252,6 +253,9 @@ async function initializePage() {
         state.userName = authData.username;
         state.userId = authData.userId;
         debug(`Пользователь аутентифицирован: ${state.userName} (ID: ${state.userId})`);
+
+        // Профиль определяет обращение и лорные реакции КТБ.
+        await loadActiveProfile();
         
         // Загружаем счетчики повторных прослушиваний ПОСЛЕ получения username
         await loadRepeatCounts();
@@ -410,35 +414,49 @@ async function loadUserSettings() {
         const response = await fetch(`${API_URL}/user-settings`, {
             credentials: 'include'
         });
-        
+
         if (!response.ok) {
             const saved = localStorage.getItem('autoPlayMusic');
             if (saved !== null) {
                 state.autoPlayMusic = saved === '1';
             }
+            const savedSkipBoot = localStorage.getItem('skipBoot');
+            if (savedSkipBoot !== null) {
+                state.skipBoot = savedSkipBoot === '1';
+            }
             return;
         }
-        
+
         const data = await response.json();
         state.autoPlayMusic = data.auto_play_music !== 0;
+        state.skipBoot = data.skip_boot === 1 || data.skip_boot === '1';
         localStorage.setItem('autoPlayMusic', state.autoPlayMusic ? '1' : '0');
+        localStorage.setItem('skipBoot', state.skipBoot ? '1' : '0');
     } catch (error) {
         const saved = localStorage.getItem('autoPlayMusic');
         if (saved !== null) {
             state.autoPlayMusic = saved === '1';
+        }
+        const savedSkipBoot = localStorage.getItem('skipBoot');
+        if (savedSkipBoot !== null) {
+            state.skipBoot = savedSkipBoot === '1';
         }
     }
 }
 
 async function saveUserSettings() {
     localStorage.setItem('autoPlayMusic', state.autoPlayMusic ? '1' : '0');
-    
+    localStorage.setItem('skipBoot', state.skipBoot ? '1' : '0');
+
     try {
         const response = await fetch(`${API_URL}/user-settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ auto_play_music: state.autoPlayMusic ? 1 : 0 })
+            body: JSON.stringify({
+                auto_play_music: state.autoPlayMusic ? 1 : 0,
+                skip_boot: state.skipBoot ? 1 : 0
+            })
         });
         
         if (!response.ok) {
@@ -1136,10 +1154,13 @@ function showChoiceOptions(choiceId, options) {
         if (isLocked) {
             button.textContent = '\uD83D\uDD12 ' + option.text + lockReason;
             button.classList.add('choice-locked');
-            button.disabled = true;
+            button.dataset.choiceId = option.id;
+            button.setAttribute('aria-disabled', 'true');
+            button.title = `Выбор недоступен${lockReason}`;
             button.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                window.KtbDrama?.showHerald(state.pilotProfile);
             });
         } else {
             button.textContent = option.text;
@@ -1771,6 +1792,11 @@ async function saveUserChoice(frequency, choiceId, optionId, optionText, relatio
             }
             
             console.error(`Ошибка сервера: ${response.status} ${response.statusText}`, errorText);
+            if (response.status === 401 && window.KtbDrama?.showHttpError(response.status, state.pilotProfile)) {
+                setTimeout(() => { window.location.href = 'login.html'; }, 4000);
+            } else if (response.status >= 500) {
+                window.KtbDrama?.showHttpError(response.status, state.pilotProfile);
+            }
             
             // Не выбрасываем исключение, чтобы не прерывать выполнение диалога
             return {
@@ -2521,8 +2547,9 @@ function barSignal() {
 
     function animateBars() {
         var isYellowTheme = document.body.classList.contains('theme-yellow');
-        var activeColor = isYellowTheme ? '#ff9500' : '#03FB8D';
-        var inactiveColor = isYellowTheme ? '#4a2800' : '#397975';
+        var isKtbTheme = document.body.classList.contains('theme-ktb');
+        var activeColor = isKtbTheme ? '#d4af37' : isYellowTheme ? '#ff9500' : '#03FB8D';
+        var inactiveColor = isKtbTheme ? '#4a3b19' : isYellowTheme ? '#4a2800' : '#397975';
         
         if (dBar) {
             signalCount--;
@@ -3422,12 +3449,22 @@ $(document).ready(function() {
         
         toggle.append(toggleInput).append(toggleSlider);
         settingRow.append(settingLabel).append(toggle);
-        
-        modalContent.append(closeBtn).append(title).append(settingRow);
+
+        const bootRow = $('<div class="setting-row"></div>');
+        const bootLabel = $('<label for="skip-boot">Пропускать запуск</label>');
+        const bootToggle = $('<div class="toggle-switch"></div>');
+        const bootInput = $('<input type="checkbox" id="skip-boot">');
+        const bootSlider = $('<span class="toggle-slider"></span>');
+
+        bootToggle.append(bootInput).append(bootSlider);
+        bootRow.append(bootLabel).append(bootToggle);
+
+        modalContent.append(closeBtn).append(title).append(settingRow).append(bootRow);
         modal.append(modalContent);
         $('body').append(modal);
-        
+
         toggleInput.prop('checked', state.autoPlayMusic);
+        bootInput.prop('checked', state.skipBoot);
         
         closeBtn.on('click', function() {
             modal.remove();
@@ -3454,7 +3491,18 @@ $(document).ready(function() {
             const isChecked = toggleInput.prop('checked');
             toggleInput.prop('checked', !isChecked).trigger('change');
         });
-        
+
+        bootInput.on('change', function() {
+            debug('Skip boot changed, new value:', $(this).prop('checked'));
+            state.skipBoot = $(this).prop('checked');
+            saveUserSettings();
+        });
+
+        bootToggle.on('click', function() {
+            const isChecked = bootInput.prop('checked');
+            bootInput.prop('checked', !isChecked).trigger('change');
+        });
+
         $('<style>')
         .prop('type', 'text/css')
         .html(`

@@ -36,6 +36,61 @@
 
     .theme-green .bg-grid { display: none; }
 
+    /* КТБ — старое золото и благородный тёмный фон */
+    .theme-ktb {
+      --bg: #090806;
+      --screen-bg: rgba(24, 19, 11, 0.9);
+      --screen-border: rgba(197, 160, 73, 0.52);
+      --screen-glow: rgba(212, 175, 55, 0.2);
+      --text: #f0e5c8;
+      --text-dim: #b5a47a;
+      --accent: #d4af37;
+      --success: #e5c96a;
+      --grid-line: rgba(197, 160, 73, 0.09);
+    }
+
+    .theme-ktb .bg-grid {
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.08), transparent 55%);
+    }
+
+    .theme-ktb .vignette {
+      background: radial-gradient(ellipse at center, transparent 25%, rgba(5, 4, 2, 0.9) 100%);
+    }
+
+    .theme-ktb .scanlines {
+      background: repeating-linear-gradient(0deg, transparent 3px, rgba(212, 175, 55, 0.018) 3px, rgba(212, 175, 55, 0.018) 4px);
+    }
+
+    .theme-ktb .screen {
+      position: relative;
+      border-radius: 0;
+      outline: 1px solid rgba(212, 175, 55, 0.18);
+      outline-offset: 4px;
+      box-shadow: inset 0 0 35px rgba(212, 175, 55, 0.045), 0 0 24px rgba(212, 175, 55, 0.08);
+    }
+
+    .theme-ktb .screen::before,
+    .theme-ktb .screen::after {
+      content: "";
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      pointer-events: none;
+      z-index: 4;
+      background:
+        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 42px 2px no-repeat,
+        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 2px 42px no-repeat,
+        linear-gradient(#b8943f, #b8943f) 7px 7px / 30px 1px no-repeat,
+        linear-gradient(#b8943f, #b8943f) 7px 7px / 1px 30px no-repeat,
+        linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) 8px 8px / 20px 20px no-repeat;
+    }
+
+    .theme-ktb .screen::before { top: -7px; left: -7px; }
+    .theme-ktb .screen::after { right: -7px; bottom: -7px; transform: rotate(180deg); }
+
     .code-overlay {
       position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; display: none;
     }
@@ -929,9 +984,10 @@
       try {
         const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
         const data = await response.json();
-        if (data.theme === 'green') {
-          document.body.classList.add('theme-green');
-          initCodeOverlay();
+        document.body.classList.remove('theme-green', 'theme-ktb');
+        if (data.theme === 'green' || data.theme === 'ktb') {
+          document.body.classList.add(`theme-${data.theme}`);
+          if (data.theme === 'green') initCodeOverlay();
         }
       } catch (e) {
         console.warn('Failed to load theme:', e);

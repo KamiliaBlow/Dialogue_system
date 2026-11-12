@@ -11,7 +11,34 @@
       font-weight: 300;
       font-style: normal;
     }
-    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+    @font-face {
+      font-family: 'Share Tech Mono';
+      src: url('./assets/fonts/ShareTechMono-Regular.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Cormorant';
+      src: url('./assets/fonts/Cormorant-Variable.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 300 700;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Alegreya';
+      src: url('./assets/fonts/Alegreya-Variable.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 400 800;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'JetBrains Mono';
+      src: url('./assets/fonts/JetBrainsMono-Variable.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 100 800;
+      font-display: swap;
+    }
 
     :root {
       --bg: #050508;
@@ -34,6 +61,97 @@
     }
 
     .theme-green .bg-grid { display: none; }
+
+    /* КТБ — старое золото, тёмное дерево и сдержанное сияние */
+    .theme-ktb {
+      --bg: #090806;
+      --screen-bg: rgba(24, 19, 11, 0.9);
+      --screen-border: rgba(197, 160, 73, 0.52);
+      --screen-glow: rgba(212, 175, 55, 0.2);
+      --text: #f0e5c8;
+      --text-dim: #b5a47a;
+      --accent: #d4af37;
+      --success: #e5c96a;
+      --grid-line: rgba(197, 160, 73, 0.09);
+    }
+
+    .theme-ktb .bg-grid {
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.08), transparent 55%);
+    }
+
+    .theme-ktb .vignette {
+      background: radial-gradient(ellipse at center, transparent 25%, rgba(5, 4, 2, 0.9) 100%);
+    }
+
+    .theme-ktb .scanlines {
+      background: repeating-linear-gradient(0deg, transparent 3px, rgba(212, 175, 55, 0.018) 3px, rgba(212, 175, 55, 0.018) 4px);
+    }
+
+    .theme-ktb .page-title,
+    .theme-ktb .header-title,
+    .theme-ktb .editor-header,
+    .theme-ktb .slot-callsign {
+      color: #e5c96a;
+      font-family: 'Cormorant', Georgia, serif;
+      font-weight: 600;
+      text-shadow: 0 0 18px rgba(212, 175, 55, 0.24);
+    }
+
+    .theme-ktb .page-title {
+      font-size: 2rem;
+    }
+
+    .theme-ktb .slot-mech,
+    .theme-ktb .form-hint,
+    .theme-ktb .slot-empty-text {
+      font-family: 'Alegreya', Georgia, serif;
+    }
+
+    .theme-ktb .form-input,
+    .theme-ktb .form-label,
+    .theme-ktb .slot-number {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .theme-ktb .theme-selector,
+    .theme-ktb .slot-card,
+    .theme-ktb .profile-editor {
+      position: relative;
+      border-radius: 0;
+      outline: 1px solid rgba(212, 175, 55, 0.18);
+      outline-offset: 4px;
+      box-shadow: inset 0 0 28px rgba(212, 175, 55, 0.035), 0 8px 30px rgba(0, 0, 0, 0.28);
+    }
+
+    .theme-ktb .theme-selector::before,
+    .theme-ktb .slot-card::before,
+    .theme-ktb .profile-editor::before,
+    .theme-ktb .theme-selector::after,
+    .theme-ktb .slot-card::after,
+    .theme-ktb .profile-editor::after {
+      content: "";
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      pointer-events: none;
+      background:
+        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 36px 2px no-repeat,
+        linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 2px 36px no-repeat,
+        linear-gradient(#b8943f, #b8943f) 7px 7px / 25px 1px no-repeat,
+        linear-gradient(#b8943f, #b8943f) 7px 7px / 1px 25px no-repeat,
+        linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) 8px 8px / 18px 18px no-repeat;
+    }
+
+    .theme-ktb .theme-selector::before,
+    .theme-ktb .slot-card::before,
+    .theme-ktb .profile-editor::before { top: -7px; left: -7px; }
+
+    .theme-ktb .theme-selector::after,
+    .theme-ktb .slot-card::after,
+    .theme-ktb .profile-editor::after { right: -7px; bottom: -7px; transform: rotate(180deg); }
 
     .code-overlay {
       position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; display: none;
@@ -207,6 +325,12 @@
       background: rgba(3, 251, 141, 0.1);
     }
 
+    .theme-option.active.ktb {
+      border-color: #d4af37;
+      background: rgba(212, 175, 55, 0.12);
+      box-shadow: inset 0 0 14px rgba(212, 175, 55, 0.08);
+    }
+
     .theme-color {
       width: 20px;
       height: 20px;
@@ -219,6 +343,12 @@
 
     .theme-color.green {
       background: #03FB8D;
+    }
+
+    .theme-color.ktb {
+      background: linear-gradient(135deg, #f0dfaa 0%, #d4af37 45%, #8a6828 100%);
+      border: 1px solid #d4af37;
+      box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
     }
 
     .slots-container {
@@ -415,6 +545,44 @@
       opacity: 0.5;
     }
 
+    select.form-input {
+      color-scheme: dark;
+      cursor: pointer;
+    }
+
+    .form-hint {
+      display: block;
+      margin-top: 0.45rem;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      line-height: 1.5;
+      letter-spacing: 0.04em;
+      text-transform: none;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.85rem;
+      border: 1px solid var(--screen-border);
+      background: rgba(0, 0, 0, 0.25);
+      cursor: pointer;
+    }
+
+    .checkbox-group input {
+      width: 18px;
+      height: 18px;
+      margin-top: 0.15rem;
+      flex: 0 0 auto;
+      accent-color: var(--accent);
+    }
+
+    .checkbox-group .form-label {
+      margin-bottom: 0.25rem;
+      cursor: pointer;
+    }
+
     .form-actions {
       display: flex;
       gap: 1rem;
@@ -469,6 +637,33 @@
       background: var(--success);
       color: var(--bg);
       box-shadow: 0 0 20px rgba(0,245,160,0.3);
+    }
+
+    .cavalier-block {
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(-10px);
+      margin-bottom: 0;
+      transition: max-height 0.5s ease, opacity 0.4s ease, transform 0.4s ease, margin-bottom 0.5s ease;
+    }
+
+    .cavalier-block.visible {
+      max-height: 420px;
+      opacity: 1;
+      transform: translateY(0);
+      margin-bottom: 1.25rem;
+    }
+
+    .cavalier-inner {
+      padding: 1rem;
+      border: 1px solid var(--screen-border);
+      background: rgba(0, 0, 0, 0.25);
+      box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
+    }
+
+    .cavalier-inner .form-group:last-of-type {
+      margin-bottom: 0.5rem;
     }
 
     .hidden {
@@ -537,6 +732,10 @@
         <div class="theme-color green"></div>
         <span>Green Theme</span>
       </div>
+      <div class="theme-option ktb" data-theme="ktb" onclick="setTheme('ktb')" role="button" tabindex="0" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setTheme('ktb'); }">
+        <div class="theme-color ktb"></div>
+        <span>КТБ</span>
+      </div>
     </div>
 
     <div class="slots-container" id="slotsContainer"></div>
@@ -561,13 +760,59 @@
             <input type="text" class="form-input" id="callsignInput" placeholder="e.g., RAVEN">
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Full Name</label>
-            <input type="text" class="form-input" id="fullNameInput" placeholder="e.g., Unknown Pilot">
+          <div class="form-group" id="fullNameGroup">
+            <label class="form-label" for="fullNameInput">Full Name / Каноническое имя</label>
+            <input type="text" class="form-input" id="fullNameInput" placeholder="Кассия-Вейл из Дома Стекла" maxlength="160">
+            <small class="form-hint">Для Лансера — как удобно. Кавалер заполняет титул и дом отдельными полями ниже.</small>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Mech Name *</label>
+            <label class="form-label" for="estateInput">Статус в Баронствах</label>
+            <select class="form-input" id="estateInput" onchange="updateEstateFields()">
+              <option value="lancer">Лансер — пилот без родословной</option>
+              <option value="cavalier">Кавалер — благородный титул и печать Дома</option>
+            </select>
+          </div>
+
+          <div class="cavalier-block" id="cavalierBlock">
+            <div class="cavalier-inner">
+              <div class="form-group">
+                <label class="form-label" for="titleInput">Титул и имя</label>
+                <input type="text" class="form-input" id="titleInput" placeholder="леди Кассия-Вейл" maxlength="120">
+                <small class="form-hint">Пример: «леди Кассия-Вейл» — титул подставит выбранная форма обращения, имя и младший дом пишете вы.</small>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="houseInput">Великий дом</label>
+                <input type="text" class="form-input" id="houseInput" placeholder="Стекла" maxlength="80">
+                <small class="form-hint">Пример: «Стекла» — система склонит: из Дома Стекла.</small>
+              </div>
+              <small class="form-hint">Каноническое имя соберётся автоматически: «леди Кассия-Вейл из Дома Стекла».</small>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="genderInput">Форма обращения</label>
+            <select class="form-input" id="genderInput">
+              <option value="neutral">Нейтральная — без гендерных окончаний</option>
+              <option value="female">Женская — леди</option>
+              <option value="male">Мужская — лорд</option>
+            </select>
+          </div>
+
+          <!-- Персона — НЧЛ: временно скрыто по просьбе владельца, вернуть по запросу.
+          <div class="form-group">
+            <label class="checkbox-group" for="isNhpInput">
+              <input type="checkbox" id="isNhpInput">
+              <span>
+                <span class="form-label">Персона — НЧЛ</span>
+                <small class="form-hint">Включает особый цикл ошибки ORACULUM при сбое 500.</small>
+              </span>
+            </label>
+          </div>
+          -->
+
+          <div class="form-group">
+            <label class="form-label" for="mechNameInput">Mech Name *</label>
             <input type="text" class="form-input" id="mechNameInput" placeholder="e.g., STEEL HUNTER">
           </div>
         </div>
@@ -581,7 +826,7 @@
     </div>
   </div>
 
-  <a href="Qwen_html_20260315_hmm0zlm42.html" class="back-link">← Back to Briefing</a>
+  <a href="index.html" class="back-link">← Вернуться в терминал</a>
 
   <script>
     let API_URL = 'https://' + window.location.hostname + ':3000/api';
@@ -645,21 +890,15 @@
       try {
         const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
         const data = await response.json();
-        if (data.theme) {
-          applyTheme(data.theme);
-          if (data.theme === 'green') {
-            document.body.classList.add('theme-green');
-            initCodeOverlay();
-          } else {
-            document.body.classList.remove('theme-green');
-          }
-        }
+        if (data.theme) applyTheme(data.theme);
       } catch (e) {
         console.warn('Failed to load theme:', e);
       }
     }
 
     async function setTheme(theme) {
+      if (!['yellow', 'green', 'ktb'].includes(theme)) return;
+      applyTheme(theme);
       try {
         const response = await fetch(`${API_URL}/user-settings`, {
           method: 'POST',
@@ -668,26 +907,21 @@
           body: JSON.stringify({ theme: theme })
         });
         const data = await response.json();
-        if (data.theme) {
-          applyTheme(data.theme);
-          if (data.theme === 'green') {
-            document.body.classList.add('theme-green');
-            initCodeOverlay();
-          } else {
-            document.body.classList.remove('theme-green');
-          }
-        }
+        if (data.theme) applyTheme(data.theme);
       } catch (e) {
         console.error('Failed to save theme:', e);
       }
     }
 
     function applyTheme(theme) {
+      document.body.classList.remove('theme-green', 'theme-ktb');
+      if (theme === 'green' || theme === 'ktb') {
+        document.body.classList.add(`theme-${theme}`);
+      }
+      if (theme === 'green') initCodeOverlay();
+
       document.querySelectorAll('.theme-option').forEach(el => {
-        el.classList.remove('active');
-        if (el.dataset.theme === theme) {
-          el.classList.add('active');
-        }
+        el.classList.toggle('active', el.dataset.theme === theme);
       });
     }
 
@@ -767,6 +1001,17 @@
       document.getElementById('callsignInput').value = profile?.callsign || '';
       document.getElementById('fullNameInput').value = profile?.full_name || '';
       document.getElementById('mechNameInput').value = profile?.mech_name || '';
+      document.getElementById('estateInput').value = ['cavalier', 'lancer'].includes(profile?.estate) ? profile.estate : 'lancer';
+      document.getElementById('genderInput').value = ['female', 'male', 'neutral'].includes(profile?.gender) ? profile.gender : 'neutral';
+      const isNhpInput = document.getElementById('isNhpInput');
+      if (isNhpInput) isNhpInput.checked = profile?.is_nhp === 1 || profile?.is_nhp === true;
+
+      // Разбор канонического имени на титул и дом для Кавалера.
+      const fullName = profile?.full_name || '';
+      const nameMatch = fullName.match(/^(.*?)(?:\s+из\s+(?:Дома?|дома?)\s+(.+))?$/);
+      document.getElementById('titleInput').value = (nameMatch && nameMatch[1] ? nameMatch[1] : fullName).trim();
+      document.getElementById('houseInput').value = nameMatch && nameMatch[2] ? nameMatch[2].trim() : '';
+      updateEstateFields();
       
       uploadedAvatarPath = profile?.avatar_path || null;
       
@@ -781,10 +1026,26 @@
       renderSlots();
     }
 
+    function updateEstateFields() {
+      const estate = document.getElementById('estateInput').value;
+      const isCavalier = estate === 'cavalier';
+      document.getElementById('cavalierBlock').classList.toggle('visible', isCavalier);
+      document.getElementById('fullNameGroup').classList.toggle('hidden', isCavalier);
+    }
+
     async function saveProfile() {
       const callsign = document.getElementById('callsignInput').value.trim();
-      const fullName = document.getElementById('fullNameInput').value.trim();
+      let fullName = document.getElementById('fullNameInput').value.trim();
       const mechName = document.getElementById('mechNameInput').value.trim();
+      const estate = document.getElementById('estateInput').value;
+      const gender = document.getElementById('genderInput').value;
+      const isNhp = document.getElementById('isNhpInput')?.checked || false;
+
+      if (estate === 'cavalier') {
+        const title = document.getElementById('titleInput').value.trim();
+        const house = document.getElementById('houseInput').value.trim();
+        fullName = house ? `${title} из Дома ${house}` : title;
+      }
       
       if (!callsign) {
         showMessage('Callsign is required', 'error');
@@ -806,7 +1067,10 @@
             callsign: callsign,
             full_name: fullName,
             mech_name: mechName,
-            avatar_path: uploadedAvatarPath
+            avatar_path: uploadedAvatarPath,
+            gender: gender,
+            estate: estate,
+            is_nhp: isNhp
           })
         });
         

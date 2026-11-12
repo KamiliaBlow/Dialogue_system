@@ -1,7 +1,9 @@
+const SERVER_ORIGIN = `${window.location.protocol}//${window.location.hostname}:3000`;
+
 const AppConfig = {
 	Debug: false,
-    API_URL: 'https://REPLACEME:3000/api',
-    ASSETS_URL: 'https://REPLACEME:3000/assets',
+    API_URL: `${SERVER_ORIGIN}/api`,
+    ASSETS_URL: `${SERVER_ORIGIN}/assets`,
     ITEMS_PER_PAGE: 10,
     CACHE_HEADERS: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',

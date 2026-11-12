@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>КТБ — золотая тема интерфейса</title>
+  <link rel="stylesheet" href="./styles/index_styles.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090806;
+      --panel: #100d07;
+      --panel-raised: #191308;
+      --gold: #d4af37;
+      --gold-light: #f0dfaa;
+      --gold-mid: #b8943f;
+      --gold-dark: #6f5724;
+      --text: #f0e5c8;
+      --muted: #b5a47a;
+      --line: rgba(212, 175, 55, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100dvh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.09), transparent 42%),
+        linear-gradient(rgba(197, 160, 73, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(197, 160, 73, 0.045) 1px, transparent 1px),
+        var(--bg);
+      background-size: auto, 120px 120px, 120px 120px, auto;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    button { font: inherit; }
+    button:focus-visible { outline: 2px solid var(--gold-light); outline-offset: 5px; }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 56px;
+    }
+
+    .masthead {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--gold-dark);
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 0;
+      color: var(--gold-light);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(34px, 6vw, 64px);
+      font-weight: 400;
+      line-height: 1;
+      letter-spacing: 0.16em;
+      text-shadow: 0 0 24px rgba(212, 175, 55, 0.2);
+    }
+
+    .edition {
+      color: var(--gold-mid);
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      white-space: nowrap;
+    }
+
+    .intro {
+      max-width: 70ch;
+      margin: 24px 8px 32px;
+      color: var(--muted);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 36px 8px 20px;
+      color: var(--gold-light);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 22px;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+    }
+
+    .section-title::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--gold-dark), transparent);
+    }
+
+    .ornate {
+      position: relative;
+      border: 1px solid var(--gold-mid);
+      outline: 1px solid rgba(212, 175, 55, 0.2);
+      outline-offset: 5px;
+      background: linear-gradient(145deg, rgba(212, 175, 55, 0.035), transparent 45%), var(--panel);
+      box-shadow: inset 0 0 32px rgba(212, 175, 55, 0.035), 0 16px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .ornate::before,
+    .ornate::after {
+      content: "";
+      position: absolute;
+      z-index: 3;
+      width: 58px;
+      height: 58px;
+      pointer-events: none;
+      background:
+        linear-gradient(var(--gold-light), var(--gold-light)) 0 0 / 48px 2px no-repeat,
+        linear-gradient(var(--gold-light), var(--gold-light)) 0 0 / 2px 48px no-repeat,
+        linear-gradient(var(--gold-mid), var(--gold-mid)) 8px 8px / 34px 1px no-repeat,
+        linear-gradient(var(--gold-mid), var(--gold-mid)) 8px 8px / 1px 34px no-repeat,
+        linear-gradient(135deg, transparent 47%, var(--gold) 48%, var(--gold) 52%, transparent 53%) 9px 9px / 23px 23px no-repeat;
+    }
+
+    .ornate::before { top: -8px; left: -8px; }
+    .ornate::after { right: -8px; bottom: -8px; transform: rotate(180deg); }
+
+    .terminal { padding: clamp(20px, 4vw, 40px); }
+
+    .terminal-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+      color: var(--gold-mid);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+    }
+
+    .terminal-grid {
+      display: grid;
+      grid-template-columns: minmax(120px, 0.8fr) minmax(210px, 1.4fr) minmax(120px, 0.8fr);
+      gap: 20px;
+    }
+
+    .portrait {
+      position: relative;
+      display: grid;
+      min-height: 220px;
+      place-items: center;
+      border: 1px solid var(--gold-dark);
+      background:
+        linear-gradient(180deg, rgba(212, 175, 55, 0.13), transparent 55%),
+        repeating-linear-gradient(135deg, transparent 0 12px, rgba(212, 175, 55, 0.025) 12px 13px),
+        #0c0a06;
+      box-shadow: inset 0 0 24px rgba(212, 175, 55, 0.08);
+    }
+
+    .portrait::after {
+      content: "";
+      position: absolute;
+      inset: 8px;
+      border: 1px solid rgba(212, 175, 55, 0.14);
+      pointer-events: none;
+    }
+
+    .monogram {
+      color: var(--gold);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 62px;
+      text-shadow: 0 0 22px rgba(212, 175, 55, 0.25);
+    }
+
+    .portrait-label {
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      left: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-align: center;
+    }
+
+    .receiver {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-top: 1px solid var(--gold-dark);
+      border-bottom: 1px solid var(--gold-dark);
+      background: rgba(212, 175, 55, 0.025);
+    }
+
+    .receiver-label {
+      padding: 4px 24px;
+      border: 1px solid var(--gold-dark);
+      color: var(--gold-light);
+      font-family: Georgia, "Times New Roman", serif;
+      letter-spacing: 0.2em;
+    }
+
+    .signal {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      height: 82px;
+      margin: 16px 0 4px;
+    }
+
+    .signal i {
+      display: block;
+      width: 5px;
+      height: calc(18px + var(--n) * 6px);
+      background: var(--gold);
+      box-shadow: 0 0 7px rgba(212, 175, 55, 0.35);
+    }
+
+    .signal i:nth-child(n+8) { background: var(--gold-dark); box-shadow: none; }
+
+    .frequency {
+      color: var(--gold-light);
+      font-size: 25px;
+      letter-spacing: 0.12em;
+    }
+
+    .transcript {
+      margin-top: 24px;
+      padding: 20px 24px;
+      border: 1px solid var(--gold-dark);
+      background: rgba(0, 0, 0, 0.18);
+    }
+
+    .speaker {
+      margin-bottom: 8px;
+      color: var(--gold);
+      font-size: 12px;
+      letter-spacing: 0.16em;
+    }
+
+    #transmissionText { margin-bottom: 0; min-height: 52px; }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .gold-button {
+      min-height: 44px;
+      padding: 10px 20px;
+      border: 1px solid var(--gold-mid);
+      border-radius: 0;
+      clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+      color: var(--gold-light);
+      background: linear-gradient(180deg, #251c0c, #100d07);
+      cursor: pointer;
+      transition: color 180ms ease-out, background-color 180ms ease-out, box-shadow 180ms ease-out, transform 180ms ease-out;
+    }
+
+    .gold-button:hover {
+      color: #171106;
+      background: var(--gold-light);
+      box-shadow: 0 0 20px rgba(212, 175, 55, 0.25);
+    }
+
+    .gold-button:active { transform: translateY(1px); }
+
+    .corner-gallery {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 28px;
+    }
+
+    .corner-card { min-height: 180px; padding: 28px; }
+    .corner-card h3 { margin-bottom: 8px; color: var(--gold-light); font-family: Georgia, "Times New Roman", serif; font-weight: 400; }
+    .corner-card p { margin-bottom: 0; color: var(--muted); font-size: 14px; }
+    .corner-card.double { outline-offset: 8px; box-shadow: inset 0 0 0 5px var(--panel), inset 0 0 0 6px var(--gold-dark); }
+    .corner-card.arc::before { border-radius: 0 0 100% 0; }
+    .corner-card.arc::after { border-radius: 0 0 100% 0; }
+
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .swatch {
+      padding-top: 74px;
+      border: 1px solid var(--gold-dark);
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+      background: var(--swatch);
+    }
+
+    .swatch span { display: block; padding: 7px 4px; background: var(--panel); }
+
+    .note {
+      margin: 32px 8px 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .oraculum-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .oraculum-controls label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    .oraculum-controls .wide { grid-column: 1 / -1; }
+
+    .oraculum-controls input,
+    .oraculum-controls select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--gold-dark);
+      border-radius: 0;
+      background: #0c0905;
+      color: var(--gold-light);
+      font: 14px 'JetBrains Mono', monospace;
+    }
+
+    .oraculum-controls .check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .oraculum-controls .check input { width: 18px; height: 18px; accent-color: var(--gold); }
+
+    .boot-preview {
+      margin: 0;
+      padding: 22px;
+      border: 1px solid var(--gold-dark);
+      background: #070604;
+      color: var(--gold);
+      font: 13px/1.65 'JetBrains Mono', monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .boot-greeting {
+      margin: 0;
+      padding: 20px 22px;
+      border: 1px solid var(--gold-dark);
+      border-top: 0;
+      color: var(--gold-light);
+      font: 20px/1.5 'Alegreya', Georgia, serif;
+    }
+
+    .oraculum-title {
+      margin: 0 0 18px;
+      color: var(--gold-light);
+      font: 500 28px 'Cormorant', Georgia, serif;
+      letter-spacing: 0.1em;
+    }
+
+    @media (max-width: 760px) {
+      .page { padding-top: 32px; }
+      .masthead { align-items: flex-start; flex-direction: column; gap: 12px; }
+      .terminal-grid { grid-template-columns: 1fr 1fr; }
+      .receiver { grid-column: 1 / -1; grid-row: 1; min-height: 180px; }
+      .portrait { min-height: 170px; }
+      .corner-gallery { grid-template-columns: 1fr; }
+      .palette { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 420px) {
+      .page { width: min(100% - 24px, 1180px); }
+      .terminal { padding: 18px; }
+      .terminal-grid { gap: 12px; }
+      .terminal-header { flex-direction: column; gap: 4px; }
+      .transcript { padding: 16px; }
+      .actions { flex-direction: column; }
+      .gold-button { width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .gold-button { transition: none; }
+    }
+  </style>
+</head>
+<body class="theme-ktb">
+  <main class="page">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Коллекция интерфейсов</p>
+        <h1>КТБ</h1>
+      </div>
+      <div class="edition">ЗОЛОТАЯ СЕРИЯ · 03</div>
+    </header>
+
+    <p class="intro">Тёмный фон, старое золото и многослойные фацетные углы. Страница автономна: стили и сценарий находятся внутри файла, сервер и подключение к базе данных не требуются.</p>
+
+    <h2 class="section-title">Терминал связи</h2>
+    <section class="terminal ornate" aria-label="Демонстрация терминала КТБ">
+      <div class="terminal-header">
+        <span>ЗАЩИЩЁННЫЙ КАНАЛ · КТБ-4521</span>
+        <span id="channelStatus">КАНАЛ ОЖИДАЕТ</span>
+      </div>
+
+      <div class="terminal-grid">
+        <div class="portrait">
+          <span class="monogram">A</span>
+          <span class="portrait-label">АБОНЕНТ · I</span>
+        </div>
+
+        <div class="receiver">
+          <span class="receiver-label">СВЯЗЬ</span>
+          <div class="signal" aria-hidden="true">
+            <i style="--n:1"></i><i style="--n:2"></i><i style="--n:3"></i><i style="--n:4"></i><i style="--n:5"></i><i style="--n:6"></i><i style="--n:7"></i><i style="--n:8"></i><i style="--n:9"></i><i style="--n:10"></i>
+          </div>
+          <span class="frequency">140.85</span>
+        </div>
+
+        <div class="portrait">
+          <span class="monogram">R</span>
+          <span class="portrait-label">АБОНЕНТ · II</span>
+        </div>
+      </div>
+
+      <div class="transcript" aria-live="polite">
+        <div class="speaker">ДИСПЕТЧЕР · ПРИОРИТЕТНАЯ ПЕРЕДАЧА</div>
+        <p id="transmissionText">Линия защищена. Нажмите «Прослушать передачу», чтобы проверить состояние интерфейса.</p>
+      </div>
+
+      <div class="actions">
+        <button class="gold-button" id="listenButton" type="button">Прослушать передачу</button>
+        <button class="gold-button" id="choiceButton" type="button">Подтвердить канал</button>
+      </div>
+    </section>
+
+    <h2 class="section-title">ORACULUM-5.5.0</h2>
+    <section class="terminal ornate" aria-label="Автономная проверка сценария запуска">
+      <h3 class="oraculum-title" id="scenarioTitle">SENESCHAL</h3>
+      <div class="oraculum-controls">
+        <label class="wide">Каноническое имя
+          <input id="previewName" value="Кассия-Вейл из Дома Стекла" maxlength="160">
+        </label>
+        <label>Статус
+          <select id="previewEstate">
+            <option value="cavalier">Кавалер</option>
+            <option value="lancer">Лансер</option>
+          </select>
+        </label>
+        <label>Форма обращения
+          <select id="previewGender">
+            <option value="female">Женская — леди</option>
+            <option value="male">Мужская — лорд</option>
+            <option value="neutral">Нейтральная — без титула</option>
+          </select>
+        </label>
+        <label class="check wide"><input id="previewNhp" type="checkbox"> Персона — НЧЛ</label>
+      </div>
+      <pre class="boot-preview" id="bootLog"></pre>
+      <p class="boot-greeting" id="bootGreeting"></p>
+      <div class="actions">
+        <button class="gold-button" id="heraldButton" type="button">Провал порога отношений</button>
+        <button class="gold-button" id="error401Button" type="button">Ошибка 401</button>
+        <button class="gold-button" id="error500Button" type="button">Ошибка 500</button>
+      </div>
+    </section>
+
+    <h2 class="section-title">Варианты рамок</h2>
+    <section class="corner-gallery" aria-label="Варианты декоративных углов">
+      <article class="corner-card ornate">
+        <h3>Фацетный</h3>
+        <p>Основной вариант: строгие прямые линии, диагональный срез и двойной контур.</p>
+      </article>
+      <article class="corner-card ornate double">
+        <h3>Парадный</h3>
+        <p>Дополнительная внутренняя линия и увеличенный внешний отступ для крупных панелей.</p>
+      </article>
+      <article class="corner-card ornate arc">
+        <h3>Ар-деко</h3>
+        <p>Более мягкий акцент с дугой в декоративном угле по второму референсу.</p>
+      </article>
+    </section>
+
+    <h2 class="section-title">Палитра</h2>
+    <div class="palette" aria-label="Цвета темы">
+      <div class="swatch" style="--swatch:#090806"><span>#090806</span></div>
+      <div class="swatch" style="--swatch:#6f5724"><span>#6F5724</span></div>
+      <div class="swatch" style="--swatch:#b8943f"><span>#B8943F</span></div>
+      <div class="swatch" style="--swatch:#d4af37"><span>#D4AF37</span></div>
+      <div class="swatch" style="--swatch:#f0dfaa"><span>#F0DFAA</span></div>
+    </div>
+
+    <p class="note">Файл можно открыть двойным щелчком в любом современном браузере.</p>
+  </main>
+
+  <script src="./scripts/boot-scenarios.js"></script>
+  <script src="./scripts/ktb-drama.js"></script>
+  <script>
+    const listenButton = document.getElementById('listenButton');
+    const choiceButton = document.getElementById('choiceButton');
+    const transmissionText = document.getElementById('transmissionText');
+    const channelStatus = document.getElementById('channelStatus');
+
+    listenButton.addEventListener('click', () => {
+      transmissionText.textContent = 'Передача принята. Золотой контур стабилен, защищённая частота 140.85 доступна.';
+      channelStatus.textContent = 'ПЕРЕДАЧА ПРИНЯТА';
+      listenButton.textContent = 'Повторить передачу';
+    });
+
+    choiceButton.addEventListener('click', () => {
+      transmissionText.textContent = 'Канал подтверждён. Соединение установлено в приоритетном режиме.';
+      channelStatus.textContent = 'КАНАЛ ПОДТВЕРЖДЁН';
+    });
+
+    const previewControls = ['previewName', 'previewEstate', 'previewGender', 'previewNhp']
+      .map(id => document.getElementById(id));
+
+    function getPreviewProfile() {
+      return {
+        slot_number: 1,
+        callsign: 'RAVEN',
+        full_name: document.getElementById('previewName').value,
+        mech_name: 'STEEL HUNTER',
+        estate: document.getElementById('previewEstate').value,
+        gender: document.getElementById('previewGender').value,
+        is_nhp: document.getElementById('previewNhp').checked
+      };
+    }
+
+    function renderBootPreview() {
+      const scenario = window.BootScenarios.buildScenario('ktb', getPreviewProfile());
+      document.getElementById('scenarioTitle').textContent = `${scenario.bannerTitle} // ${scenario.system}`;
+      document.getElementById('bootLog').textContent = scenario.lines.join('\n');
+      document.getElementById('bootGreeting').textContent = scenario.greeting;
+    }
+
+    previewControls.forEach(control => {
+      control.addEventListener('input', renderBootPreview);
+      control.addEventListener('change', renderBootPreview);
+    });
+    document.getElementById('heraldButton').addEventListener('click', () => {
+      if (!window.KtbDrama.showHerald(getPreviewProfile())) {
+        document.getElementById('bootGreeting').textContent = '«Герольд не вмешивается в обращения неблагородных. Выберите статус Кавалера.»';
+      }
+    });
+    document.getElementById('error401Button').addEventListener('click', () => {
+      window.KtbDrama.showHttpError(401, getPreviewProfile());
+    });
+    document.getElementById('error500Button').addEventListener('click', () => {
+      window.KtbDrama.showHttpError(500, getPreviewProfile());
+    });
+    renderBootPreview();
+  </script>
+</body>
+</html>

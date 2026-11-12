@@ -283,6 +283,7 @@ const authLimiter = rateLimit({
 });
 
 function initDatabase() {
+    db.serialize(() => {
     const tables = [
         `CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -392,6 +393,7 @@ function initDatabase() {
             user_id INTEGER UNIQUE NOT NULL,
             auto_play_music INTEGER DEFAULT 1,
             theme TEXT DEFAULT 'yellow',
+            skip_boot INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )`,
         `CREATE TABLE IF NOT EXISTS pilot_profiles (
@@ -402,6 +404,9 @@ function initDatabase() {
             full_name TEXT,
             mech_name TEXT NOT NULL,
             avatar_path TEXT,
+            gender TEXT NOT NULL DEFAULT 'neutral',
+            estate TEXT NOT NULL DEFAULT 'lancer',
+            is_nhp INTEGER NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -464,6 +469,30 @@ tables.forEach(sql => db.run(sql));
     db.run(`ALTER TABLE pilot_profiles ADD COLUMN is_active INTEGER DEFAULT 0`, (err) => {
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (is_active):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE pilot_profiles ADD COLUMN gender TEXT NOT NULL DEFAULT 'neutral'`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (gender):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE pilot_profiles ADD COLUMN estate TEXT NOT NULL DEFAULT 'lancer'`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (estate):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE pilot_profiles ADD COLUMN is_nhp INTEGER NOT NULL DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (is_nhp):', err.message);
+        }
+    });
+
+    db.run(`ALTER TABLE user_settings ADD COLUMN skip_boot INTEGER DEFAULT 0`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (skip_boot):', err.message);
         }
     });
 
@@ -554,6 +583,7 @@ tables.forEach(sql => db.run(sql));
                 });
             }
         }
+    });
     });
 }
 
@@ -687,7 +717,7 @@ app.use('/api', authRoutes);
 const pilotRoutes = express.Router();
 
 pilotRoutes.get('/pilot-profiles', requireAuth, (req, res) => {
-    db.all('SELECT id, slot_number, callsign, full_name, mech_name, avatar_path, created_at, updated_at FROM pilot_profiles WHERE user_id = ? ORDER BY slot_number', 
+    db.all('SELECT id, slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp, is_active, created_at, updated_at FROM pilot_profiles WHERE user_id = ? ORDER BY slot_number', 
         [req.session.userId], 
         (err, rows) => {
             if (err) return res.status(500).json({ message: 'Ошибка получения профилей' });
@@ -698,7 +728,17 @@ pilotRoutes.get('/pilot-profiles', requireAuth, (req, res) => {
                 if (existing) {
                     profiles.push(existing);
                 } else {
-                    profiles.push({ slot_number: i, callsign: '', full_name: '', mech_name: '', avatar_path: null });
+                    profiles.push({
+                        slot_number: i,
+                        callsign: '',
+                        full_name: '',
+                        mech_name: '',
+                        avatar_path: null,
+                        gender: 'neutral',
+                        estate: 'lancer',
+                        is_nhp: 0,
+                        is_active: 0
+                    });
                 }
             }
             res.json({ profiles });
@@ -715,20 +755,40 @@ pilotRoutes.get('/pilot-profiles/active', requireAuth, (req, res) => {
 });
 
 pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
-    const { slot_number, callsign, full_name, mech_name, avatar_path } = req.body;
+    const { slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp } = req.body;
     const userId = req.session.userId;
+    const normalizedGender = gender === undefined ? 'neutral' : gender;
+    const normalizedEstate = estate === undefined ? 'lancer' : estate;
 
     if (!slot_number || slot_number < 1 || slot_number > 3) {
         return res.status(400).json({ message: 'Номер слота должен быть от 1 до 3' });
     }
 
-    if (!callsign || callsign.trim() === '') {
+    if (typeof callsign !== 'string' || callsign.trim() === '') {
         return res.status(400).json({ message: 'Позывной обязателен' });
     }
 
-    if (!mech_name || mech_name.trim() === '') {
+    if (typeof mech_name !== 'string' || mech_name.trim() === '') {
         return res.status(400).json({ message: 'Название меха обязательно' });
     }
+
+    if (full_name !== undefined && full_name !== null && typeof full_name !== 'string') {
+        return res.status(400).json({ message: 'Некорректное полное имя' });
+    }
+
+    if (!['female', 'male', 'neutral'].includes(normalizedGender)) {
+        return res.status(400).json({ message: 'Неизвестная форма обращения' });
+    }
+
+    if (!['cavalier', 'lancer'].includes(normalizedEstate)) {
+        return res.status(400).json({ message: 'Неизвестный статус персонажа' });
+    }
+
+    if (is_nhp !== undefined && ![0, 1, '0', '1', true, false].includes(is_nhp)) {
+        return res.status(400).json({ message: 'Некорректный признак НЧЛ' });
+    }
+
+    const normalizedIsNhp = [1, '1', true].includes(is_nhp) ? 1 : 0;
 
     // avatar_path должен указывать только на директорию аватаров (защита от path traversal).
     let safeAvatarPath = null;
@@ -743,15 +803,18 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
         }
     }
 
-    db.run(`INSERT INTO pilot_profiles (user_id, slot_number, callsign, full_name, mech_name, avatar_path, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    db.run(`INSERT INTO pilot_profiles (user_id, slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, slot_number) DO UPDATE SET
                 callsign = excluded.callsign,
                 full_name = excluded.full_name,
                 mech_name = excluded.mech_name,
                 avatar_path = excluded.avatar_path,
+                gender = excluded.gender,
+                estate = excluded.estate,
+                is_nhp = excluded.is_nhp,
                 updated_at = CURRENT_TIMESTAMP`,
-        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), safeAvatarPath],
+        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), safeAvatarPath, normalizedGender, normalizedEstate, normalizedIsNhp],
         function(err) {
             if (err) return res.status(500).json({ message: 'Ошибка сохранения профиля' });
 
@@ -1360,17 +1423,17 @@ app.get('/api/user-settings', (req, res) => {
         return res.status(401).json({ message: 'Не авторизован' });
     }
     
-    db.get('SELECT auto_play_music, theme FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
+    db.get('SELECT auto_play_music, theme, skip_boot FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
-        
+
         if (!settings) {
-            db.run('INSERT INTO user_settings (user_id, auto_play_music, theme) VALUES (?, 1, ?)', [req.session.userId, 'yellow'], (err) => {
+            db.run('INSERT INTO user_settings (user_id, auto_play_music, theme, skip_boot) VALUES (?, 1, ?, 0)', [req.session.userId, 'yellow'], (err) => {
                 if (err) Logger.error('Error creating user settings:', err.message);
             });
-            return res.json({ auto_play_music: 1, theme: 'yellow' });
+            return res.json({ auto_play_music: 1, theme: 'yellow', skip_boot: 0 });
         }
-        
-        res.json({ auto_play_music: settings.auto_play_music, theme: settings.theme || 'yellow' });
+
+        res.json({ auto_play_music: settings.auto_play_music, theme: settings.theme || 'yellow', skip_boot: settings.skip_boot || 0 });
     });
 });
 
@@ -1379,23 +1442,32 @@ app.post('/api/user-settings', (req, res) => {
         return res.status(401).json({ message: 'Не авторизован' });
     }
     
-    const { auto_play_music, theme } = req.body;
-    
-    if (auto_play_music === undefined && theme === undefined) {
+    const { auto_play_music, theme, skip_boot } = req.body;
+
+    if (auto_play_music === undefined && theme === undefined && skip_boot === undefined) {
         return res.status(400).json({ message: 'Отсутствуют параметры' });
     }
-    
+
+    if (theme !== undefined && !['yellow', 'green', 'ktb'].includes(theme)) {
+        return res.status(400).json({ message: 'Неизвестная тема' });
+    }
+
+    if (skip_boot !== undefined && typeof skip_boot !== 'number' && typeof skip_boot !== 'boolean') {
+        return res.status(400).json({ message: 'Некорректное значение skip_boot' });
+    }
+
     db.get('SELECT * FROM user_settings WHERE user_id = ?', [req.session.userId], (err, existing) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
-        
+
         const newAutoPlay = auto_play_music !== undefined ? (auto_play_music ? 1 : 0) : (existing?.auto_play_music || 1);
         const newTheme = theme || existing?.theme || 'yellow';
-        
-        db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music, theme) VALUES (?, ?, ?)', 
-            [req.session.userId, newAutoPlay, newTheme],
+        const newSkipBoot = skip_boot !== undefined ? (skip_boot ? 1 : 0) : (existing?.skip_boot || 0);
+
+        db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music, theme, skip_boot) VALUES (?, ?, ?, ?)',
+            [req.session.userId, newAutoPlay, newTheme, newSkipBoot],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
-                res.json({ success: true, auto_play_music: newAutoPlay, theme: newTheme });
+                res.json({ success: true, auto_play_music: newAutoPlay, theme: newTheme, skip_boot: newSkipBoot });
             });
     });
 });
@@ -1619,19 +1691,53 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: 'Внутренняя ошибка сервера' });
 });
 
+function logServerStarted(protocol) {
+    const separator = '='.repeat(58);
+    console.log(`\n${separator}`);
+    console.log('✓ СЕРВЕР ЗАПУЩЕН И РАБОТАЕТ');
+    console.log(separator);
+    console.log(`Протокол:      ${protocol.toUpperCase()}`);
+    console.log(`Локальный API: ${protocol}://localhost:${config.PORT}/api`);
+    console.log(`Node.js:       ${process.version}`);
+    console.log(`База данных:   ${config.DB_PATH}`);
+    console.log(`Запущен:       ${new Date().toLocaleString('ru-RU')}`);
+    console.log('Остановка:     Ctrl+C');
+    console.log(`${separator}\n`);
+
+    db.get('SELECT 1 AS connected', (err) => {
+        if (err) {
+            console.error('✗ База данных: ошибка подключения —', err.message);
+        } else {
+            console.log('✓ База данных: подключение работает');
+        }
+    });
+}
+
+function handleServerError(error) {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`✗ Порт ${config.PORT} уже занят другим процессом.`);
+    } else {
+        console.error('✗ Ошибка запуска сервера:', error.message);
+    }
+}
+
 if (hasSSL) {
     const sslOptions = {
         key: fs.readFileSync(sslKeyPath),
         cert: fs.readFileSync(sslCertPath)
     };
-    
-    https.createServer(sslOptions, app).listen(config.PORT, () => {
-        Logger.info(`HTTPS server started on port ${config.PORT}`);
+
+    const server = https.createServer(sslOptions, app);
+    server.on('error', handleServerError);
+    server.listen(config.PORT, () => {
+        logServerStarted('https');
         Logger.info(`CORS origins: ${config.CORS_ORIGINS.join(', ')}`);
     });
 } else {
-    http.createServer(app).listen(config.PORT, () => {
-        Logger.info(`HTTP server started on port ${config.PORT}`);
+    const server = http.createServer(app);
+    server.on('error', handleServerError);
+    server.listen(config.PORT, () => {
+        logServerStarted('http');
         Logger.info(`CORS origins: ${config.CORS_ORIGINS.join(', ')}`);
         Logger.warn('Running in HTTP mode (no SSL certificates found)');
     });

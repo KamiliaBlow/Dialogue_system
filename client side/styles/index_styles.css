@@ -3,6 +3,38 @@
     src: url('TeletactileRus.ttf') format('opentype');
 }
 
+@font-face {
+    font-family: 'Orbitron';
+    src: local('Orbitron'), url('Orbitron-Light.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Cormorant';
+    src: url('../assets/fonts/Cormorant-Variable.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Alegreya';
+    src: url('../assets/fonts/Alegreya-Variable.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('../assets/fonts/JetBrainsMono-Variable.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 100 800;
+    font-display: swap;
+}
+
 @keyframes shake {
     0% { transform: translate(0, 0); }
     25% { transform: translate(-2px, 0); }
@@ -75,7 +107,7 @@ body.theme-green {
 
 #mCodec {
 	position: absolute;
-	top: 50%;
+	top: 45%;
 	left: 50%;
 	transform: translate(-50%, -50%) scale(0.9);
 	width: 1080px;
@@ -89,6 +121,7 @@ body.theme-green {
 	justify-content: center;
 	align-items: center;
 	flex-direction: row;
+	gap: 16px;
 	overflow: hidden;
 	width: 100%;
 	max-width: 1080px;
@@ -120,7 +153,7 @@ body.theme-green {
 	font-family: 'TeletactileRus', monospace;
 	border: 1px solid #03FB8D;
 	height: 300px;
-	margin: 0 auto;
+	margin: 16px auto 0;
 	color: white;
 	text-align: center;
 	max-width: 1080px;
@@ -2420,4 +2453,701 @@ body.theme-yellow .boot-reveal-terminal {
     transform: translateX(-50%) translateY(0);
     box-shadow: 0 0 15px rgba(255, 107, 53, 0.4);
   }
+}
+
+/* ============================================
+   КТБ — аристократичное старое золото
+   ============================================ */
+body.theme-ktb {
+  --ktb-gold: #d4af37;
+  --ktb-light: #f0dfaa;
+  --ktb-dark: #6f5724;
+  background-color: #090806;
+  color: var(--ktb-light);
+}
+
+body.theme-ktb .bg-grid {
+  display: block;
+  background-image:
+    linear-gradient(rgba(197, 160, 73, 0.075) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(197, 160, 73, 0.075) 1px, transparent 1px),
+    radial-gradient(circle at 50% 10%, rgba(212, 175, 55, 0.08), transparent 58%);
+  background-size: 150px 150px, 150px 150px, 100% 100%;
+}
+
+body.theme-ktb .vignette {
+  display: block;
+  background: radial-gradient(ellipse at center, transparent 28%, rgba(5, 4, 2, 0.92) 100%);
+}
+
+body.theme-ktb .scanlines {
+  display: block;
+  opacity: 0.32;
+  background: repeating-linear-gradient(0deg, transparent 3px, rgba(212, 175, 55, 0.025) 3px, rgba(212, 175, 55, 0.025) 4px);
+}
+
+body.theme-ktb #contact_1,
+body.theme-ktb #contact_2,
+body.theme-ktb .codec-col,
+body.theme-ktb #text-con,
+body.theme-ktb #r_box,
+body.theme-ktb #terminal-background,
+body.theme-ktb .assembly-code-container {
+  border-color: #b8943f !important;
+  background-color: rgba(15, 12, 7, 0.88) !important;
+  box-shadow: inset 0 0 24px rgba(212, 175, 55, 0.045), 0 0 16px rgba(212, 175, 55, 0.16) !important;
+}
+
+body.theme-ktb .char-box,
+body.theme-ktb #char-1,
+body.theme-ktb #char-2 {
+  border-color: #b8943f !important;
+  box-shadow: inset 0 0 20px rgba(212, 175, 55, 0.08), 0 0 14px rgba(212, 175, 55, 0.14) !important;
+}
+
+body.theme-ktb .char-box .overlay,
+body.theme-ktb #char-1 .overlay,
+body.theme-ktb #char-2 .overlay {
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.18), rgba(110, 82, 26, 0.06) 55%, transparent) !important;
+  box-shadow: inset 0 0 24px rgba(212, 175, 55, 0.12) !important;
+}
+
+body.theme-ktb #left,
+body.theme-ktb #right,
+body.theme-ktb #left_2,
+body.theme-ktb #right_2,
+body.theme-ktb .caret,
+body.theme-ktb .freq,
+body.theme-ktb #c-char,
+body.theme-ktb #freq_2,
+body.theme-ktb #text,
+body.theme-ktb .terminal-line,
+body.theme-ktb .terminal-text,
+body.theme-ktb .terminal-message,
+body.theme-ktb .terminal-message-text,
+body.theme-ktb .start-link,
+body.theme-ktb .repeat-link,
+body.theme-ktb #track-name,
+body.theme-ktb .choice-button,
+body.theme-ktb .setting-row,
+body.theme-ktb .setting-row label,
+body.theme-ktb .modal-content h2,
+body.theme-ktb .modal-close {
+  color: #e5c96a !important;
+  border-color: #b8943f !important;
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.24) !important;
+}
+
+body.theme-ktb #codec_banner h2,
+body.theme-ktb #memory_banner h2,
+body.theme-ktb .banner h2 {
+  color: #f0dfaa !important;
+  border-color: #b8943f !important;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.3) !important;
+}
+
+body.theme-ktb .banner {
+  background: linear-gradient(90deg, #171208, #241b0c 50%, #171208) !important;
+  border-color: #6f5724 !important;
+}
+
+body.theme-ktb #receiver-box {
+  background: rgba(212, 175, 55, 0.08) !important;
+  border-color: #6f5724 !important;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.16) !important;
+}
+
+body.theme-ktb #start-transmission,
+body.theme-ktb #repeat-transmission,
+body.theme-ktb .choice-button,
+body.theme-ktb #music-float-btn,
+body.theme-ktb #admin-float-btn,
+body.theme-ktb #logout-btn,
+body.theme-ktb #settings-btn,
+body.theme-ktb #dossier-btn {
+  color: #e5c96a !important;
+  border-color: #b8943f !important;
+  background: linear-gradient(180deg, #211a0d, #100d07) !important;
+  box-shadow: inset 0 0 8px rgba(212, 175, 55, 0.12), 0 0 10px rgba(212, 175, 55, 0.16) !important;
+}
+
+body.theme-ktb #start-transmission:hover,
+body.theme-ktb #repeat-transmission:hover,
+body.theme-ktb .choice-button:hover,
+body.theme-ktb #music-float-btn:hover,
+body.theme-ktb #admin-float-btn:hover,
+body.theme-ktb #logout-btn:hover,
+body.theme-ktb #settings-btn:hover,
+body.theme-ktb #dossier-btn:hover {
+  color: #171106 !important;
+  background: linear-gradient(180deg, #f0dfaa, #c49b35) !important;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.38) !important;
+}
+
+body.theme-ktb #start-transmission:hover .start-link,
+body.theme-ktb #repeat-transmission:hover .repeat-link {
+  color: #171106 !important;
+  text-shadow: none !important;
+}
+
+body.theme-ktb #music-popup,
+body.theme-ktb #settings-modal,
+body.theme-ktb .modal-content {
+  border-color: #b8943f !important;
+  background: rgba(15, 12, 7, 0.97) !important;
+  box-shadow: inset 0 0 30px rgba(212, 175, 55, 0.045), 0 0 28px rgba(212, 175, 55, 0.22) !important;
+}
+
+body.theme-ktb #music-popup button,
+body.theme-ktb input,
+body.theme-ktb select,
+body.theme-ktb textarea {
+  border-color: #b8943f !important;
+  color: #e5c96a !important;
+  background-color: rgba(212, 175, 55, 0.08) !important;
+}
+
+body.theme-ktb #volume-control {
+  accent-color: #d4af37 !important;
+}
+
+body.theme-ktb .toggle-slider {
+  border-color: #b8943f !important;
+}
+
+body.theme-ktb .toggle-slider:before {
+  background-color: #d4af37 !important;
+}
+
+body.theme-ktb .toggle-switch input:checked + .toggle-slider {
+  background-color: rgba(212, 175, 55, 0.3) !important;
+}
+
+body.theme-ktb #assembly-code-overlay {
+  display: none !important;
+}
+
+body.theme-ktb .assembly-code-line {
+  color: rgba(212, 175, 55, 0.24) !important;
+}
+
+body.theme-ktb #alien-boot-text,
+body.theme-ktb .alien-corp-title,
+body.theme-ktb .alien-corp-subtitle,
+body.theme-ktb .alien-corp-line,
+body.theme-ktb .alien-progress-label {
+  color: #e5c96a !important;
+  text-shadow: 0 0 12px rgba(212, 175, 55, 0.35) !important;
+}
+
+body.theme-ktb .alien-corner,
+body.theme-ktb .alien-progress-bar-bg {
+  border-color: #b8943f !important;
+}
+
+body.theme-ktb .alien-progress-bar-fill {
+  background: #d4af37 !important;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.55) !important;
+}
+
+body.theme-ktb #alien-crt-circle {
+  border-color: #d4af37 !important;
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.28), inset 0 0 30px rgba(212, 175, 55, 0.12) !important;
+}
+
+body.theme-ktb #mCodec.boot-reveal-main {
+  animation-name: bootRevealHoloYellow !important;
+}
+
+body.theme-ktb .boot-reveal-btn {
+  animation-name: bootRevealEnergyPopYellow !important;
+}
+
+body.theme-ktb .boot-reveal-terminal {
+  animation-name: bootRevealSlideUpGlowYellow !important;
+}
+
+/* Прокрутка длинных реплик сохраняется, но полосы не отображаются. */
+#text-con {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#text-con::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Углы text-con рисуются на самой панели и не создают переполнение. */
+body.theme-ktb #text-con {
+  border-radius: 0 !important;
+  outline: 1px solid rgba(212, 175, 55, 0.2);
+  outline-offset: 4px;
+  background:
+    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 42px 2px no-repeat,
+    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 2px 42px no-repeat,
+    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 30px 1px no-repeat,
+    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 1px 30px no-repeat,
+    linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) left 8px top 8px / 20px 20px no-repeat,
+    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 42px 2px no-repeat,
+    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 2px 42px no-repeat,
+    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 30px 1px no-repeat,
+    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 1px 30px no-repeat,
+    linear-gradient(315deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) right 8px bottom 8px / 20px 20px no-repeat,
+    linear-gradient(rgba(15, 12, 7, 0.88), rgba(15, 12, 7, 0.88)) !important;
+}
+
+/* Многослойные углы остальных панелей по референсам. */
+body.theme-ktb #char-1,
+body.theme-ktb #char-2,
+body.theme-ktb .modal-content {
+  position: relative;
+}
+
+body.theme-ktb #terminal-background,
+body.theme-ktb #char-1,
+body.theme-ktb #char-2,
+body.theme-ktb .modal-content {
+  border-radius: 0 !important;
+  outline: 1px solid rgba(212, 175, 55, 0.2);
+  outline-offset: 4px;
+}
+
+body.theme-ktb #terminal-background::before,
+body.theme-ktb #char-1::before,
+body.theme-ktb #char-2::before,
+body.theme-ktb .modal-content::before,
+body.theme-ktb #terminal-background::after,
+body.theme-ktb #char-1::after,
+body.theme-ktb #char-2::after,
+body.theme-ktb .modal-content::after {
+  content: "";
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  pointer-events: none;
+  z-index: 4;
+  background:
+    linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 42px 2px no-repeat,
+    linear-gradient(#f0dfaa, #f0dfaa) 0 0 / 2px 42px no-repeat,
+    linear-gradient(#b8943f, #b8943f) 7px 7px / 30px 1px no-repeat,
+    linear-gradient(#b8943f, #b8943f) 7px 7px / 1px 30px no-repeat,
+    linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) 8px 8px / 20px 20px no-repeat;
+}
+
+body.theme-ktb #terminal-background::before,
+body.theme-ktb #char-1::before,
+body.theme-ktb #char-2::before,
+body.theme-ktb .modal-content::before {
+  top: -7px;
+  left: -7px;
+}
+
+body.theme-ktb #terminal-background::after,
+body.theme-ktb #char-1::after,
+body.theme-ktb #char-2::after,
+body.theme-ktb .modal-content::after {
+  right: -7px;
+  bottom: -7px;
+  transform: rotate(180deg);
+}
+
+body.theme-ktb #start-transmission,
+body.theme-ktb #repeat-transmission,
+body.theme-ktb .choice-button,
+body.theme-ktb #music-float-btn,
+body.theme-ktb #admin-float-btn,
+body.theme-ktb #logout-btn,
+body.theme-ktb #settings-btn,
+body.theme-ktb #dossier-btn {
+  border-radius: 0 !important;
+  clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px), 0 7px);
+}
+
+/* ============================================
+   ТЕМАТИЧЕСКИЙ ЗАПУСК И ЛОКАЛЬНАЯ ТИПОГРАФИКА
+   ============================================ */
+#alien-system-id {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  z-index: 10;
+  transform: translateX(-50%);
+  color: rgba(3, 251, 141, 0.58);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  white-space: nowrap;
+}
+
+.alien-boot-spacer {
+  height: 0.65em;
+}
+
+#alien-boot-greeting {
+  max-width: 72ch;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid currentColor;
+  font-family: 'Alegreya', Georgia, serif;
+  font-size: 19px;
+  line-height: 1.45;
+  white-space: normal;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+#alien-boot-greeting.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+body.theme-ktb #c-char,
+body.theme-ktb .banner h2,
+body.theme-ktb .freq {
+  font-family: 'Cormorant', Georgia, serif !important;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+body.theme-ktb #text,
+body.theme-ktb .choice-button,
+body.theme-ktb .start-link,
+body.theme-ktb .repeat-link {
+  font-family: 'Alegreya', Georgia, serif !important;
+}
+
+body.theme-ktb #text {
+  font-size: clamp(17px, 1.35vw, 22px);
+  line-height: 1.5;
+}
+
+body.theme-ktb .choice-button {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+#alien-boot-overlay[data-theme='ktb'] {
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(116, 82, 25, 0.15), transparent 52%),
+    linear-gradient(135deg, rgba(212, 175, 55, 0.025) 25%, transparent 25%) 0 0 / 24px 24px,
+    #070604;
+}
+
+#alien-boot-overlay[data-theme='ktb'] #alien-system-id {
+  color: #b8943f;
+}
+
+#alien-boot-overlay[data-theme='ktb'] #alien-boot-text {
+  width: min(900px, calc(100% - 64px));
+  max-width: 900px;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  color: #e5c96a !important;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-shadow: 0 0 12px rgba(212, 175, 55, 0.24) !important;
+}
+
+#alien-boot-overlay[data-theme='ktb'] #alien-boot-text::-webkit-scrollbar {
+  display: none;
+}
+
+#alien-boot-overlay[data-theme='ktb'] #alien-boot-greeting {
+  color: #f0dfaa;
+  border-color: rgba(212, 175, 55, 0.38);
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-corp-title {
+  color: #f0dfaa !important;
+  font-family: 'Cormorant', Georgia, serif;
+  font-size: clamp(42px, 7vw, 84px);
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 26px rgba(212, 175, 55, 0.42) !important;
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-corp-subtitle {
+  color: #b8943f !important;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.22em;
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-corp-line {
+  background: linear-gradient(90deg, transparent, #d4af37, transparent);
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-corner {
+  width: 52px;
+  height: 52px;
+  border-color: #d4af37 !important;
+}
+
+#alien-boot-overlay[data-theme='ktb'] #alien-crt-circle {
+  background: radial-gradient(ellipse at center, rgba(212, 175, 55, 0.06), transparent 68%);
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-progress-label {
+  color: #b8943f !important;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-progress-bar-bg {
+  background: rgba(212, 175, 55, 0.12) !important;
+}
+
+#alien-boot-overlay[data-theme='yellow'] #alien-system-id {
+  color: rgba(255, 107, 53, 0.65);
+}
+
+/* Красно-чёрный герольд и церемониальные ошибки КТБ. */
+body.ktb-drama-open {
+  overflow: hidden !important;
+}
+
+.ktb-drama-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(4, 3, 2, 0.94);
+  animation: ktbDramaIn 0.22s ease-out;
+}
+
+.ktb-drama-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(212, 175, 55, 0.035) 3px 4px);
+}
+
+.ktb-drama-panel {
+  position: relative;
+  width: min(820px, 100%);
+  padding: clamp(28px, 5vw, 60px);
+  border: 1px solid #b8943f;
+  outline: 1px solid rgba(212, 175, 55, 0.3);
+  outline-offset: 7px;
+  background: linear-gradient(145deg, rgba(212, 175, 55, 0.08), transparent 48%), #0c0905;
+  clip-path: polygon(22px 0, calc(100% - 22px) 0, 100% 22px, 100% calc(100% - 22px), calc(100% - 22px) 100%, 22px 100%, 0 calc(100% - 22px), 0 22px);
+  text-align: center;
+  box-shadow: 0 0 80px rgba(212, 175, 55, 0.16);
+}
+
+.ktb-drama-eyebrow {
+  margin-bottom: 18px;
+  color: #b8943f;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+
+.ktb-drama-panel h2 {
+  margin: 0 0 24px;
+  color: #f0dfaa;
+  font-family: 'Cormorant', Georgia, serif;
+  font-size: clamp(34px, 6vw, 62px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1.05;
+}
+
+.ktb-drama-panel p {
+  margin: 0 auto 30px;
+  max-width: 62ch;
+  color: #f0e5c8;
+  font-family: 'Alegreya', Georgia, serif;
+  font-size: clamp(18px, 2.4vw, 24px);
+  line-height: 1.55;
+}
+
+.ktb-drama-action {
+  padding: 12px 22px;
+  border: 1px solid #d4af37;
+  border-radius: 0;
+  background: #171208;
+  color: #f0dfaa;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.ktb-drama-action:hover,
+.ktb-drama-action:focus-visible {
+  outline: 2px solid #f0dfaa;
+  outline-offset: 4px;
+  background: #d4af37;
+  color: #100d07;
+}
+
+.ktb-drama-red,
+.ktb-drama-herald {
+  background: radial-gradient(ellipse at center, rgba(115, 0, 0, 0.32), transparent 62%), rgba(3, 0, 0, 0.97);
+}
+
+.ktb-drama-red::before,
+.ktb-drama-herald::before {
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 25, 25, 0.055) 3px 4px);
+}
+
+.ktb-drama-red .ktb-drama-panel,
+.ktb-drama-herald .ktb-drama-panel {
+  border-color: #b51f2e;
+  outline-color: rgba(181, 31, 46, 0.48);
+  background: linear-gradient(145deg, rgba(181, 31, 46, 0.12), transparent 50%), #090304;
+  box-shadow: 0 0 100px rgba(181, 31, 46, 0.28);
+}
+
+.ktb-drama-red .ktb-drama-eyebrow,
+.ktb-drama-herald .ktb-drama-eyebrow {
+  color: #d44a56;
+}
+
+.ktb-drama-red .ktb-drama-panel h2,
+.ktb-drama-herald .ktb-drama-panel h2 {
+  color: #ef4758;
+  text-shadow: 0 0 24px rgba(239, 71, 88, 0.35);
+}
+
+.ktb-drama-red .ktb-drama-action,
+.ktb-drama-herald .ktb-drama-action {
+  border-color: #b51f2e;
+  background: #20070a;
+  color: #ff8a95;
+}
+
+@keyframes ktbDramaIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 700px), (max-height: 720px) {
+  #alien-system-id { top: 16px; }
+  #alien-boot-overlay[data-theme='ktb'] #alien-boot-text {
+    width: calc(100% - 40px);
+    max-height: calc(100dvh - 70px);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  #alien-boot-greeting { margin-top: 12px; padding-top: 10px; font-size: 16px; }
+  #alien-boot-overlay[data-theme='ktb'] .alien-corp-subtitle { letter-spacing: 0.1em; }
+  .ktb-drama-overlay { padding: 20px; }
+  .ktb-drama-panel { padding: 28px 22px; }
+}
+
+/* ============================================
+   ИСПРАВЛЕНИЯ ЗЕЛЁНЫХ «ХВОСТОВ» И КНОПКА ПОДТВЕРЖДЕНИЯ
+   ============================================ */
+
+/* Блик-«хвост» прогресс-бара наследовал зелёный градиент базовой темы. */
+body.theme-yellow .alien-progress-bar-fill::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 107, 53, 0.8)) !important;
+}
+
+body.theme-ktb .alien-progress-bar-fill::after {
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.8)) !important;
+}
+
+/* Стрелки r_box/alt-box наследовали тёмно-зелёный фон базовой темы. */
+body.theme-ktb #left,
+body.theme-ktb #right,
+body.theme-ktb #left_2,
+body.theme-ktb #right_2 {
+  background: transparent !important;
+}
+
+/* Кнопка подтверждения личности в конце заставки запуска. */
+.alien-boot-confirm {
+  display: table;
+  margin: 30px auto 0;
+  padding: 13px 34px;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s ease, transform 0.5s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.alien-boot-confirm.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#alien-boot-overlay[data-theme='green'] .alien-boot-confirm {
+  color: #03FB8D;
+}
+
+#alien-boot-overlay[data-theme='green'] .alien-boot-confirm:hover,
+#alien-boot-overlay[data-theme='green'] .alien-boot-confirm:focus-visible {
+  background: #03FB8D;
+  color: #02120a;
+  outline: none;
+}
+
+#alien-boot-overlay[data-theme='yellow'] .alien-boot-confirm {
+  color: #ff6b35;
+}
+
+#alien-boot-overlay[data-theme='yellow'] .alien-boot-confirm:hover,
+#alien-boot-overlay[data-theme='yellow'] .alien-boot-confirm:focus-visible {
+  background: #ff6b35;
+  color: #120602;
+  outline: none;
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-boot-confirm {
+  color: #e5c96a;
+  border-color: #b8943f;
+  background: linear-gradient(180deg, #211a0d, #100d07);
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+
+#alien-boot-overlay[data-theme='ktb'] .alien-boot-confirm:hover,
+#alien-boot-overlay[data-theme='ktb'] .alien-boot-confirm:focus-visible {
+  background: linear-gradient(180deg, #f0dfaa, #c49b35);
+  color: #171106;
+  outline: none;
+}
+
+/* ============================================
+   УГЛЫ ТЕРМИНАЛА СООБЩЕНИЙ — КАК У TEXT-CON
+   ============================================ */
+
+/* Псевдоэлементные углы терминала позиционировались некорректно,
+   поэтому углы рисуются фоновыми слоями на самом элементе. */
+body.theme-ktb #terminal-background {
+  background:
+    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 42px 2px no-repeat,
+    linear-gradient(#f0dfaa, #f0dfaa) left 0 top 0 / 2px 42px no-repeat,
+    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 30px 1px no-repeat,
+    linear-gradient(#b8943f, #b8943f) left 7px top 7px / 1px 30px no-repeat,
+    linear-gradient(135deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) left 8px top 8px / 20px 20px no-repeat,
+    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 42px 2px no-repeat,
+    linear-gradient(#f0dfaa, #f0dfaa) right 0 bottom 0 / 2px 42px no-repeat,
+    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 30px 1px no-repeat,
+    linear-gradient(#b8943f, #b8943f) right 7px bottom 7px / 1px 30px no-repeat,
+    linear-gradient(315deg, transparent 47%, #d4af37 48%, #d4af37 52%, transparent 53%) right 8px bottom 8px / 20px 20px no-repeat,
+    linear-gradient(rgba(15, 12, 7, 0.88), rgba(15, 12, 7, 0.88)) !important;
+}
+
+body.theme-ktb #terminal-background::before,
+body.theme-ktb #terminal-background::after {
+  content: none !important;
 }
