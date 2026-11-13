@@ -61,6 +61,13 @@ const api = {
     deleteUser: userId => del(`/admin/delete-user/${enc(userId)}`),
     clearProgress: (userId, frequency) => post('/admin/clear-progress', { userId, frequency }),
     getUserPilots: userId => get(`/editor/users/${enc(userId)}/pilots`),
+    renameUser: (userId, username) => post('/admin/rename-user', { userId, username }),
+    // Пилоты игрока со всеми полями досье; правка и назначение активным — от имени админа.
+    pilots: {
+        list: userId => get(`/admin/users/${enc(userId)}/pilots`),
+        update: (userId, slot, data) => put(`/admin/users/${enc(userId)}/pilots/${enc(slot)}`, data),
+        activate: (userId, slot) => post(`/admin/users/${enc(userId)}/pilots/${enc(slot)}/activate`)
+    },
 
     // ---- статистика ----
     getFrequencies: () => get('/admin/frequencies'),
@@ -101,7 +108,9 @@ const api = {
         create: data => post('/editor/dialogues', data),
         update: (id, data) => put(`/editor/dialogues/${enc(id)}`, data),
         remove: id => del(`/editor/dialogues/${enc(id)}`),
-        users: () => get('/editor/users')
+        users: () => get('/editor/users'),
+        // Перемычки линии связи в дереве; пустой список — убрать.
+        saveEdgePoints: (id, edgeKey, points) => put(`/editor/dialogues/${enc(id)}/edge-points`, { edgeKey, points })
     },
     dialogueCharacters: {
         create: data => post('/editor/characters', data),
@@ -115,6 +124,8 @@ const api = {
         shift: data => post('/editor/conversations/shift', data),
         link: data => post('/editor/conversations/link', data),
         unlink: data => post('/editor/conversations/unlink', data),
+        // Ножницы: type sequential (from/to реплики) или choice (choiceOptionId).
+        cut: data => post('/editor/conversations/cut', data),
         // Вариант реплики для сословия: audience — cavalier | lancer.
         saveVariant: (id, audience, data) => put(`/editor/conversations/${enc(id)}/variants/${enc(audience)}`, data),
         removeVariant: (id, audience) => del(`/editor/conversations/${enc(id)}/variants/${enc(audience)}`)

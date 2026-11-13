@@ -32,6 +32,10 @@ class DialogueTreeVisualizer {
             panY: 0,
             selectedNodeId: null,
             connectingFrom: null,
+            cutting: false,
+            pointer: null,
+            placing: null,      // { edgeId, point } — ставится перемычка на связь
+            dragPoint: null,    // { edgeId, index } — перетаскивается перемычка
             isDragging: false,
             dragNode: null,
             dragOffsetX: 0,
@@ -48,8 +52,12 @@ class DialogueTreeVisualizer {
             onConnectionCreate: null,
             onNodeAdd: null,
             onNodeAddBefore: null,
-            onNodeUnlink: null
+            onNodeUnlink: null,
+            onEdgeCut: null,
+            onEdgePointsChange: null
         };
+        // Перемычки связей: edgeKey → [{ dx, dy }] от нижней середины исходной реплики.
+        this.edgePoints = {};
         
         this.contextMenu = null;
         
@@ -75,6 +83,33 @@ class DialogueTreeVisualizer {
         this.container.addEventListener('mouseup', (e) => this.handleMouseUp(e));
         this.container.addEventListener('wheel', (e) => this.handleWheel(e));
         this.container.addEventListener('contextmenu', (e) => this.handleContextMenu(e));
+
+        // Esc отменяет протягивание связи и ножницы.
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            if (this.state.connectingFrom) this.cancelConnecting();
+            if (this.state.cutting) this.cancelCutting();
+            if (this.state.placing) this.cancelPlacing();
+        });
+
+        // У каждой связи — невидимая широкая «зона попадания»: наведение, ножницы, двойной клик.
+        this.edgesGroup.addEventListener('mouseover', (e) => this.hoverEdge(e.target.closest?.('.tree-edge-hit'), true));
+        this.edgesGroup.addEventListener('mouseout', (e) => this.hoverEdge(e.target.closest?.('.tree-edge-hit'), false));
+        // Двойной клик по связи — поставить перемычку: кружок едет по линии, ЛКМ ставит, ПКМ отменяет.
+        this.edgesGroup.addEventListener('dblclick', (e) => {
+            const hit = e.target.closest?.('.tree-edge-hit');
+            if (!hit || this.state.cutting || this.state.connectingFrom) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this.startPlacing(hit.dataset.edgeId, e);
+        });
+        this.edgesGroup.addEventListener('click', (e) => {
+            const hit = e.target.closest?.('.tree-edge-hit');
+            if (hit && this.state.cutting) {
+                e.stopPropagation();
+                this.cutEdge(hit.dataset.edgeId);
+            }
+        });
         
         document.addEventListener('click', (e) => {
             if (this.contextMenu && !this.contextMenu.contains(e.target)) {
@@ -89,6 +124,7 @@ class DialogueTreeVisualizer {
     }
     
     setData(data) {
+        this.edgePoints = data.edgePoints ? JSON.parse(JSON.stringify(data.edgePoints)) : {};
         this.data = {
             conversations: data.conversations || [],
             branches: data.branches || [],
@@ -161,6 +197,7 @@ class DialogueTreeVisualizer {
                     
                     this.edges.push({
                         id: `edge_${fromId}_${toId}`,
+                        key: `seq:${convs[i].id}:${convs[i + 1].id}`,
                         source: fromId,
                         target: toId,
                         type: 'sequential'
@@ -193,6 +230,8 @@ class DialogueTreeVisualizer {
                                 source: sourceId,
                                 target: targetId,
                                 type: 'choice',
+                                key: `choice:${choice.id}`,
+                                choiceOptionId: choice.id,
                                 label: choice.option_text
                             });
                         }
@@ -202,100 +241,308 @@ class DialogueTreeVisualizer {
         });
     }
     
+    // Связные части графа (без учёта направления).
+    components() {
+        const neighbours = new Map([...this.nodes.keys()].map(id => [id, []]));
+        this.edges.forEach(e => {
+            if (!neighbours.has(e.source) || !neighbours.has(e.target)) return;
+            neighbours.get(e.source).push(e.target);
+            neighbours.get(e.target).push(e.source);
+        });
+        const seen = new Set();
+        const result = [];
+        this.nodes.forEach((_, start) => {
+            if (seen.has(start)) return;
+            const ids = [];
+            const stack = [start];
+            seen.add(start);
+            while (stack.length) {
+                const id = stack.pop();
+                ids.push(id);
+                neighbours.get(id).forEach(n => { if (!seen.has(n)) { seen.add(n); stack.push(n); } });
+            }
+            result.push(ids);
+        });
+        // Родительское дерево — то, где начинается диалог (первая реплика главной ветки) — идёт первым;
+        // отрезанные части — правее, в порядке создания реплик.
+        const rootId = this.rootNodeId();
+        const firstConv = ids => Math.min(...ids.map(id => this.nodes.get(id).conversationId));
+        return result.sort((a, b) => {
+            if (a.includes(rootId)) return -1;
+            if (b.includes(rootId)) return 1;
+            return firstConv(a) - firstConv(b);
+        });
+    }
+
+    rootNodeId() {
+        const main = [...this.nodes.values()].filter(n => n.branchId === 'main')
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.conversationId - b.conversationId);
+        if (main.length) return main[0].id;
+        const any = [...this.nodes.values()].sort((a, b) => a.conversationId - b.conversationId);
+        return any[0]?.id;
+    }
+
+    // Раскладка одного дерева: позиции относительно (0, 0) и размеры.
+    layoutComponent(ids) {
+        const set = new Set(ids);
+        const edges = this.edges.filter(e => set.has(e.source) && set.has(e.target));
+        const positions = new Map();
+        const { nodeWidth: w, nodeHeight: h } = this.options;
+
+        if (typeof dagre !== 'undefined') {
+            const g = new dagre.graphlib.Graph();
+            g.setGraph({ rankdir: 'TB', ranksep: this.options.rankSeparation, nodesep: this.options.nodeSeparation, marginx: 0, marginy: 0 });
+            g.setDefaultEdgeLabel(() => ({}));
+            ids.forEach(id => g.setNode(id, { width: w, height: this.nodeHeight(this.nodes.get(id)) }));
+            edges.forEach(e => g.setEdge(e.source, e.target));
+            dagre.layout(g);
+            ids.forEach(id => { const n = g.node(id); positions.set(id, { x: n.x - w / 2, y: n.y - n.height / 2 }); });
+        } else {
+            // dagre с CDN не загрузился — уровни от корней, узлы уровня в ряд.
+            const incoming = new Map(ids.map(id => [id, 0]));
+            const children = new Map(ids.map(id => [id, []]));
+            edges.forEach(e => { incoming.set(e.target, incoming.get(e.target) + 1); children.get(e.source).push(e.target); });
+            const level = new Map();
+            const queue = ids.filter(id => incoming.get(id) === 0);
+            if (!queue.length) queue.push(ids[0]);
+            queue.forEach(id => level.set(id, 0));
+            while (queue.length) {
+                const id = queue.shift();
+                children.get(id).forEach(c => { if (!level.has(c)) { level.set(c, level.get(id) + 1); queue.push(c); } });
+            }
+            let maxLevel = Math.max(0, ...level.values());
+            ids.forEach(id => { if (!level.has(id)) level.set(id, ++maxLevel); });
+            const rows = new Map();
+            level.forEach((lvl, id) => { if (!rows.has(lvl)) rows.set(lvl, []); rows.get(lvl).push(id); });
+            const stepX = w + this.options.nodeSeparation;
+            const stepY = h + this.options.rankSeparation;
+            const widest = Math.max(...[...rows.values()].map(r => r.length));
+            rows.forEach((row, lvl) => {
+                const offset = (widest - row.length) * stepX / 2;
+                row.forEach((id, i) => positions.set(id, { x: offset + i * stepX, y: lvl * stepY }));
+            });
+        }
+
+        const xs = [...positions.values()].map(p => p.x);
+        const ys = [...positions.values()].map(p => p.y);
+        const minX = Math.min(...xs), minY = Math.min(...ys);
+        positions.forEach(p => { p.x -= minX; p.y -= minY; });
+        return { positions, width: Math.max(...xs) - minX + w };
+    }
+
     autoLayout() {
         if (this.nodes.size === 0) return;
-        
-        const g = new dagre.graphlib.Graph();
-        g.setGraph({
-            rankdir: 'TB',
-            ranksep: this.options.rankSeparation,
-            nodesep: this.options.nodeSeparation,
-            marginx: 50,
-            marginy: 50
-        });
-        g.setDefaultEdgeLabel(() => ({}));
-        
-        this.nodes.forEach((node, id) => {
-            g.setNode(id, {
-                width: this.options.nodeWidth,
-                height: this.options.nodeHeight
+        const GAP = 160;
+        let offsetX = 50;
+        this.components().forEach(ids => {
+            const { positions, width } = this.layoutComponent(ids);
+            positions.forEach((p, id) => {
+                const node = this.nodes.get(id);
+                node.x = offsetX + p.x;
+                node.y = 50 + p.y;
             });
+            offsetX += width + GAP;
         });
-        
-        this.edges.forEach(edge => {
-            g.setEdge(edge.source, edge.target);
-        });
-        
-        dagre.layout(g);
-        
-        g.nodes().forEach(nodeId => {
-            const node = g.node(nodeId);
-            const nodeData = this.nodes.get(nodeId);
-            if (nodeData && node) {
-                nodeData.x = node.x - this.options.nodeWidth / 2;
-                nodeData.y = node.y - this.options.nodeHeight / 2;
-            }
-        });
-        
         this.render();
         this.zoomToFit();
     }
-    
+
     render() {
-        this.renderEdges();
+        // Сначала узлы: их реальная высота нужна, чтобы связь начиналась ровно у нижнего края.
         this.renderNodes();
         this.updateTransform();
     }
-    
+
+    nodeHeight(node) {
+        return node.height || this.options.nodeHeight;
+    }
+
+    // Начало связи — нижняя середина исходной реплики (в координатах дерева).
+    edgeAnchor(edge) {
+        const source = this.nodes.get(edge.source);
+        return { x: source.x + this.options.nodeWidth / 2, y: source.y + this.nodeHeight(source) };
+    }
+
+    // Точки связи в координатах дерева: начало, перемычки, конец (верх целевой реплики).
+    edgeGeometry(edge) {
+        const source = this.nodes.get(edge.source);
+        const target = this.nodes.get(edge.target);
+        if (!source || !target) return null;
+        const start = this.edgeAnchor(edge);
+        const end = { x: target.x + this.options.nodeWidth / 2, y: target.y };
+        const points = (this.edgePoints[edge.key] || []).map(p => ({ x: start.x + p.dx, y: start.y + p.dy }));
+        return { start, end, points };
+    }
+
+    toScreen(p) {
+        return { x: p.x * this.state.zoom + this.state.panX, y: p.y * this.state.zoom + this.state.panY };
+    }
+
+    toLayout(e) {
+        const rect = this.container.getBoundingClientRect();
+        return {
+            x: (e.clientX - rect.left - this.state.panX) / this.state.zoom,
+            y: (e.clientY - rect.top - this.state.panY) / this.state.zoom
+        };
+    }
+
+    // Без перемычек — плавная кривая; с перемычками — ломаная через них.
+    edgePathD(geometry) {
+        const s = this.toScreen(geometry.start);
+        const t = this.toScreen(geometry.end);
+        if (!geometry.points.length) {
+            const midY = (s.y + t.y) / 2;
+            return `M ${s.x} ${s.y} C ${s.x} ${midY}, ${t.x} ${midY}, ${t.x} ${t.y}`;
+        }
+        return [s, ...geometry.points.map(p => this.toScreen(p)), t]
+            .map((p, i) => `${i ? 'L' : 'M'} ${p.x} ${p.y}`).join(' ');
+    }
+
     renderEdges() {
         this.edgesGroup.innerHTML = '';
-        
         const zoom = this.state.zoom;
-        const panX = this.state.panX;
-        const panY = this.state.panY;
-        
+
         this.edges.forEach(edge => {
-            const sourceNode = this.nodes.get(edge.source);
-            const targetNode = this.nodes.get(edge.target);
-            
-            if (!sourceNode || !targetNode) return;
-            
+            const geometry = this.edgeGeometry(edge);
+            if (!geometry) return;
+            const d = this.edgePathD(geometry);
+
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            
-            const startX = (sourceNode.x + this.options.nodeWidth / 2) * zoom + panX;
-            const startY = (sourceNode.y + this.options.nodeHeight) * zoom + panY;
-            const endX = (targetNode.x + this.options.nodeWidth / 2) * zoom + panX;
-            const endY = targetNode.y * zoom + panY;
-            
-            const midY = (startY + endY) / 2;
-            const d = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
-            
             path.setAttribute('d', d);
             path.setAttribute('class', `tree-edge ${edge.type === 'choice' ? 'choice-edge' : ''}`);
             path.setAttribute('data-edge-id', edge.id);
             path.setAttribute('marker-end', edge.type === 'choice' ? 'url(#arrowhead-choice)' : 'url(#arrowhead)');
             path.setAttribute('stroke-width', 2 * zoom);
-            
-            if (edge.type === 'choice') {
-                path.setAttribute('stroke-dasharray', `${5 * zoom}, ${3 * zoom}`);
-            }
-            
+            if (edge.type === 'choice') path.setAttribute('stroke-dasharray', `${5 * zoom}, ${3 * zoom}`);
             this.edgesGroup.appendChild(path);
-            
+
+            // Широкая невидимая копия — по ней ловятся наведение, ножницы и двойной клик.
+            const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            hit.setAttribute('d', d);
+            hit.setAttribute('class', 'tree-edge-hit');
+            hit.setAttribute('data-edge-id', edge.id);
+            hit.setAttribute('stroke-width', Math.max(12, 14 * zoom));
+            this.edgesGroup.appendChild(hit);
+
             if (edge.label) {
+                // Подпись ответа — у первого отрезка (с перемычками) или посередине кривой.
+                const s = this.toScreen(geometry.start);
+                const n = this.toScreen(geometry.points[0] || geometry.end);
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                text.setAttribute('x', (startX + endX) / 2);
-                text.setAttribute('y', midY - 5 * zoom);
+                text.setAttribute('x', (s.x + n.x) / 2);
+                text.setAttribute('y', (s.y + n.y) / 2 - 5 * zoom);
                 text.setAttribute('class', 'tree-edge-label');
                 text.setAttribute('text-anchor', 'middle');
                 text.setAttribute('font-size', `${10 * zoom}px`);
-                const label = edge.label.length > 20 ? edge.label.substring(0, 20) + '...' : edge.label;
-                text.textContent = label;
+                text.textContent = edge.label.length > 20 ? edge.label.substring(0, 20) + '...' : edge.label;
                 this.edgesGroup.appendChild(text);
             }
+
+            // Кружки перемычек: тянуть ЛКМ, убрать ПКМ.
+            geometry.points.forEach((p, index) => {
+                const sp = this.toScreen(p);
+                const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot.setAttribute('cx', sp.x);
+                dot.setAttribute('cy', sp.y);
+                dot.setAttribute('r', Math.max(4, 6 * zoom));
+                dot.setAttribute('class', `tree-reroute ${edge.type === 'choice' ? 'choice-reroute' : ''}`);
+                dot.setAttribute('data-edge-id', edge.id);
+                dot.setAttribute('data-index', index);
+                const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                title.textContent = 'Перемычка: тяните ЛКМ, ПКМ — убрать';
+                dot.appendChild(title);
+                this.edgesGroup.appendChild(dot);
+            });
         });
     }
-    
+
+    // ---------- перемычки ----------
+
+    startPlacing(edgeId, e) {
+        const edge = this.edges.find(ed => ed.id === edgeId);
+        if (!edge) return;
+        this.state.placing = { edgeId, point: null, index: 0 };
+        this.container.classList.add('placing');
+        if (!this.placingDot) {
+            this.placingDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            this.placingDot.setAttribute('class', 'tree-reroute tree-reroute-ghost');
+            this.svg.appendChild(this.placingDot);
+        }
+        this.updatePlacing(e);
+    }
+
+    // Кружок едет по линии: ближайшая к курсору точка связи и отрезок, куда встанет перемычка.
+    updatePlacing(e) {
+        const edge = this.edges.find(ed => ed.id === this.state.placing?.edgeId);
+        const geometry = edge && this.edgeGeometry(edge);
+        if (!geometry) return this.cancelPlacing();
+        const cursor = this.toLayout(e);
+        let best = null;
+
+        if (!geometry.points.length) {
+            // Кривая без перемычек: ищем по точкам самой кривой.
+            const path = this.edgesGroup.querySelector(`.tree-edge[data-edge-id="${CSS.escape(edge.id)}"]`);
+            const total = path?.getTotalLength?.() || 0;
+            const step = Math.max(2, total / 200);
+            for (let l = 0; l <= total; l += step) {
+                const sp = path.getPointAtLength(l);
+                const lp = { x: (sp.x - this.state.panX) / this.state.zoom, y: (sp.y - this.state.panY) / this.state.zoom };
+                const dist = Math.hypot(lp.x - cursor.x, lp.y - cursor.y);
+                if (!best || dist < best.dist) best = { dist, point: lp, index: 0 };
+            }
+        } else {
+            const chain = [geometry.start, ...geometry.points, geometry.end];
+            for (let i = 0; i < chain.length - 1; i++) {
+                const a = chain[i], b = chain[i + 1];
+                const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1;
+                const t = Math.max(0, Math.min(1, ((cursor.x - a.x) * (b.x - a.x) + (cursor.y - a.y) * (b.y - a.y)) / len2));
+                const point = { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+                const dist = Math.hypot(point.x - cursor.x, point.y - cursor.y);
+                if (!best || dist < best.dist) best = { dist, point, index: i };
+            }
+        }
+        if (!best) return;
+        this.state.placing.point = best.point;
+        this.state.placing.index = best.index;
+        const sp = this.toScreen(best.point);
+        this.placingDot.setAttribute('cx', sp.x);
+        this.placingDot.setAttribute('cy', sp.y);
+        this.placingDot.setAttribute('r', Math.max(4, 6 * this.state.zoom));
+    }
+
+    commitPlacing() {
+        const { edgeId, point, index } = this.state.placing || {};
+        const edge = this.edges.find(ed => ed.id === edgeId);
+        this.cancelPlacing();
+        if (!edge || !point) return;
+        const anchor = this.edgeAnchor(edge);
+        const points = this.edgePoints[edge.key] || (this.edgePoints[edge.key] = []);
+        points.splice(index, 0, { dx: Math.round(point.x - anchor.x), dy: Math.round(point.y - anchor.y) });
+        this.renderEdges();
+        this.savePoints(edge);
+    }
+
+    cancelPlacing() {
+        this.state.placing = null;
+        this.container.classList.remove('placing');
+        this.placingDot?.remove();
+        this.placingDot = null;
+    }
+
+    removePoint(edgeId, index) {
+        const edge = this.edges.find(ed => ed.id === edgeId);
+        const points = edge && this.edgePoints[edge.key];
+        if (!points) return;
+        points.splice(index, 1);
+        if (!points.length) delete this.edgePoints[edge.key];
+        this.renderEdges();
+        this.savePoints(edge);
+    }
+
+    savePoints(edge) {
+        this.callbacks.onEdgePointsChange?.(edge.key, this.edgePoints[edge.key] || []);
+    }
+
     renderNodes() {
         this.nodesContainer.innerHTML = '';
         
@@ -314,6 +561,8 @@ class DialogueTreeVisualizer {
         this.nodes.forEach((nodeData, id) => {
             const nodeEl = this.createNodeElement(nodeData);
             this.nodesContainer.appendChild(nodeEl);
+            // offsetHeight не зависит от масштаба дерева; 0 — дерево скрыто, берём стандартную высоту.
+            nodeData.height = nodeEl.offsetHeight || nodeData.height || null;
         });
     }
     
@@ -360,7 +609,7 @@ class DialogueTreeVisualizer {
             <div class="tree-node-header">
                 <span class="tree-node-speaker">${this.escapeHtml(nodeData.speaker)}</span>
                 ${nodeData.hasChoice ? '<span class="tree-node-badge choice-badge">Выбор</span>' : ''}
-                ${nodeData.variantAudiences.length ? `<span class="tree-node-badge variant-badge" title="Есть вариант для: ${nodeData.variantAudiences.map(a => a === 'cavalier' ? 'Кавалера' : 'Лансера').join(', ')}">⇄ ${nodeData.variantAudiences.map(a => a === 'cavalier' ? 'К' : 'Л').join('')}</span>` : ''}
+                ${nodeData.variantAudiences.length ? `<span class="tree-node-badge variant-badge" title="Своя реплика для: ${nodeData.variantAudiences.map(a => ({ cavalier: 'Кавалера в Доме', exile: 'изгнанника' }[a] || a)).join(', ')}">⇄ ${nodeData.variantAudiences.map(a => ({ cavalier: 'К', exile: 'И' }[a] || '')).join('')}</span>` : ''}
             </div>
             <div class="tree-node-text">${this.escapeHtml(textPreview)}</div>
         `;
@@ -453,17 +702,80 @@ class DialogueTreeVisualizer {
     toggleConnecting(nodeId) {
         if (this.state.connectingFrom === nodeId) {
             this.cancelConnecting();
-        } else {
-            this.state.connectingFrom = nodeId;
-            this.renderNodes();
+            return;
         }
+        this.cancelCutting();
+        this.state.connectingFrom = nodeId;
+        this.state.pointer = null;
+        this.container.classList.add('connecting');
+        this.renderNodes();
+        this.renderConnectPreview();
     }
-    
+
     cancelConnecting() {
+        if (!this.state.connectingFrom) return;
         this.state.connectingFrom = null;
+        this.state.pointer = null;
+        this.container.classList.remove('connecting');
+        this.connectPreview?.remove();
+        this.connectPreview = null;
         this.renderNodes();
     }
-    
+
+    // Временная связь от низа исходной реплики к курсору (координаты контейнера).
+    renderConnectPreview() {
+        const from = this.nodes.get(this.state.connectingFrom);
+        if (!from) return;
+        if (!this.connectPreview) {
+            this.connectPreview = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            this.connectPreview.setAttribute('class', 'tree-edge tree-edge-preview');
+            this.connectPreview.setAttribute('marker-end', 'url(#arrowhead)');
+            this.svg.appendChild(this.connectPreview);
+        }
+        const { zoom, panX, panY } = this.state;
+        const startX = (from.x + this.options.nodeWidth / 2) * zoom + panX;
+        const startY = (from.y + this.options.nodeHeight) * zoom + panY;
+        const end = this.state.pointer || { x: startX, y: startY + 40 * zoom };
+        const midY = (startY + end.y) / 2;
+        this.connectPreview.setAttribute('d', `M ${startX} ${startY} C ${startX} ${midY}, ${end.x} ${midY}, ${end.x} ${end.y}`);
+        this.connectPreview.setAttribute('stroke-width', 2 * zoom);
+    }
+
+    // ---------- ножницы ----------
+
+    startCutting() {
+        this.cancelConnecting();
+        this.state.cutting = true;
+        this.container.classList.add('cutting');
+    }
+
+    cancelCutting() {
+        if (!this.state.cutting) return;
+        this.state.cutting = false;
+        this.container.classList.remove('cutting');
+        this.edgesGroup.querySelectorAll('.cut-hover').forEach(el => el.classList.remove('cut-hover'));
+    }
+
+    hoverEdge(hit, on) {
+        if (!hit || this.state.placing) return;
+        this.edgesGroup.querySelector(`.tree-edge[data-edge-id="${CSS.escape(hit.dataset.edgeId)}"]`)
+            ?.classList.toggle(this.state.cutting ? 'cut-hover' : 'edge-hover', on);
+    }
+
+    cutEdge(edgeId) {
+        const edge = this.edges.find(e => e.id === edgeId);
+        this.cancelCutting();
+        if (!edge || !this.callbacks.onEdgeCut) return;
+        const source = this.nodes.get(edge.source);
+        const target = this.nodes.get(edge.target);
+        this.callbacks.onEdgeCut({
+            type: edge.type,
+            fromConversationId: source?.conversationId,
+            toConversationId: target?.conversationId,
+            choiceOptionId: edge.choiceOptionId || null
+        });
+    }
+
     createConnection(fromId, toId) {
         if (this.callbacks.onConnectionCreate) {
             const fromNode = this.nodes.get(fromId);
@@ -483,6 +795,21 @@ class DialogueTreeVisualizer {
     }
     
     handleMouseDown(e) {
+        // Ставим перемычку: ЛКМ фиксирует кружок на связи.
+        if (this.state.placing) {
+            if (e.button === 0) { e.preventDefault(); this.commitPlacing(); }
+            return;
+        }
+        // Перетаскивание перемычки.
+        const handle = e.target.closest?.('.tree-reroute');
+        if (handle && e.button === 0 && !this.state.cutting) {
+            e.preventDefault();
+            this.state.dragPoint = { edgeId: handle.dataset.edgeId, index: Number(handle.dataset.index) };
+            this.container.classList.add('dragging-point');
+            return;
+        }
+        // В режимах связи и ножниц левая кнопка не двигает узлы и не панорамирует.
+        if ((this.state.connectingFrom || this.state.cutting) && e.button === 0) return;
         if (e.button === 1 || (e.button === 0 && e.target === this.container)) {
             this.state.isPanning = true;
             this.state.panStartX = e.clientX - this.state.panX;
@@ -512,6 +839,27 @@ class DialogueTreeVisualizer {
     }
     
     handleMouseMove(e) {
+        if (this.state.placing) {
+            this.updatePlacing(e);
+            return;
+        }
+        if (this.state.dragPoint) {
+            const { edgeId, index } = this.state.dragPoint;
+            const edge = this.edges.find(ed => ed.id === edgeId);
+            const points = edge && this.edgePoints[edge.key];
+            if (points && points[index]) {
+                const anchor = this.edgeAnchor(edge);
+                const p = this.toLayout(e);
+                points[index] = { dx: Math.round(p.x - anchor.x), dy: Math.round(p.y - anchor.y) };
+                this.renderEdges();
+            }
+            return;
+        }
+        if (this.state.connectingFrom) {
+            const rect = this.container.getBoundingClientRect();
+            this.state.pointer = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            this.renderConnectPreview();
+        }
         if (this.state.isPanning) {
             this.state.panX = e.clientX - this.state.panStartX;
             this.state.panY = e.clientY - this.state.panStartY;
@@ -541,6 +889,13 @@ class DialogueTreeVisualizer {
     }
     
     handleMouseUp(e) {
+        if (this.state.dragPoint) {
+            const edge = this.edges.find(ed => ed.id === this.state.dragPoint.edgeId);
+            this.state.dragPoint = null;
+            this.container.classList.remove('dragging-point');
+            if (edge) this.savePoints(edge);
+            return;
+        }
         if (this.state.isPanning) {
             this.state.isPanning = false;
             this.container.classList.remove('grabbing');
@@ -578,6 +933,23 @@ class DialogueTreeVisualizer {
     
     handleContextMenu(e) {
         e.preventDefault();
+        // ПКМ при постановке перемычки — отмена.
+        if (this.state.placing) {
+            this.cancelPlacing();
+            return;
+        }
+        // ПКМ по перемычке — убрать её.
+        const handle = e.target.closest?.('.tree-reroute');
+        if (handle) {
+            this.removePoint(handle.dataset.edgeId, Number(handle.dataset.index));
+            return;
+        }
+        // ПКМ где угодно в дереве отменяет протягивание связи и ножницы, меню не открывается.
+        if (this.state.connectingFrom || this.state.cutting) {
+            this.cancelConnecting();
+            this.cancelCutting();
+            return;
+        }
         
         const nodeEl = e.target.closest('.tree-node-visual');
         if (nodeEl) {
@@ -625,15 +997,9 @@ class DialogueTreeVisualizer {
                 `;
             }
             
-            if (!nodeData.hasChoice) {
-                menuItems += `
-                    <div class="tree-context-menu-item" data-action="unlink">🔓 Удалить связи</div>
-                `;
-            } else {
-                menuItems += `
-                    <div class="tree-context-menu-item disabled" title="Недоступно для реплик с выбором">🔓 Удалить связи</div>
-                `;
-            }
+            menuItems += `
+                <div class="tree-context-menu-item" data-action="unlink">✂️ Удалить связь (ножницы)</div>
+            `;
             
             menuItems += `
                 <div class="tree-context-menu-divider"></div>
@@ -644,6 +1010,7 @@ class DialogueTreeVisualizer {
         } else {
             this.contextMenu.innerHTML = `
                 <div class="tree-context-menu-item" data-action="add-here">➕ Добавить реплику здесь</div>
+                <div class="tree-context-menu-item" data-action="unlink">✂️ Удалить связь (ножницы)</div>
                 <div class="tree-context-menu-divider"></div>
                 <div class="tree-context-menu-item" data-action="auto-layout">⟳ Авто-компоновка</div>
             `;
@@ -663,6 +1030,16 @@ class DialogueTreeVisualizer {
         });
         
         document.body.appendChild(this.contextMenu);
+
+        // Не даём меню уйти за край окна: у нижней или правой границы оно открывается вверх / влево.
+        const rect = this.contextMenu.getBoundingClientRect();
+        const margin = 8;
+        if (rect.bottom > window.innerHeight - margin) {
+            this.contextMenu.style.top = `${Math.max(margin, y - rect.height)}px`;
+        }
+        if (rect.right > window.innerWidth - margin) {
+            this.contextMenu.style.left = `${Math.max(margin, x - rect.width)}px`;
+        }
     }
     
     hideContextMenu() {
@@ -700,9 +1077,7 @@ class DialogueTreeVisualizer {
                 }
                 break;
             case 'unlink':
-                if (this.callbacks.onNodeUnlink) {
-                    this.callbacks.onNodeUnlink(nodeData);
-                }
+                this.startCutting();
                 break;
             case 'delete':
                 if (this.callbacks.onNodeDelete && nodeData) {
@@ -719,6 +1094,7 @@ class DialogueTreeVisualizer {
         const transform = `translate(${this.state.panX}px, ${this.state.panY}px) scale(${this.state.zoom})`;
         this.nodesContainer.style.transform = transform;
         this.renderEdges();
+        if (this.state.connectingFrom) this.renderConnectPreview();
     }
     
     updateZoomDisplay() {

@@ -34,7 +34,6 @@ export default class CharacterCatalog {
         this.el('gc-search').addEventListener('input', () => this.renderList());
         this.el('gc-save-btn').addEventListener('click', e => withBusy(e.currentTarget, () => this.save()));
         this.el('gc-delete-btn').addEventListener('click', () => this.remove());
-        this.el('gc-init-relations-btn').addEventListener('click', e => withBusy(e.currentTarget, () => this.initRelations()));
 
         this.el('gc-name').addEventListener('input', () => {
             this.portrait.setName(this.el('gc-name').value.trim());
@@ -248,17 +247,6 @@ export default class CharacterCatalog {
             toast('Портрет загружен', 'success');
         } catch (error) {
             toast(`Ошибка загрузки: ${error.message}`, 'error');
-        }
-    }
-
-    async initRelations() {
-        if (!confirm('Создать записи отношений для всех пользователей и персонажей?')) return;
-        try {
-            const data = await api.relations.init();
-            toast(data.message || 'Отношения инициализированы', 'success');
-            if (this.editingId) this.loadRelations(this.editingId);
-        } catch (error) {
-            toast(`Ошибка инициализации: ${error.message}`, 'error');
         }
     }
 

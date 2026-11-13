@@ -1,5 +1,5 @@
-// Раздел студии «Диалоги»: список слева, сведения, персонажи и дерево в центре,
-// редактор реплики — в правой колонке (раньше был модальным окном).
+// Раздел студии «Диалоги»: список слева, сведения, персонажи и дерево в центре.
+// Реплика редактируется в модальном окне: ПКМ по реплике → «Редактировать», двойной клик или ✎.
 import api from '../admin/admin-api.js';
 import { toast, withBusy } from '../admin/admin-shell.js';
 import debug from '../debug.js';
@@ -24,13 +24,18 @@ function selectValue(select, value) {
     select.value = v;
 }
 
-// Пилоты для предпросмотра: как реплику увидит Кавалер в Доме и Лансер.
+// Пилоты для предпросмотра: как реплику увидят Кавалер в Доме, изгнанник и Лансер.
 const PREVIEW_PILOTS = {
     cavalier: { callsign: 'RAVEN', full_name: 'леди Кассия-Вейл из Дома Стекла', gender: 'female', estate: 'cavalier', house_standing: 'member', house_key: 'glass' },
+    exile: { callsign: 'VEX', full_name: 'Орсо из Дома Пыли', gender: 'male', estate: 'cavalier', house_standing: 'exile', house_key: 'dust' },
     lancer: { callsign: 'HAMMER', full_name: 'Тара Окс', gender: 'neutral', estate: 'lancer', house_standing: 'member' }
 };
-// Поля, куда вставляются метки кнопками над текстом.
-const TOKEN_TARGETS = ['conversation-text', 'variant-text', 'conversation-fake-name', 'variant-fake-name'];
+// Варианты реплики: основная звучит Лансеру, у Кавалера в Доме и изгнанника может быть своя.
+const ESTATES = [
+    { id: 'cavalier', title: 'Кавалеру в Доме', off: 'Выключено — Кавалер слышит основную реплику.' },
+    { id: 'exile', title: 'Кавалеру-изгнаннику', off: 'Выключено — изгнанник слышит основную реплику, как Лансер.' }
+];
+const INFO_OPEN_KEY = 'studioDialogueInfoOpen';
 // Разметка терминала ([1s], [Shake]…[ShakeE]) в предпросмотре не нужна.
 const stripMarkup = text => String(text || '').replace(/\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').trim();
 
@@ -68,12 +73,12 @@ export default class DialogueEditor {
             rankSeparation: 120,
             nodeSeparation: 70
         });
-        this.treeVisualizer.on('nodeClick', node => this.showSpeaker(node.conversationId));
         this.treeVisualizer.on('nodeEdit', node => this.openConversation(node.conversationId));
         this.treeVisualizer.on('nodeDelete', node => this.deleteConversation(node.conversationId));
         this.treeVisualizer.on('nodeAdd', afterNode => this.addConversationAfter(afterNode));
         this.treeVisualizer.on('nodeAddBefore', beforeNode => this.addConversationBefore(beforeNode));
-        this.treeVisualizer.on('nodeUnlink', node => this.unlinkConversation(node));
+        this.treeVisualizer.on('edgeCut', edge => this.cutEdge(edge));
+        this.treeVisualizer.on('edgePointsChange', (edgeKey, points) => this.saveEdgePoints(edgeKey, points));
         this.treeVisualizer.on('connectionCreate', (from, to) => this.createChoiceConnection(from, to));
     }
 
@@ -122,6 +127,7 @@ export default class DialogueEditor {
         this.state.conversations = data.conversations || [];
         this.state.choices = data.choices || [];
         this.state.variants = data.variants || [];
+        this.state.edgePoints = data.edgePoints || {};
 
         this.el('dialogue-list').querySelectorAll('.dialogue-item').forEach(item =>
             item.classList.toggle('active', item.dataset.id === String(id)));
@@ -148,8 +154,6 @@ export default class DialogueEditor {
     renderDialogueInfo(dialogue) {
         this.el('dialogue-frequency').value = dialogue.frequency;
         this.el('dialogue-title').value = dialogue.title || '';
-        this.el('dialogue-summary').textContent = `${dialogue.frequency} · ${dialogue.title || 'Без названия'}`;
-
         let allowedUsers = [-1];
         try { allowedUsers = JSON.parse(dialogue.allowed_users || '[-1]'); } catch { /* старый формат */ }
         const isAllUsers = allowedUsers.includes(-1);
@@ -160,6 +164,30 @@ export default class DialogueEditor {
 
         this.updateUsersSelector();
         this.el('users-selector').classList.toggle('hidden', isAllUsers);
+        this.renderInfoSummary();
+    }
+
+    // Строка-сводка в заголовке «Информация о диалоге»: видна, когда блок свёрнут.
+    renderInfoSummary() {
+        const access = this.el('dialogue-access').value === 'all'
+            ? 'доступ всем'
+            : `доступ: ${this.state.selectedAllowedUsers.length} игр.`;
+        const repeats = parseInt(this.el('dialogue-max-repeats').value);
+        const chips = [
+            { text: this.el('dialogue-frequency').value || '—', cls: 'chip-freq' },
+            { text: this.el('dialogue-title').value || 'Без названия' },
+            { text: this.el('dialogue-active').checked ? 'активен' : 'неактивен', cls: this.el('dialogue-active').checked ? 'chip-on' : 'chip-off' },
+            { text: access },
+            { text: repeats === -1 ? 'повторы ∞' : `повторов: ${Number.isFinite(repeats) ? repeats : 1}` }
+        ];
+        const host = this.el('dialogue-summary');
+        host.textContent = '';
+        chips.forEach(c => {
+            const chip = document.createElement('span');
+            chip.className = `info-chip ${c.cls || ''}`.trim();
+            chip.textContent = c.text;
+            host.appendChild(chip);
+        });
     }
 
     updateUsersSelector() {
@@ -333,7 +361,8 @@ export default class DialogueEditor {
             })),
             branches: this.state.branches,
             choices: this.state.choices,
-            characters: this.state.characters
+            characters: this.state.characters,
+            edgePoints: this.state.edgePoints
         });
         this.treeVisualizer.autoLayout();
     }
@@ -360,13 +389,27 @@ export default class DialogueEditor {
         }
     }
 
-    async unlinkConversation(node) {
-        if (!node || !confirm('Отсоединить реплику? Она будет перемещена в отдельную ветку.')) return;
+    // Перемычки сохраняются сразу после постановки, перетаскивания или удаления.
+    async saveEdgePoints(edgeKey, points) {
+        if (points.length) this.state.edgePoints[edgeKey] = points.map(p => ({ ...p }));
+        else delete this.state.edgePoints[edgeKey];
         try {
-            await api.conversations.unlink({ conversationId: node.conversationId });
+            await api.dialogues.saveEdgePoints(this.state.currentDialogueId, edgeKey, points);
+        } catch (error) {
+            toast(`Перемычка не сохранилась: ${error.message}`, 'error');
+        }
+    }
+
+    // Ножницы: связь обрезана — диалог перестраивается, отрезанная часть становится отдельным деревом.
+    async cutEdge(edge) {
+        try {
+            const data = await api.conversations.cut(edge);
+            toast(edge.type === 'choice'
+                ? 'Связь ответа обрезана: ответ теперь завершает диалог'
+                : `Связь обрезана: отдельно ${data.moved || 1} реплик(а)`, 'success');
             await this.reload();
         } catch (error) {
-            toast(error.message || 'Ошибка отсоединения', 'error');
+            toast(error.message || 'Ошибка обрезки связи', 'error');
         }
     }
 
@@ -381,36 +424,7 @@ export default class DialogueEditor {
         }
     }
 
-    // Одиночный клик по реплике: в правой колонке — кто говорит, со ссылкой в каталог.
-    showSpeaker(conversationId) {
-        if (!this.el('conversation-panel').hidden) return;
-        const conv = this.state.conversations.find(c => String(c.id) === String(conversationId));
-        const char = conv && this.state.characters.find(c => String(c.id) === String(conv.character_id));
-        const host = this.el('conv-speaker-card');
-        host.textContent = '';
-        if (!char) return;
-        const card = document.createElement('div');
-        card.className = 'speaker-card';
-        const name = document.createElement('b');
-        name.textContent = this.characterName(char);
-        const text = document.createElement('p');
-        text.textContent = conv.text;
-        const open = document.createElement('button');
-        open.className = 'btn btn-small';
-        open.textContent = 'Редактировать реплику';
-        open.addEventListener('click', () => this.openConversation(conv.id));
-        card.append(name, text, open);
-        if (char.global_character_id) {
-            const toCatalog = document.createElement('button');
-            toCatalog.className = 'btn btn-small';
-            toCatalog.textContent = 'Персонаж в каталоге';
-            toCatalog.addEventListener('click', () => this.studio.openCharacter(char.global_character_id));
-            card.appendChild(toCatalog);
-        }
-        host.appendChild(card);
-    }
-
-    // ===================== редактор реплики (правая колонка) =====================
+    // ===================== редактор реплики (модальное окно) =====================
 
     openConversation(id = null, defaultBranch = 'main', forcedSortOrder = null) {
         debug('openConversation', id, defaultBranch, forcedSortOrder);
@@ -427,7 +441,7 @@ export default class DialogueEditor {
             return;
         }
 
-        this.el('conversation-panel-title').textContent = conv ? 'РЕПЛИКА' : 'НОВАЯ РЕПЛИКА';
+        this.el('conversation-panel-title').textContent = conv ? 'Редактор реплики' : 'Новая реплика';
         this.el('conversation-id').value = conv ? conv.id : '';
         this.el('conversation-character').value = conv ? conv.character_id : '';
         this.el('conversation-branch-select').value = conv ? conv.branch_id : defaultBranch;
@@ -441,15 +455,16 @@ export default class DialogueEditor {
         this.fillVariantFields(conv);
 
         const choices = conv ? this.state.choices.filter(ch => String(ch.conversation_id) === String(conv.id)) : [];
+        this.removedOptionIds = new Set();
         this.el('has-choice').checked = choices.length > 0;
         this.el('choice-options-container').classList.toggle('hidden', choices.length === 0);
         this.el('choice-id').value = choices.length ? choices[0].choice_id : '';
         this.el('choice-options-list').textContent = '';
         if (choices.length) this.renderChoiceOptions(choices);
 
-        this.el('conv-placeholder').hidden = true;
-        this.el('conversation-panel').hidden = false;
-        this.el('conversation-panel').closest('.studio-col').scrollTop = 0;
+        const modal = this.el('conversation-modal');
+        modal.style.display = 'flex';
+        modal.querySelector('.modal-body').scrollTop = 0;
         if (conv) this.treeVisualizer.highlightNode?.(conv.id);
         this.lastTokenTarget = this.el('conversation-text');
         this.updateConversationHints();
@@ -458,33 +473,76 @@ export default class DialogueEditor {
 
     // ===================== вариант для сословия и метки пилота =====================
 
-    variantOf(conversationId) {
-        return this.state.variants.find(v => String(v.conversation_id) === String(conversationId)) || null;
+    variantsOf(conversationId) {
+        const map = {};
+        this.state.variants
+            .filter(v => String(v.conversation_id) === String(conversationId))
+            .forEach(v => { map[v.audience] = v; });
+        return map;
     }
 
+    voicelineOptions(empty = 'Без озвучки (звук персонажа)') {
+        return option('', empty) + store.files.voicelines.map(v => option(v, fileName(v))).join('');
+    }
+
+    // Блоки «Кавалеру в Доме» и «Кавалеру-изгнаннику», у каждого своя галочка включения.
     fillVariantFields(conv) {
-        const variant = conv ? this.variantOf(conv.id) : null;
-        this.el('variant-voiceline').innerHTML = option('', 'Без озвучки (звук персонажа)') +
-            store.files.voicelines.map(v => option(v, fileName(v))).join('');
-        this.el('variant-custom-image').innerHTML = option('', 'Как у основной реплики') +
-            store.files.portraits.map(p => option(p, fileName(p))).join('');
+        const variants = conv ? this.variantsOf(conv.id) : {};
+        const host = this.el('variant-fields');
+        host.textContent = '';
+        this.variantBlocks = {};
 
-        this.el('has-variant').checked = !!variant;
-        this.el('variant-fields').hidden = !variant;
-        this.el('variant-audience').value = variant?.audience || 'lancer';
-        this.el('variant-text').value = variant?.text || '';
-        selectValue(this.el('variant-voiceline'), variant?.voiceline);
-        this.el('variant-fake-name').value = variant?.fake_name || '';
-        selectValue(this.el('variant-custom-image'), variant?.custom_image);
-        this.el('variant-typing-speed').value = variant?.typing_speed || 0;
-        this.updateVariantAudienceHelp();
+        ESTATES.forEach(estate => {
+            const fragment = this.el('variant-block-template').content.cloneNode(true);
+            const block = fragment.querySelector('.variant-block');
+            const v = variants[estate.id] || null;
+            const q = cls => block.querySelector(cls);
+            block.dataset.audience = estate.id;
+            q('.variant-title').textContent = estate.title;
+            q('.variant-off-note').textContent = estate.off;
+            q('.variant-voiceline').innerHTML = this.voicelineOptions();
+            q('.variant-custom-image').innerHTML = option('', 'Как у основной') +
+                store.files.portraits.map(p => option(p, fileName(p))).join('');
+
+            q('.variant-enabled').checked = !!v;
+            q('.variant-text').value = v?.text || '';
+            selectValue(q('.variant-voiceline'), v?.voiceline);
+            q('.variant-fake-name').value = v?.fake_name || '';
+            selectValue(q('.variant-custom-image'), v?.custom_image);
+            q('.variant-typing-speed').value = v?.typing_speed || 0;
+
+            const sync = () => {
+                const on = q('.variant-enabled').checked;
+                block.classList.toggle('is-off', !on);
+                q('.variant-body').hidden = !on;
+                q('.variant-off-note').hidden = on;
+            };
+            q('.variant-enabled').addEventListener('change', () => {
+                sync();
+                if (q('.variant-enabled').checked) q('.variant-text').focus();
+                this.updateConversationHints();
+            });
+            q('.variant-preview').addEventListener('click', () => this.previewSound(q('.variant-voiceline')));
+            q('.variant-upload-btn').addEventListener('click', () => q('.variant-upload').click());
+            q('.variant-upload').addEventListener('change', e => this.uploadFile(e, 'voiceline', q('.variant-voiceline')));
+            q('.variant-auto-speed').addEventListener('click', () =>
+                this.autoCalculateTypingSpeed(q('.variant-voiceline'), q('.variant-text'), q('.variant-typing-speed')));
+            q('.variant-voiceline').addEventListener('change', () => this.updateConversationHints());
+            sync();
+
+            this.variantBlocks[estate.id] = block;
+            host.appendChild(block);
+        });
+
+        const any = Object.keys(variants).length > 0;
+        this.el('has-variant').checked = any;
+        host.hidden = !any;
     }
 
-    updateVariantAudienceHelp() {
-        const audience = this.el('variant-audience').value;
-        this.el('variant-audience-help').textContent = audience === 'lancer'
-            ? 'Основной текст выше услышит Кавалер в Доме.'
-            : 'Основной текст выше услышат Лансер и Кавалер-изгнанник.';
+    enabledVariantBlocks() {
+        if (!this.el('has-variant').checked) return [];
+        return Object.entries(this.variantBlocks || {})
+            .filter(([, block]) => block.querySelector('.variant-enabled').checked);
     }
 
     // Реплика из формы в формате терминала — для предпросмотра.
@@ -495,14 +553,12 @@ export default class DialogueEditor {
             text: this.el('conversation-text').value,
             fakeName: this.el('conversation-fake-name').value
         };
-        if (this.el('has-variant').checked && this.el('variant-text').value.trim()) {
-            conv.variants = {
-                [this.el('variant-audience').value]: {
-                    text: this.el('variant-text').value,
-                    fakeName: this.el('variant-fake-name').value
-                }
-            };
-        }
+        const variants = {};
+        this.enabledVariantBlocks().forEach(([audience, block]) => {
+            const text = block.querySelector('.variant-text').value;
+            if (text.trim()) variants[audience] = { text, fakeName: block.querySelector('.variant-fake-name').value };
+        });
+        if (Object.keys(variants).length) conv.variants = variants;
         return conv;
     }
 
@@ -520,11 +576,21 @@ export default class DialogueEditor {
                 ? `Неизвестная метка ${unknown.map(t => `<${t}>`).join(', ')} — в терминале выведется как есть. Доступны: ${TOKENS.map(t => `<${t}>`).join(' ')}.`
                 : '';
         };
+        const warnEl = (el, text) => {
+            const unknown = [...new Set(this.unknownTokens(text))];
+            el.hidden = unknown.length === 0;
+            el.textContent = unknown.length
+                ? `Неизвестная метка ${unknown.map(t => `<${t}>`).join(', ')} — в терминале выведется как есть. Доступны: ${TOKENS.map(t => `<${t}>`).join(' ')}.`
+                : '';
+        };
         warn('conversation-token-warning', `${this.el('conversation-text').value} ${this.el('conversation-fake-name').value}`);
-        warn('variant-token-warning', `${this.el('variant-text').value} ${this.el('variant-fake-name').value}`);
-
         this.el('conversation-voice-hint').hidden = !(this.el('conversation-voiceline').value && hasTokens(this.el('conversation-text').value));
-        this.el('variant-voice-hint').hidden = !(this.el('variant-voiceline').value && hasTokens(this.el('variant-text').value));
+
+        Object.values(this.variantBlocks || {}).forEach(block => {
+            const text = block.querySelector('.variant-text').value;
+            warnEl(block.querySelector('.variant-token-warning'), `${text} ${block.querySelector('.variant-fake-name').value}`);
+            block.querySelector('.variant-voice-hint').hidden = !(block.querySelector('.variant-voiceline').value && hasTokens(text));
+        });
 
         const conv = this.formConversation();
         document.querySelectorAll('.conversation-preview .preview-line').forEach(line => {
@@ -540,7 +606,9 @@ export default class DialogueEditor {
         // Кнопки меток не забирают фокус (mousedown → preventDefault), поэтому активное поле —
         // то, в котором пользователь печатал. Запасной вариант — последнее поле с фокусом.
         const active = document.activeElement;
-        const target = TOKEN_TARGETS.includes(active?.id) ? active : (this.lastTokenTarget || this.el('conversation-text'));
+        const target = active?.matches?.('[data-token-target]') && !active.disabled
+            ? active
+            : (this.lastTokenTarget?.isConnected ? this.lastTokenTarget : this.el('conversation-text'));
         const text = `<${token}>`;
         const start = target.selectionStart ?? target.value.length;
         const end = target.selectionEnd ?? target.value.length;
@@ -550,34 +618,28 @@ export default class DialogueEditor {
         this.updateConversationHints();
     }
 
-    // Сохранение варианта после основной реплики. false — сохранение прервано.
-    async saveVariant(conversationId) {
-        const existing = this.variantOf(conversationId);
-        const wanted = this.el('has-variant').checked;
-        const audience = this.el('variant-audience').value;
-
-        if (!wanted) {
-            if (existing) await api.conversations.removeVariant(conversationId, existing.audience);
-            return true;
+    // Варианты для Кавалера и изгнанника: включённые сохраняются, выключенные удаляются.
+    async saveVariants(conversationId) {
+        const existing = this.variantsOf(conversationId);
+        const enabled = new Map(this.enabledVariantBlocks());
+        for (const estate of ESTATES) {
+            const block = enabled.get(estate.id);
+            if (!block) {
+                if (existing[estate.id]) await api.conversations.removeVariant(conversationId, estate.id);
+                continue;
+            }
+            await api.conversations.saveVariant(conversationId, estate.id, {
+                text: block.querySelector('.variant-text').value.trim(),
+                voiceline: block.querySelector('.variant-voiceline').value,
+                fakeName: block.querySelector('.variant-fake-name').value.trim(),
+                customImage: block.querySelector('.variant-custom-image').value,
+                typingSpeed: parseFloat(block.querySelector('.variant-typing-speed').value) || 0
+            });
         }
-        // Сменили аудиторию — старый вариант убираем, чтобы не осталось двух.
-        if (existing && existing.audience !== audience) {
-            await api.conversations.removeVariant(conversationId, existing.audience);
-        }
-        await api.conversations.saveVariant(conversationId, audience, {
-            text: this.el('variant-text').value.trim(),
-            voiceline: this.el('variant-voiceline').value,
-            fakeName: this.el('variant-fake-name').value.trim(),
-            customImage: this.el('variant-custom-image').value,
-            typingSpeed: parseFloat(this.el('variant-typing-speed').value) || 0
-        });
-        return true;
     }
 
     closeConversation() {
-        this.el('conversation-panel').hidden = true;
-        this.el('conv-placeholder').hidden = false;
-        this.el('conv-speaker-card').textContent = '';
+        this.el('conversation-modal').style.display = 'none';
     }
 
     fillVoicelineSelect() {
@@ -591,65 +653,96 @@ export default class DialogueEditor {
     renderChoiceOptions(choices) {
         const container = this.el('choice-options-list');
         container.textContent = '';
-        choices.forEach(ch => {
-            const hasRelation = ch.relation_global_char_id !== null && ch.relation_global_char_id !== undefined;
-            const relationData = hasRelation ? {
-                globalCharId: ch.relation_global_char_id,
-                min: ch.relation_require_min !== null ? ch.relation_require_min : -100,
-                max: ch.relation_require_max !== null ? ch.relation_require_max : 100,
-                effect: ch.relation_effect || 0
-            } : null;
-            this.addChoiceOption(ch.option_id, ch.option_text, ch.target_branch, ch.id, relationData);
+        choices.forEach(ch => this.addChoiceOption(ch));
+    }
+
+    // Персонажи диалога, привязанные к каталогу: с ними может меняться отношение.
+    relationCharacters() {
+        const seen = new Set();
+        return this.state.characters.filter(c => {
+            if (!c.global_character_id || seen.has(c.global_character_id)) return false;
+            seen.add(c.global_character_id);
+            return true;
         });
     }
 
-    addChoiceOption(id = '', text = '', target = '', dbId = null, relationData = null) {
+    // ch — строка choice_options (или пусто для нового ответа).
+    addChoiceOption(ch = null) {
         const container = this.el('choice-options-list');
         const fragment = this.el('choice-option-template').content.cloneNode(true);
         const optionDiv = fragment.querySelector('.choice-option');
-        optionDiv.dataset.optionId = id || Date.now();
-        if (dbId) optionDiv.dataset.dbId = dbId;
+        const q = cls => optionDiv.querySelector(cls);
+        optionDiv.dataset.optionId = ch?.option_id || `opt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        if (ch?.id) optionDiv.dataset.dbId = ch.id;
 
-        optionDiv.querySelector('.option-text').value = text;
+        q('.option-text').value = ch?.option_text || '';
 
-        const targetSelect = optionDiv.querySelector('.option-target');
-        targetSelect.innerHTML = option('', 'Новая ветка') + this.state.branches.map(b => option(b.branch_id, b.branch_id)).join('');
-        targetSelect.value = target || '';
+        // Куда ведёт ответ; для новой ветки — кто говорит её первую реплику (по умолчанию тот же персонаж).
+        const targetSelect = q('.option-target');
+        targetSelect.innerHTML = option('', 'Новая ветка') + option('__end__', 'Никуда — завершает диалог') +
+            this.state.branches.map(b => option(b.branch_id, b.branch_id)).join('');
+        // У сохранённого ответа без ветки (например, после ножниц) — «никуда», а не «новая ветка».
+        targetSelect.value = ch?.target_branch || (ch?.id ? '__end__' : '');
+        const speakerSelect = q('.option-character');
+        speakerSelect.innerHTML = option('', 'Говорит: тот же персонаж') +
+            this.state.characters.map(c => option(c.id, `Говорит: ${this.characterName(c)}`)).join('');
+        const syncTarget = () => speakerSelect.classList.toggle('hidden', targetSelect.value !== '');
+        targetSelect.addEventListener('change', syncTarget);
+        syncTarget();
 
-        const characterSelect = optionDiv.querySelector('.option-character');
-        characterSelect.innerHTML = option('', 'Выберите персонажа') +
-            this.state.characters.map(c => option(c.id, this.characterName(c))).join('');
-        characterSelect.classList.toggle('hidden', !!target);
-        targetSelect.addEventListener('change', e => characterSelect.classList.toggle('hidden', e.target.value !== ''));
+        // Альтернативный ответ для сословия
+        const estatesFields = q('.option-estates-fields');
+        const texts = { cavalier: ch?.option_text_cavalier || '', exile: ch?.option_text_exile || '' };
+        optionDiv.querySelectorAll('.option-estate-row').forEach(row => {
+            const enabled = row.querySelector('.option-estate-enabled');
+            const input = row.querySelector('.option-estate-text');
+            input.value = texts[row.dataset.audience];
+            enabled.checked = !!input.value;
+            const sync = () => { input.disabled = !enabled.checked; row.classList.toggle('is-off', !enabled.checked); };
+            enabled.addEventListener('change', () => { sync(); if (enabled.checked) input.focus(); });
+            sync();
+        });
+        q('.option-estates-enabled').checked = !!(texts.cavalier || texts.exile);
+        estatesFields.hidden = !q('.option-estates-enabled').checked;
+        q('.option-estates-enabled').addEventListener('change', e => { estatesFields.hidden = !e.target.checked; });
 
-        const npcLabel = optionDiv.querySelector('.relation-npc-name');
-        const updateNpcLabel = () => {
-            const selChar = this.state.characters.find(c => String(c.id) === this.el('conversation-character').value);
-            npcLabel.textContent = selChar ? `Персонаж: ${this.characterName(selChar)}` : 'Персонаж: не выбран';
+        // Отношения: без персонажа ответ ни на чьё отношение не влияет.
+        const relationSection = q('.choice-option-relation');
+        const relationChar = q('.relation-character');
+        relationChar.innerHTML = option('', '— ни с кем (не влияет) —') +
+            this.relationCharacters().map(c => option(c.global_character_id, this.characterName(c))).join('');
+        selectValue(relationChar, ch?.relation_global_char_id ? String(ch.relation_global_char_id) : '');
+        if (ch?.relation_global_char_id) {
+            q('.relation-min').value = ch.relation_require_min ?? -100;
+            q('.relation-max').value = ch.relation_require_max ?? 100;
+            q('.relation-effect').value = ch.relation_effect || 0;
+        }
+        const syncRelation = () => {
+            const none = !relationChar.value;
+            ['.relation-min', '.relation-max', '.relation-effect'].forEach(cls => { q(cls).disabled = none; });
+            const effect = parseInt(q('.relation-effect').value) || 0;
+            q('.relation-summary').textContent = none
+                ? 'Отношения: не меняются'
+                : `Отношения: ${relationChar.selectedOptions[0]?.textContent || ''}${effect ? ` ${effect > 0 ? '+' : '−'}${Math.abs(effect)}` : ''}`;
+            relationSection.classList.toggle('has-relation', !none);
         };
-        this.el('conversation-character').addEventListener('change', updateNpcLabel);
-        updateNpcLabel();
+        relationChar.addEventListener('change', syncRelation);
+        q('.relation-effect').addEventListener('input', syncRelation);
+        syncRelation();
 
-        const relationSection = optionDiv.querySelector('.choice-option-relation');
-        const icon = relationSection.querySelector('.relation-toggle-icon');
-        const header = relationSection.querySelector('.relation-header');
+        const icon = q('.relation-toggle-icon');
+        const header = q('.relation-header');
         const setExpanded = expanded => {
             relationSection.classList.toggle('expanded', expanded);
             icon.textContent = expanded ? '▼' : '▶';
             header.setAttribute('aria-expanded', String(expanded));
         };
-        if (relationData) {
-            optionDiv.querySelector('.relation-min').value = relationData.min;
-            optionDiv.querySelector('.relation-max').value = relationData.max;
-            optionDiv.querySelector('.relation-effect').value = relationData.effect;
-            if (relationData.globalCharId) setExpanded(true);
-        }
-        header.addEventListener('click', () => {
-            setExpanded(!relationSection.classList.contains('expanded'));
-            updateNpcLabel();
-        });
+        header.addEventListener('click', () => setExpanded(!relationSection.classList.contains('expanded')));
 
-        optionDiv.querySelector('.remove-option-btn').addEventListener('click', () => optionDiv.remove());
+        q('.remove-option-btn').addEventListener('click', () => {
+            if (optionDiv.dataset.dbId) this.removedOptionIds.add(optionDiv.dataset.dbId);
+            optionDiv.remove();
+        });
         container.appendChild(optionDiv);
     }
 
@@ -668,9 +761,20 @@ export default class DialogueEditor {
             toast('Выберите персонажа и введите текст', 'error');
             return;
         }
-        if (this.el('has-variant').checked && !this.el('variant-text').value.trim()) {
-            toast('Введите текст варианта или снимите галочку «Альтернативная реплика»', 'error');
-            this.el('variant-text').focus();
+        const emptyVariant = this.enabledVariantBlocks().find(([, block]) => !block.querySelector('.variant-text').value.trim());
+        if (emptyVariant) {
+            const title = ESTATES.find(e => e.id === emptyVariant[0]).title;
+            toast(`Введите текст реплики «${title}» или снимите у неё галочку`, 'error');
+            emptyVariant[1].querySelector('.variant-text').focus();
+            return;
+        }
+        const emptyEstateAnswer = [...this.el('choice-options-list').querySelectorAll('.option-estate-row')]
+            .find(row => hasChoice && row.querySelector('.option-estate-enabled').checked
+                && !row.closest('.option-estates-fields').hidden
+                && !row.querySelector('.option-estate-text').value.trim());
+        if (emptyEstateAnswer) {
+            toast('Введите текст альтернативного ответа или снимите у него галочку', 'error');
+            emptyEstateAnswer.querySelector('.option-estate-text').focus();
             return;
         }
 
@@ -697,62 +801,85 @@ export default class DialogueEditor {
                 const data = await api.conversations.create({ dialogueId: this.state.currentDialogueId, ...fields });
                 conversationId = data.conversationId;
             }
-            if (hasChoice && !(await this.saveChoices(conversationId))) return;
-            await this.saveVariant(conversationId);
+            if (hasChoice) {
+                if (!(await this.saveChoices(conversationId))) return;
+            } else {
+                // Галочку «Добавить выбор» сняли — варианты ответа удаляются (ветки остаются).
+                const existing = this.state.choices.filter(ch => String(ch.conversation_id) === String(conversationId));
+                for (const ch of existing) await api.choices.remove(ch.id);
+            }
+            await this.saveVariants(conversationId);
 
             toast('Реплика сохранена', 'success');
+            this.closeConversation();
             await this.reload();
-            this.openConversation(conversationId);
         } catch (error) {
             toast(`Ошибка сохранения реплики: ${error.message}`, 'error');
         }
     }
 
-    // Возвращает false, если сохранение прервано (не выбран персонаж для новой ветки и т. п.).
+    // Возвращает false, если сохранение прервано.
     async saveChoices(conversationId) {
         const choiceId = this.el('choice-id').value || `choice_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        const convCharacter = this.state.characters.find(c => String(c.id) === this.el('conversation-character').value);
+        const speakerId = this.el('conversation-character').value;
+
+        // Ответы, убранные крестиком, удаляются из базы.
+        for (const id of this.removedOptionIds || []) await api.choices.remove(id);
+        this.removedOptionIds = new Set();
 
         const options = [...this.el('choice-options-list').querySelectorAll('.choice-option')].map((opt, i) => {
-            const targetBranch = opt.querySelector('.option-target').value;
-            const min = parseInt(opt.querySelector('.relation-min').value);
-            const max = parseInt(opt.querySelector('.relation-max').value);
-            const effect = parseInt(opt.querySelector('.relation-effect').value) || 0;
-            const hasRelation = min !== -100 || max !== 100 || effect !== 0;
+            const q = cls => opt.querySelector(cls);
+            const estatesOn = q('.option-estates-enabled').checked;
+            const estateText = audience => {
+                const row = opt.querySelector(`.option-estate-row[data-audience="${audience}"]`);
+                return estatesOn && row.querySelector('.option-estate-enabled').checked
+                    ? row.querySelector('.option-estate-text').value.trim() : '';
+            };
+            const relationCharId = parseInt(q('.relation-character').value) || null;
+            const targetBranch = q('.option-target').value;
             return {
                 dbId: opt.dataset.dbId || null,
-                optionId: opt.dataset.optionId || `opt_${i}_${Date.now()}`,
-                optionText: opt.querySelector('.option-text').value,
+                optionId: opt.dataset.optionId,
+                optionText: q('.option-text').value.trim(),
+                optionTextCavalier: estateText('cavalier'),
+                optionTextExile: estateText('exile'),
                 targetBranch,
-                characterId: opt.querySelector('.option-character').value,
-                isNewBranch: !targetBranch,
+                isNewBranch: targetBranch === '',
+                // Первая реплика новой ветки — у выбранного персонажа, иначе у того же, кто говорит сейчас.
+                newBranchSpeakerId: q('.option-character').value || speakerId,
                 sortOrder: i,
-                // Отношение меняется с персонажем, который говорит эту реплику.
-                relationGlobalCharId: hasRelation && convCharacter?.global_character_id ? convCharacter.global_character_id : null,
-                relationRequireMin: Number.isFinite(min) ? min : -100,
-                relationRequireMax: Number.isFinite(max) ? max : 100,
-                relationEffect: effect
+                // Без персонажа отношения не меняются (сервер сбросит пороги и эффект).
+                relationGlobalCharId: relationCharId,
+                relationRequireMin: parseInt(q('.relation-min').value),
+                relationRequireMax: parseInt(q('.relation-max').value),
+                relationEffect: parseInt(q('.relation-effect').value) || 0
             };
         });
 
         for (const opt of options) {
             if (!opt.optionText) continue;
+            const payload = {
+                conversationId,
+                choiceId,
+                optionId: opt.optionId,
+                optionText: opt.optionText,
+                optionTextCavalier: opt.optionTextCavalier,
+                optionTextExile: opt.optionTextExile,
+                sortOrder: opt.sortOrder,
+                relationGlobalCharId: opt.relationGlobalCharId,
+                relationRequireMin: opt.relationRequireMin,
+                relationRequireMax: opt.relationRequireMax,
+                relationEffect: opt.relationEffect
+            };
 
             if (opt.isNewBranch) {
-                if (!opt.characterId) {
-                    toast(`Выберите персонажа для варианта «${opt.optionText}» или укажите существующую ветку`, 'error');
-                    return false;
-                }
+                if (opt.dbId) await api.choices.remove(opt.dbId);   // ответ переводят в новую ветку
                 try {
                     await api.branches.createWithConversation({
+                        ...payload,
                         dialogueId: this.state.currentDialogueId,
                         branchId: `branch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-                        characterId: opt.characterId,
-                        conversationId,
-                        choiceId,
-                        optionId: opt.optionId,
-                        optionText: opt.optionText,
-                        sortOrder: opt.sortOrder
+                        characterId: opt.newBranchSpeakerId
                     });
                 } catch (error) {
                     toast(error.message || 'Ошибка создания ветки', 'error');
@@ -761,18 +888,7 @@ export default class DialogueEditor {
                 continue;
             }
 
-            const payload = {
-                conversationId,
-                choiceId,
-                optionId: opt.optionId,
-                optionText: opt.optionText,
-                targetBranch: opt.targetBranch,
-                sortOrder: opt.sortOrder,
-                relationGlobalCharId: opt.relationGlobalCharId,
-                relationRequireMin: opt.relationRequireMin,
-                relationRequireMax: opt.relationRequireMax,
-                relationEffect: opt.relationEffect
-            };
+            payload.targetBranch = opt.targetBranch === '__end__' ? null : opt.targetBranch;
             if (opt.dbId) await api.choices.update(opt.dbId, payload);
             else await api.choices.create(payload);
         }
@@ -822,7 +938,7 @@ export default class DialogueEditor {
         try {
             await api.dialogues.update(this.state.currentDialogueId, body);
             toast('Диалог сохранён', 'success');
-            this.el('dialogue-summary').textContent = `${body.frequency} · ${body.title || 'Без названия'}`;
+            this.renderInfoSummary();
             await this.loadDialogues();
         } catch (error) {
             toast(error.message || 'Ошибка сохранения', 'error');
@@ -847,19 +963,19 @@ export default class DialogueEditor {
 
     // ===================== звук =====================
 
-    previewSound(selectId) {
-        const path = this.el(selectId).value;
+    previewSound(select) {
+        const el = typeof select === 'string' ? this.el(select) : select;
+        const path = el?.value;
         if (!path) return;
         this.state.audioPreview?.pause();
         this.state.audioPreview = new Audio(assetUrl(path));
         this.state.audioPreview.play().catch(err => debug('Audio play error:', err));
     }
 
-    autoCalculateTypingSpeed(prefix = 'conversation') {
-        const voicelinePath = this.el(`${prefix}-voiceline`).value;
-        const text = this.el(`${prefix}-text`).value;
+    autoCalculateTypingSpeed(voicelineEl = this.el('conversation-voiceline'), textEl = this.el('conversation-text'), speedEl = this.el('conversation-typing-speed')) {
+        const voicelinePath = voicelineEl.value;
         if (!voicelinePath) return toast('Сначала выберите файл озвучки', 'error');
-        const charCount = text.replace(/\[\d+\.?\d*s\]/g, '').trim().length;
+        const charCount = textEl.value.replace(/\[\d+\.?\d*s\]/g, '').trim().length;
         if (!charCount) return toast('Сначала введите текст реплики', 'error');
 
         const audio = new Audio(assetUrl(voicelinePath));
@@ -868,13 +984,14 @@ export default class DialogueEditor {
                 toast('Не удалось получить длительность аудиофайла', 'error');
                 return;
             }
-            this.el(`${prefix}-typing-speed`).value = Math.round(audio.duration * 1000 / charCount);
+            speedEl.value = Math.round(audio.duration * 1000 / charCount);
         });
         audio.addEventListener('error', () => toast('Не удалось загрузить аудиофайл для расчёта', 'error'));
         audio.load();
     }
 
-    async uploadFile(event, kind, target = 'conversation') {
+    // targetSelect — список озвучки, в котором выбрать загруженный файл (по умолчанию основной).
+    async uploadFile(event, kind, targetSelect = null) {
         const file = event.target.files[0];
         event.target.value = '';
         if (!file) return;
@@ -884,13 +1001,15 @@ export default class DialogueEditor {
                 this.fillSoundSelect();
                 this.el('character-voice').value = data.path;
             } else {
-                // Список озвучки общий: обновляем оба поля, выбираем файл в том, откуда загружали.
-                const variantValue = this.el('variant-voiceline').value;
-                this.fillVoicelineSelect();
-                this.el('variant-voiceline').innerHTML = option('', 'Без озвучки (звук персонажа)') +
-                    store.files.voicelines.map(v => option(v, fileName(v))).join('');
-                this.el('variant-voiceline').value = variantValue;
-                this.el(target === 'variant' ? 'variant-voiceline' : 'conversation-voiceline').value = data.path;
+                // Список озвучки общий: обновляем все поля, сохраняя выбранное.
+                const selects = [this.el('conversation-voiceline'),
+                    ...document.querySelectorAll('#variant-fields .variant-voiceline')];
+                selects.forEach(sel => {
+                    const keep = sel.value;
+                    sel.innerHTML = this.voicelineOptions();
+                    selectValue(sel, keep);
+                });
+                (targetSelect || this.el('conversation-voiceline')).value = data.path;
                 this.updateConversationHints();
             }
             toast('Файл загружен', 'success');
@@ -942,28 +1061,41 @@ export default class DialogueEditor {
         on('upload-conversation-voiceline', 'change', e => this.uploadFile(e, 'voiceline'));
         on('auto-calc-speed-btn', 'click', () => this.autoCalculateTypingSpeed());
 
-        // Вариант для сословия и метки пилота
+        // Варианты для сословий и метки пилота
         on('has-variant', 'change', e => {
             this.el('variant-fields').hidden = !e.target.checked;
-            if (e.target.checked) this.el('variant-text').focus();
+            // Включили впервые — сразу включаем вариант для Кавалера, остальное по желанию.
+            if (e.target.checked && !this.enabledVariantBlocks().length) {
+                const first = this.variantBlocks?.cavalier?.querySelector('.variant-enabled');
+                if (first) { first.checked = true; first.dispatchEvent(new Event('change')); }
+            }
             this.updateConversationHints();
         });
-        on('variant-audience', 'change', () => { this.updateVariantAudienceHelp(); this.updateConversationHints(); });
-        on('preview-variant-voiceline-btn', 'click', () => this.previewSound('variant-voiceline'));
-        on('upload-variant-voiceline-btn', 'click', () => this.el('upload-variant-voiceline').click());
-        on('upload-variant-voiceline', 'change', e => this.uploadFile(e, 'voiceline', 'variant'));
-        on('variant-auto-speed-btn', 'click', () => this.autoCalculateTypingSpeed('variant'));
         document.querySelectorAll('.token-bar .token-btn').forEach(btn => {
             // mousedown + preventDefault: поле не теряет фокус и позицию курсора.
             btn.addEventListener('mousedown', e => e.preventDefault());
             btn.addEventListener('click', () => this.insertToken(btn.dataset.token));
         });
-        TOKEN_TARGETS.forEach(id => {
-            ['focus', 'pointerdown', 'keyup'].forEach(type => on(id, type, () => { this.lastTokenTarget = this.el(id); }));
-            on(id, 'input', () => this.updateConversationHints());
+        // Метки вставляются в последнее поле с [data-token-target], где стоял курсор
+        // (основной текст, варианты для сословий, тексты ответов).
+        const modalBody = this.el('conversation-modal');
+        ['focusin', 'pointerdown', 'keyup'].forEach(type => modalBody.addEventListener(type, e => {
+            if (e.target.matches?.('[data-token-target]')) this.lastTokenTarget = e.target;
+        }));
+        modalBody.addEventListener('input', e => {
+            if (e.target.matches?.('[data-token-target]')) this.updateConversationHints();
         });
-        ['conversation-character', 'conversation-voiceline', 'variant-voiceline'].forEach(id =>
+        ['conversation-character', 'conversation-voiceline'].forEach(id =>
             on(id, 'change', () => this.updateConversationHints()));
+
+        // Сводка диалога обновляется сразу; открыт ли блок — запоминается.
+        ['dialogue-frequency', 'dialogue-title', 'dialogue-max-repeats'].forEach(id => on(id, 'input', () => this.renderInfoSummary()));
+        ['dialogue-active', 'dialogue-access'].forEach(id => on(id, 'change', () => this.renderInfoSummary()));
+        const info = this.el('dialogue-info');
+        try { if (localStorage.getItem(INFO_OPEN_KEY) === '0') info.open = false; } catch { /* хранилище недоступно */ }
+        info.addEventListener('toggle', () => {
+            try { localStorage.setItem(INFO_OPEN_KEY, info.open ? '1' : '0'); } catch { /* хранилище недоступно */ }
+        });
 
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });

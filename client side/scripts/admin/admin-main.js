@@ -87,7 +87,7 @@ class AdminApp {
     }
 
     initModals() {
-        const modals = ['password-modal', 'choice-details-modal', 'delete-user-modal', 'clear-progress-modal']
+        const modals = ['password-modal', 'choice-details-modal', 'delete-user-modal', 'clear-progress-modal', 'rename-user-modal', 'pilot-modal']
             .map(id => document.getElementById(id));
         const close = id => { document.getElementById(id).style.display = 'none'; };
 
@@ -98,6 +98,12 @@ class AdminApp {
         document.getElementById('confirm-delete')?.addEventListener('click', () => this.deleteUser());
         document.getElementById('cancel-clear')?.addEventListener('click', () => close('clear-progress-modal'));
         document.getElementById('confirm-clear')?.addEventListener('click', () => this.clearProgress());
+        document.getElementById('cancel-rename')?.addEventListener('click', () => close('rename-user-modal'));
+        document.getElementById('confirm-rename')?.addEventListener('click', () => this.renameUser());
+        document.getElementById('rename-username')?.addEventListener('keydown', e => { if (e.key === 'Enter') this.renameUser(); });
+        document.getElementById('cancel-pilot')?.addEventListener('click', () => close('pilot-modal'));
+        document.getElementById('save-pilot')?.addEventListener('click', () => this.savePilot());
+        this.initPilotForm();
 
         window.addEventListener('click', e => {
             modals.forEach(m => { if (e.target === m) m.style.display = 'none'; });
@@ -379,12 +385,15 @@ class AdminApp {
                     <td class="player-name">${escapeHtml(user.username)}</td>
                     <td>${escapeHtml(this.utils.formatDate(user.created_at))}</td>
                     <td class="row-actions">
+                        <button class="btn btn-small rename-user-btn" data-id="${escapeAttr(user.id)}" data-username="${escapeAttr(user.username)}">Имя</button>
                         <button class="btn btn-small change-password-btn" data-id="${escapeAttr(user.id)}" data-username="${escapeAttr(user.username)}">Пароль</button>
                         <button class="btn btn-small clear-progress-btn" data-id="${escapeAttr(user.id)}" data-username="${escapeAttr(user.username)}">Сброс</button>
                         <button class="btn btn-small btn-danger delete-user-btn" data-id="${escapeAttr(user.id)}" data-username="${escapeAttr(user.username)}">Удалить</button>
                     </td>
                 </tr>`).join('');
 
+        tbody.querySelectorAll('.rename-user-btn').forEach(btn =>
+            btn.addEventListener('click', () => this.openRenameModal(btn.dataset.id, btn.dataset.username)));
         tbody.querySelectorAll('.change-password-btn').forEach(btn =>
             btn.addEventListener('click', () => this.openPasswordModal(btn.dataset.id, btn.dataset.username)));
         tbody.querySelectorAll('.delete-user-btn').forEach(btn =>
@@ -453,6 +462,186 @@ class AdminApp {
         }
         this.renderRelationsForUser(userId);
         this.renderPlayerProgress();
+        this.loadPlayerPilots(userId);
+    }
+
+    // ===================== переименование =====================
+
+    openRenameModal(userId, username) {
+        document.getElementById('rename-user-id').value = userId;
+        const input = document.getElementById('rename-username');
+        input.value = username;
+        document.getElementById('rename-error').style.display = 'none';
+        document.getElementById('rename-user-modal').style.display = 'flex';
+        input.focus();
+        input.select();
+    }
+
+    async renameUser() {
+        const userId = document.getElementById('rename-user-id').value;
+        const username = document.getElementById('rename-username').value.trim();
+        const errorEl = document.getElementById('rename-error');
+        const fail = message => { errorEl.textContent = message; errorEl.style.display = 'block'; };
+        if (!/^[a-zA-Z0-9_]{3,50}$/.test(username)) return fail('Только латинские буквы, цифры и _, от 3 до 50 символов');
+        try {
+            const data = await api.renameUser(Number(userId), username);
+            document.getElementById('rename-user-modal').style.display = 'none';
+            const user = this.state.users.find(u => String(u.id) === String(userId));
+            if (user) user.username = data.username;
+            this.applyUserFilter();
+            if (String(this.state.selectedUserId) === String(userId)) {
+                document.getElementById('player-detail-title').textContent = `Игрок: ${data.username}`;
+            }
+            toast(`Логин изменён: ${data.username}`, 'success');
+        } catch (error) {
+            fail(error.message);
+        }
+    }
+
+    // ===================== пилоты игрока =====================
+
+    async loadPlayerPilots(userId) {
+        const host = document.getElementById('player-pilots');
+        host.innerHTML = '<div class="form-help">Загрузка пилотов...</div>';
+        try {
+            const pilots = (await api.pilots.list(userId)).pilots || [];
+            if (this.state.selectedUserId !== userId) return;
+            this.playerPilots = pilots;
+            this.renderPlayerPilots();
+        } catch (error) {
+            host.innerHTML = `<div class="form-help text-danger">Пилоты не загрузились: ${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    pilotHouse(p) {
+        return p.estate === 'cavalier' && window.KtbHouses ? window.KtbHouses.resolveHouse(p) : null;
+    }
+
+    renderPlayerPilots() {
+        const host = document.getElementById('player-pilots');
+        const pilots = this.playerPilots || [];
+        if (!pilots.length) {
+            host.innerHTML = '<div class="no-data">У игрока нет пилотов.</div>';
+            return;
+        }
+        const THEMES = { yellow: 'IPS-N', green: 'GMS', ktb: 'КТБ' };
+        const GENDERS = { female: 'леди', male: 'лорд', neutral: 'нейтр.' };
+        host.textContent = '';
+        pilots.forEach(p => {
+            const house = this.pilotHouse(p);
+            const card = document.createElement('div');
+            card.className = `pilot-card${p.is_active ? ' is-active' : ''}`;
+            const estate = p.estate === 'cavalier'
+                ? `Кавалер${p.house_standing === 'exile' ? ' · изгнанник' : ''}${house ? ` · ${house.name}` : ''}`
+                : 'Лансер';
+            card.innerHTML = `
+                <div class="pilot-card-head">
+                    <span class="pilot-slot">Слот ${escapeHtml(p.slot_number)}</span>
+                    <b class="pilot-callsign"></b>
+                    ${p.is_active ? '<span class="pilot-active-mark">● активен</span>' : ''}
+                </div>
+                <div class="pilot-card-meta"></div>
+                <div class="pilot-card-tags">
+                    <span class="info-chip"></span>
+                    <span class="info-chip">${escapeHtml(GENDERS[p.gender] || p.gender)}</span>
+                    <span class="info-chip">тема ${escapeHtml(THEMES[p.theme] || p.theme || '—')}</span>
+                </div>
+                <div class="pilot-card-actions">
+                    <button class="btn btn-small pilot-edit-btn">Изменить</button>
+                    ${p.is_active ? '' : '<button class="btn btn-small pilot-activate-btn">Сделать активным</button>'}
+                </div>`;
+            card.querySelector('.pilot-callsign').textContent = p.callsign;
+            card.querySelector('.pilot-card-meta').textContent = `${p.full_name || '—'} · мех ${p.mech_name || '—'}`;
+            card.querySelector('.pilot-card-tags .info-chip').textContent = estate;
+            card.querySelector('.pilot-edit-btn').addEventListener('click', () => this.openPilotModal(p));
+            card.querySelector('.pilot-activate-btn')?.addEventListener('click', async () => {
+                try {
+                    await api.pilots.activate(this.state.selectedUserId, p.slot_number);
+                    toast(`Активный пилот: ${p.callsign}`, 'success');
+                    this.loadPlayerPilots(this.state.selectedUserId);
+                } catch (error) {
+                    toast(error.message, 'error');
+                }
+            });
+            host.appendChild(card);
+        });
+    }
+
+    initPilotForm() {
+        const houses = window.KtbHouses;
+        const houseSelect = document.getElementById('pilot-house');
+        houseSelect.innerHTML = '<option value="">— без Дома —</option>' +
+            (houses ? houses.HOUSES.map(h => `<option value="${escapeAttr(h.id)}">${escapeHtml(h.name)}</option>`).join('') : '') +
+            '<option value="custom">Свой Дом…</option>';
+        document.getElementById('pilot-house-sigil').innerHTML = houses
+            ? houses.CUSTOM_SIGIL_GROUPS.map(g => `<optgroup label="${escapeAttr(g.title)}">${g.sigils
+                .map(id => `<option value="${escapeAttr(id)}">${escapeHtml(houses.SIGIL_LABELS[id] || id)}</option>`).join('')}</optgroup>`).join('')
+            : '<option value="crown">Корона</option>';
+        const sync = () => this.syncPilotForm();
+        document.getElementById('pilot-estate').addEventListener('change', sync);
+        houseSelect.addEventListener('change', sync);
+    }
+
+    syncPilotForm() {
+        const cavalier = document.getElementById('pilot-estate').value === 'cavalier';
+        document.getElementById('pilot-cavalier').hidden = !cavalier;
+        const custom = document.getElementById('pilot-house').value === 'custom';
+        document.querySelectorAll('#pilot-modal .pilot-custom-house').forEach(el => { el.hidden = !custom; });
+    }
+
+    openPilotModal(p) {
+        const set = (id, value) => { document.getElementById(id).value = value ?? ''; };
+        set('pilot-user-id', this.state.selectedUserId);
+        set('pilot-slot', p.slot_number);
+        set('pilot-callsign', p.callsign);
+        set('pilot-mech', p.mech_name);
+        set('pilot-full-name', p.full_name);
+        set('pilot-estate', p.estate === 'cavalier' ? 'cavalier' : 'lancer');
+        set('pilot-gender', ['female', 'male'].includes(p.gender) ? p.gender : 'neutral');
+        set('pilot-theme', ['yellow', 'green', 'ktb'].includes(p.theme) ? p.theme : 'yellow');
+        set('pilot-house', p.house_key || '');
+        set('pilot-standing', p.house_standing === 'exile' ? 'exile' : 'member');
+        set('pilot-house-custom', p.house_custom);
+        set('pilot-house-color', /^#[0-9a-f]{6}$/i.test(p.house_color || '') ? p.house_color : '#b8a27a');
+        // Старый свой Дом мог взять знак Великого Дома — добавляем его в список, чтобы не потерять.
+        const sigilSelect = document.getElementById('pilot-house-sigil');
+        if (p.house_sigil && ![...sigilSelect.options].some(o => o.value === p.house_sigil)) {
+            sigilSelect.add(new Option(`${window.KtbHouses?.SIGIL_LABELS?.[p.house_sigil] || p.house_sigil} (текущий)`, p.house_sigil), 0);
+        }
+        set('pilot-house-sigil', p.house_sigil || 'crown');
+        document.getElementById('pilot-modal-title').textContent = `Пилот: ${p.callsign} (слот ${p.slot_number})`;
+        document.getElementById('pilot-error').style.display = 'none';
+        this.syncPilotForm();
+        document.getElementById('pilot-modal').style.display = 'flex';
+        document.getElementById('pilot-callsign').focus();
+    }
+
+    async savePilot() {
+        const value = id => document.getElementById(id).value;
+        const errorEl = document.getElementById('pilot-error');
+        const houseKey = value('pilot-house');
+        const body = {
+            callsign: value('pilot-callsign').trim(),
+            mech_name: value('pilot-mech').trim(),
+            full_name: value('pilot-full-name').trim(),
+            estate: value('pilot-estate'),
+            gender: value('pilot-gender'),
+            theme: value('pilot-theme'),
+            house_key: houseKey,
+            house_standing: value('pilot-standing'),
+            house_custom: houseKey === 'custom' ? value('pilot-house-custom').trim() : '',
+            house_color: houseKey === 'custom' ? value('pilot-house-color') : '',
+            house_sigil: houseKey === 'custom' ? value('pilot-house-sigil') : ''
+        };
+        try {
+            await api.pilots.update(value('pilot-user-id'), value('pilot-slot'), body);
+            document.getElementById('pilot-modal').style.display = 'none';
+            toast('Пилот сохранён', 'success');
+            this.loadPlayerPilots(this.state.selectedUserId);
+        } catch (error) {
+            errorEl.textContent = error.message;
+            errorEl.style.display = 'block';
+        }
     }
 
     renderPlayerProgress() {
@@ -589,7 +778,7 @@ class AdminApp {
         const rows = Object.values(byChar);
 
         if (rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center">У игрока пока нет записей об отношениях (их создаёт «Инициализировать отношения» в студии, раздел «Персонажи»).</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center">У игрока пока нет записей об отношениях: они появятся после первого выбора или если задать значение в студии, раздел «Персонажи».</td></tr>';
             return;
         }
 
@@ -776,13 +965,21 @@ class AdminApp {
                 <td><button class="btn btn-small btn-danger music-del-btn">Удалить</button></td>
             </tr>`).join('');
 
+        // Громкость из поля сразу слышна в прослушке этого трека — и до сохранения, и после.
+        const volumeOf = row => Math.max(0, Math.min(100, parseInt(row.querySelector('.music-vol-input').value) || 0)) / 100;
         tbody.querySelectorAll('.music-vol-input').forEach(input => {
+            input.addEventListener('input', () => {
+                const row = input.closest('tr');
+                if (this.previewAudio && this.previewTrackId === row.dataset.trackId) this.previewAudio.volume = volumeOf(row);
+            });
             input.addEventListener('change', async () => {
                 const id = input.closest('tr').dataset.trackId;
                 const vol = Math.max(0, Math.min(100, parseInt(input.value) || 0));
                 input.value = vol;
                 try {
                     await api.music.update(id, { volume: vol });
+                    const track = (this.musicTracks || []).find(t => String(t.id) === String(id));
+                    if (track) track.volume = vol;
                     toast('Громкость сохранена', 'success');
                 } catch (e) {
                     toast(`Ошибка сохранения громкости: ${e.message}`, 'error');
@@ -807,12 +1004,14 @@ class AdminApp {
                 if (this.previewAudio.src === url && !this.previewAudio.paused) {
                     this.previewAudio.pause();
                     this.previewAudio.currentTime = 0;
+                    this.previewTrackId = null;
                     resetIcons();
                     return;
                 }
                 this.previewAudio.pause();
                 this.previewAudio.src = url;
-                this.previewAudio.volume = Math.max(0, Math.min(100, Number(track.volume) || 100)) / 100;
+                this.previewTrackId = String(id);
+                this.previewAudio.volume = volumeOf(btn.closest('tr'));
                 this.previewAudio.play().catch(e => toast(`Не удалось воспроизвести: ${e.message}`, 'error'));
                 resetIcons();
                 btn.textContent = '⏹';

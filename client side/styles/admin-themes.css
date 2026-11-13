@@ -149,8 +149,13 @@ body.theme-green .admin-header { border-bottom: 3px solid var(--t-accent) !impor
 body.theme-ktb .admin-header { border-bottom-color: var(--t-accent) !important; }
 
 /* ---------- Крупные панели: оформление темы ---------- */
-:is(.admin-card, .sidebar, .editor-main, .modal-content, .tree-context-menu) {
+:is(.admin-card, .sidebar, .editor-main, .modal-content) {
   position: relative;
+}
+
+/* Контекстное меню дерева — без position: relative: оно position: fixed у курсора.
+   Раньше это правило перебивало fixed, и меню по ПКМ рисовалось в самом низу страницы. */
+:is(.admin-card, .sidebar, .editor-main, .modal-content, .tree-context-menu) {
   border: 1px solid var(--t-line) !important;
   border-radius: 0 !important;
   background-color: var(--t-panel) !important;

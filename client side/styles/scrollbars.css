@@ -1,0 +1,51 @@
+/* =====================================================================
+   ПОЛОСЫ ПРОКРУТКИ В СТИЛЕ ТЕМЫ — терминал, досье, панель, студия.
+   Тема стоит классом на <body>, а полоса прокрутки страницы принадлежит <html>,
+   поэтому цвета задаются на :root через :has(body.theme-…).
+   По умолчанию (класса ещё нет) — IPS-N, тема по умолчанию в БД.
+   ===================================================================== */
+:root {
+  --sb-track: #06111e;
+  --sb-thumb: #1f5a86;
+  --sb-thumb-hover: #1c9ae8;
+  --sb-edge: rgba(28, 154, 232, 0.18);
+}
+/* GMS: графит, при наведении — красный #DB1A2D. */
+:root:has(body.theme-green) {
+  --sb-track: #0b0c0e;
+  --sb-thumb: #393c43;
+  --sb-thumb-hover: #db1a2d;
+  --sb-edge: rgba(228, 230, 233, 0.08);
+}
+/* КТБ: тёмная позолота по лаку. */
+:root:has(body.theme-ktb) {
+  --sb-track: #120a0a;
+  --sb-thumb: #7a6334;
+  --sb-thumb-hover: #c6a052;
+  --sb-edge: rgba(198, 160, 82, 0.2);
+}
+/* КТБ для неблагородных: олово. */
+:root:has(body.theme-ktb.ktb-ignoble) {
+  --sb-track: #121315;
+  --sb-thumb: #4f4c46;
+  --sb-thumb-hover: #9c968a;
+  --sb-edge: rgba(156, 150, 138, 0.16);
+}
+
+/* Chromium / Safari. Свои правила элементов (например, скрытая прокрутка #text-con) сильнее. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--sb-track); box-shadow: inset 1px 0 0 var(--sb-edge); }
+::-webkit-scrollbar-thumb {
+  background-color: var(--sb-thumb);
+  border: 2px solid var(--sb-track);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active { background-color: var(--sb-thumb-hover); }
+::-webkit-scrollbar-corner { background: var(--sb-track); }
+:root:has(body.theme-ktb:not(.ktb-ignoble)) ::-webkit-scrollbar-thumb { box-shadow: inset 0 0 0 1px rgba(233, 215, 165, 0.25); }
+
+/* Firefox: только цвета. В Chromium scrollbar-color отключил бы правила выше, поэтому — отдельно. */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) var(--sb-track); }
+}

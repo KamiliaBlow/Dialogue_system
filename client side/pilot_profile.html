@@ -739,6 +739,25 @@
     .color-input { width: 64px; height: 44px; padding: 2px; border: 1px solid var(--screen-border); background: transparent; cursor: pointer; }
 
     .sigil-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sigil-head { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 12px; margin-bottom: 8px; }
+    .sigil-head .form-label { margin: 0; }
+    .sigil-current { color: var(--text-dim); font-size: 0.75rem; }
+    .sigil-search { grid-column: 1 / -1; }
+    .sigil-picker {
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 4px 8px 8px 0;
+      border-top: 1px solid var(--screen-border);
+      border-bottom: 1px solid var(--screen-border);
+    }
+    .sigil-group { padding-top: 8px; }
+    .sigil-group-title { color: var(--text-dim); font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 6px; }
+    .sigil-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 6px; }
+    .sigil-empty { color: var(--text-dim); font-size: 0.8rem; padding: 12px 0; }
+    .sigil-picker [hidden] { display: none !important; }
+    .house-hint { display: block; margin: -2px 0 8px; }
+    .house-tile.is-none .name { font-style: italic; }
+    .sigil-picker .sigil-btn { width: 100%; }
     .sigil-btn {
       display: grid;
       place-items: center;
@@ -934,6 +953,7 @@
     }
   </style>
   <script src="./scripts/ui-scale.js"></script>
+  <link rel="stylesheet" href="./styles/scrollbars.css">
 </head>
 <body>
   <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
@@ -1010,32 +1030,6 @@
                 <small class="form-hint">Пример: «леди Кассия-Вейл» — титул подставит выбранная форма обращения, имя и младший дом пишете вы.</small>
               </div>
               <div class="form-group">
-                <span class="form-label" id="houseLabel">Великий Дом</span>
-                <div class="house-grid" id="houseGrid" role="radiogroup" aria-labelledby="houseLabel"></div>
-                <div class="custom-house hidden" id="customHouse">
-                  <div class="custom-house-row">
-                    <label class="form-label" for="customHouseInput">Название своего Дома</label>
-                    <div class="custom-house-name">
-                      <span aria-hidden="true">Дом</span>
-                      <input type="text" class="form-input" id="customHouseInput" placeholder="Ветров" maxlength="60" autocomplete="off">
-                    </div>
-                    <small class="form-hint">В родительном падеже, как у Великих Домов: «Ветров» → «из Дома Ветров».</small>
-                  </div>
-                  <div class="custom-house-row two">
-                    <div>
-                      <label class="form-label" for="customHouseColor">Ливрея</label>
-                      <input type="color" class="color-input" id="customHouseColor" value="#b8a27a">
-                    </div>
-                    <div>
-                      <span class="form-label" id="sigilLabel">Знак Дома</span>
-                      <div class="sigil-row" id="sigilRow" role="radiogroup" aria-labelledby="sigilLabel"></div>
-                    </div>
-                  </div>
-                </div>
-                <small class="form-hint">Цвета ливрей и знаки — интерпретация проекта: в книгах они не описаны.</small>
-              </div>
-
-              <div class="form-group">
                 <span class="form-label" id="standingLabel">Положение в Доме</span>
                 <div class="standing-switch" role="radiogroup" aria-labelledby="standingLabel">
                   <label class="standing-option">
@@ -1046,9 +1040,39 @@
                   <label class="standing-option">
                     <input type="radio" name="houseStanding" value="exile">
                     <b>Изгнанник</b>
-                    <small>Тема КТБ: неблагородная канцелярия, ливрея перечёркнута.</small>
+                    <small>Тема КТБ: неблагородная канцелярия, ливрея перечёркнута. Дом изгнания можно указать или оставить пустым.</small>
                   </label>
                 </div>
+              </div>
+
+              <div class="form-group">
+                <span class="form-label" id="houseLabel">Великий Дом</span>
+                <small class="form-hint house-hint" id="houseHint"></small>
+                <div class="house-grid" id="houseGrid" role="radiogroup" aria-labelledby="houseLabel"></div>
+                <div class="custom-house hidden" id="customHouse">
+                  <div class="custom-house-row">
+                    <label class="form-label" for="customHouseInput">Название своего Дома</label>
+                    <div class="custom-house-name">
+                      <span aria-hidden="true">Дом</span>
+                      <input type="text" class="form-input" id="customHouseInput" placeholder="Ветров" maxlength="60" autocomplete="off">
+                    </div>
+                    <small class="form-hint">В родительном падеже, как у Великих Домов: «Ветров» → «из Дома Ветров».</small>
+                  </div>
+                  <div class="custom-house-row">
+                    <label class="form-label" for="customHouseColor">Ливрея</label>
+                    <input type="color" class="color-input" id="customHouseColor" value="#b8a27a">
+                  </div>
+                  <div class="custom-house-row">
+                    <div class="sigil-head">
+                      <span class="form-label" id="sigilLabel">Знак Дома</span>
+                      <span class="sigil-current" id="sigilCurrent" aria-live="polite"></span>
+                      <input type="search" class="form-input sigil-search" id="sigilSearch" placeholder="Поиск: волк, звезда, меч…" aria-label="Поиск знака" autocomplete="off">
+                    </div>
+                    <div class="sigil-picker" id="sigilRow" role="radiogroup" aria-labelledby="sigilLabel"></div>
+                    <small class="form-hint">Знаки Великих Домов заняты ими и здесь не повторяются.</small>
+                  </div>
+                </div>
+                <small class="form-hint">Цвета ливрей и знаки — интерпретация проекта: в книгах они не описаны.</small>
               </div>
 
               <div class="livery-preview" id="liveryPreview" aria-live="polite">
@@ -1338,6 +1362,13 @@
           slot.appendChild(themeBadge);
           // Дом и положение Кавалера (значения пользователя вставляются только как текст).
           const house = profile.estate === 'cavalier' ? KtbHouses.resolveHouse(profile) : null;
+          if (!house && profile.estate === 'cavalier' && profile.house_standing === 'exile') {
+            const line = document.createElement('div');
+            line.className = 'slot-house exile-none';
+            line.textContent = KtbHouses.describe(profile).label;
+            line.title = 'Изгнанник, Дом изгнания не указан';
+            slot.appendChild(line);
+          }
           if (house) {
             const line = document.createElement('div');
             line.className = `slot-house${profile.house_standing === 'exile' ? ' exile' : ''}`;
@@ -1418,7 +1449,8 @@
       group.addEventListener('keydown', event => {
         const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'];
         if (!keys.includes(event.key)) return;
-        const items = [...group.querySelectorAll('[role="radio"]')];
+        // Только видимые варианты: поиск знака прячет часть кнопок.
+        const items = [...group.querySelectorAll('[role="radio"]')].filter(el => el.offsetParent !== null);
         const index = items.indexOf(document.activeElement);
         if (index < 0) return;
         event.preventDefault();
@@ -1429,19 +1461,40 @@
       });
     }
 
+    function currentStanding() {
+      return document.querySelector('input[name="houseStanding"]:checked')?.value === 'exile' ? 'exile' : 'member';
+    }
+
+    // Подпись выбора Дома зависит от положения: изгнаннику Дом изгнания указывать не обязательно.
+    function updateHouseLabels() {
+      const exile = currentStanding() === 'exile';
+      document.getElementById('houseLabel').textContent = exile ? 'Из какого Дома изгнание' : 'Великий Дом';
+      document.getElementById('houseHint').textContent = exile
+        ? 'Необязательно. Можно выбрать Великий Дом, свой Дом или «Не указывать».'
+        : '';
+      document.getElementById('houseHint').classList.toggle('hidden', !exile);
+    }
+
     function renderHousePicker() {
       const grid = document.getElementById('houseGrid');
       grid.textContent = '';
+      updateHouseLabels();
       const options = KtbHouses.HOUSES.map(h => ({ value: h.id, name: h.name, color: h.color, sigil: h.sigil, tag: h.provisional ? 'временный' : '' }));
       options.push({ value: 'custom', name: 'Свой Дом', color: houseState.customColor, sigil: houseState.customSigil, tag: 'название и знак' });
+      if (currentStanding() === 'exile') {
+        options.unshift({ value: '', name: 'Не указывать', color: '#8f8a80', sigil: null, tag: 'Дом изгнания неизвестен', none: true });
+      }
       options.forEach(o => {
         const tile = document.createElement('button');
         tile.type = 'button';
-        tile.className = 'house-tile';
+        tile.className = `house-tile${o.none ? ' is-none' : ''}`;
         tile.dataset.value = o.value;
         tile.style.setProperty('--hc', o.color);
         makeRadio(tile, houseState.key === o.value);
-        tile.innerHTML = KtbHouses.sigilSvg(o.sigil, { size: 28 }) + '<span class="name"></span><span class="bar" aria-hidden="true"></span>';
+        const icon = o.none
+          ? '<svg viewBox="0 0 40 40" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M11 29 29 11"/></svg>'
+          : KtbHouses.sigilSvg(o.sigil, { size: 28 });
+        tile.innerHTML = icon + '<span class="name"></span><span class="bar" aria-hidden="true"></span>';
         tile.querySelector('.name').textContent = o.name;
         if (o.tag) {
           const tag = document.createElement('span');
@@ -1452,23 +1505,84 @@
         tile.addEventListener('click', () => pickHouse(o.value));
         grid.appendChild(tile);
       });
-      if (!houseState.key && grid.firstChild) grid.firstChild.tabIndex = 0;
+      if (!grid.querySelector('[aria-checked="true"]') && grid.firstChild) grid.firstChild.tabIndex = 0;
       document.getElementById('customHouse').classList.toggle('hidden', houseState.key !== 'custom');
+      document.getElementById('sigilRow').style.setProperty('--hc', houseState.customColor);
+    }
 
-      const sigils = document.getElementById('sigilRow');
-      sigils.textContent = '';
-      sigils.style.setProperty('--hc', houseState.customColor);
-      KtbHouses.SIGIL_IDS.forEach(id => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'sigil-btn';
-        btn.dataset.value = id;
-        btn.setAttribute('aria-label', `Знак ${id}`);
-        makeRadio(btn, houseState.customSigil === id);
-        btn.innerHTML = KtbHouses.sigilSvg(id, { size: 24 });
-        btn.addEventListener('click', () => pickSigil(id));
-        sigils.appendChild(btn);
+    // Знаки своего Дома по группам. Строится один раз; выбор и поиск меняют кнопки на месте,
+    // чтобы список не прыгал в начало.
+    function buildSigilPicker() {
+      const host = document.getElementById('sigilRow');
+      host.textContent = '';
+      const groups = KtbHouses.CUSTOM_SIGIL_GROUPS.map(g => ({ title: g.title, sigils: g.sigils.slice() }));
+      // Старый свой Дом мог взять знак Великого Дома — показываем его, чтобы выбор не потерялся.
+      if (houseState.customSigil && !KtbHouses.CUSTOM_SIGIL_IDS.includes(houseState.customSigil)) {
+        groups.unshift({ title: 'Текущий знак', sigils: [houseState.customSigil] });
+      }
+      groups.forEach(g => {
+        const group = document.createElement('div');
+        group.className = 'sigil-group';
+        const title = document.createElement('div');
+        title.className = 'sigil-group-title';
+        title.textContent = g.title;
+        const grid = document.createElement('div');
+        grid.className = 'sigil-group-grid';
+        g.sigils.forEach(id => {
+          const label = KtbHouses.SIGIL_LABELS[id] || id;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'sigil-btn';
+          btn.dataset.value = id;
+          btn.dataset.search = `${label} ${g.title} ${id}`.toLowerCase();
+          btn.title = label;
+          btn.setAttribute('aria-label', label);
+          makeRadio(btn, false);
+          btn.innerHTML = KtbHouses.sigilSvg(id, { size: 24 });
+          btn.addEventListener('click', () => pickSigil(id));
+          grid.appendChild(btn);
+        });
+        group.append(title, grid);
+        host.appendChild(group);
       });
+      const empty = document.createElement('div');
+      empty.className = 'sigil-empty';
+      empty.textContent = 'Ничего не нашлось.';
+      empty.hidden = true;
+      host.appendChild(empty);
+      syncSigilSelection();
+      filterSigils();
+    }
+
+    function syncSigilSelection() {
+      const host = document.getElementById('sigilRow');
+      host.style.setProperty('--hc', houseState.customColor);
+      let any = false;
+      host.querySelectorAll('.sigil-btn').forEach(btn => {
+        const on = btn.dataset.value === houseState.customSigil;
+        makeRadio(btn, on);
+        any = any || on;
+      });
+      if (!any) host.querySelector('.sigil-btn')?.setAttribute('tabindex', '0');
+      document.getElementById('sigilCurrent').textContent =
+        `выбран: ${KtbHouses.SIGIL_LABELS[houseState.customSigil] || houseState.customSigil}`;
+    }
+
+    function filterSigils() {
+      const query = document.getElementById('sigilSearch').value.trim().toLowerCase();
+      const host = document.getElementById('sigilRow');
+      let shown = 0;
+      host.querySelectorAll('.sigil-group').forEach(group => {
+        let groupShown = 0;
+        group.querySelectorAll('.sigil-btn').forEach(btn => {
+          const match = !query || btn.dataset.search.includes(query);
+          btn.hidden = !match;
+          if (match) groupShown++;
+        });
+        group.hidden = groupShown === 0;
+        shown += groupShown;
+      });
+      host.querySelector('.sigil-empty').hidden = shown > 0;
     }
 
     function pickHouse(value, keepFocus) {
@@ -1478,10 +1592,13 @@
       updateLiveryPreview();
     }
 
-    function pickSigil(id) {
+    function pickSigil(id, keepFocus) {
       houseState.customSigil = id;
-      renderHousePicker();
-      document.querySelector(`#sigilRow [data-value="${id}"]`)?.focus();
+      syncSigilSelection();
+      // Знак своего Дома виден и на плитке «Свой Дом».
+      const customTile = document.querySelector('#houseGrid [data-value="custom"] svg');
+      if (customTile) customTile.outerHTML = KtbHouses.sigilSvg(id, { size: 28 });
+      if (!keepFocus) document.querySelector(`#sigilRow [data-value="${id}"]`)?.focus();
       updateLiveryPreview();
     }
 
@@ -1495,7 +1612,9 @@
       document.getElementById('customHouseColor').value = houseState.customColor;
       const standing = p.house_standing === 'exile' ? 'exile' : 'member';
       document.querySelectorAll('input[name="houseStanding"]').forEach(r => { r.checked = r.value === standing; });
+      document.getElementById('sigilSearch').value = '';
       renderHousePicker();
+      buildSigilPicker();
     }
 
     // Поля Дома в формате API (совпадает с колонками pilot_profiles).
@@ -1522,26 +1641,33 @@
       pennant.style.setProperty('--lv', house ? house.color : '#8f8a80');
       pennant.innerHTML = house ? KtbHouses.sigilSvg(house.sigil, { size: 26, strokeWidth: 2.2 }) : '';
       const title = document.getElementById('titleInput').value.trim();
-      document.getElementById('liveryName').textContent = house ? `${title || 'Имя'} из ${house.genitive}` : 'Дом не выбран';
+      const exile = info.standing === 'exile';
+      document.getElementById('liveryName').textContent = house
+        ? `${title || 'Имя'} из ${house.genitive}${exile ? ' — изгнание' : ''}`
+        : (exile ? `${title || 'Имя'} — ${info.label.toLowerCase()}, Дом изгнания не указан` : 'Дом не выбран');
       document.getElementById('liveryNote').textContent = info.standing === 'noble'
         ? 'Тема КТБ: благородная, ливрея Дома над пультом связи.'
-        : 'Тема КТБ: неблагородная — герб Дома перечёркнут.';
+        : (house ? 'Тема КТБ: неблагородная — герб Дома перечёркнут.' : 'Тема КТБ: неблагородная канцелярия, без герба.');
     }
 
     document.addEventListener('DOMContentLoaded', () => {
       bindRadioKeys(document.getElementById('houseGrid'), value => pickHouse(value, true));
       bindRadioKeys(document.getElementById('pilotThemePicker'), value => pickPilotTheme(value, true));
       renderPilotThemePicker();
-      bindRadioKeys(document.getElementById('sigilRow'), id => { houseState.customSigil = id; renderHousePicker(); document.querySelector(`#sigilRow [data-value="${id}"]`)?.focus(); updateLiveryPreview(); });
+      bindRadioKeys(document.getElementById('sigilRow'), id => pickSigil(id, true));
+      document.getElementById('sigilSearch').addEventListener('input', filterSigils);
       document.getElementById('customHouseColor').addEventListener('input', event => {
         houseState.customColor = event.target.value;
         document.querySelector('#houseGrid [data-value="custom"]')?.style.setProperty('--hc', houseState.customColor);
         document.getElementById('sigilRow').style.setProperty('--hc', houseState.customColor);
         updateLiveryPreview();
       });
+      // Смена положения перестраивает выбор Дома: изгнаннику доступно «Не указывать».
+      document.querySelectorAll('input[name="houseStanding"]').forEach(r => r.addEventListener('change', renderHousePicker));
       ['customHouseInput', 'titleInput', 'genderInput'].forEach(id => document.getElementById(id).addEventListener('input', updateLiveryPreview));
       document.querySelectorAll('input[name="houseStanding"]').forEach(r => r.addEventListener('change', updateLiveryPreview));
       renderHousePicker();
+      buildSigilPicker();
     });
 
     async function saveProfile() {

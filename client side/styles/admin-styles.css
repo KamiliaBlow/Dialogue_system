@@ -1944,7 +1944,9 @@ body.theme-ktb .admin-card {
    СТУДИЯ (studio.html): список · содержимое · свойства
    ========================================================================== */
 .studio-page .container {
-    width: auto;
+    /* body — flex-контейнер: без явной ширины студия сжималась до содержимого */
+    width: 100%;
+    box-sizing: border-box;
     max-width: none;
     padding: 12px 20px 20px;
 }
@@ -1958,6 +1960,10 @@ body.theme-ktb .admin-card {
     height: calc(100vh - 110px);
     min-height: 560px;
 }
+
+/* Диалоги: две колонки, правая (портрет) нужна только персонажам. */
+.studio[data-mode="dialogues"] { grid-template-columns: 280px minmax(0, 1fr); }
+.studio[data-mode="dialogues"] .studio-props { display: none; }
 
 .studio-col {
     min-height: 0;
@@ -2015,18 +2021,85 @@ body.theme-ktb .admin-card {
 .studio-center .tree-section { min-height: 0; }
 .studio-center .dialogue-tree-container { height: max(420px, calc(100vh - 430px)); }
 
-details.dialogue-info > summary {
-    cursor: pointer;
+/* «Информация о диалоге»: заголовок — заметная кнопка-полоса; свёрнутый блок показывает сводку. */
+details.dialogue-info { border: 1px solid var(--primary-border); background: rgba(0, 0, 0, 0.18); }
+details.dialogue-info > summary.dialogue-info-summary {
     list-style: none;
+    cursor: pointer;
     display: flex;
-    align-items: baseline;
-    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 14px;
+    user-select: none;
+    transition: background 0.2s;
 }
 details.dialogue-info > summary::-webkit-details-marker { display: none; }
-details.dialogue-info > summary::before { content: '▾'; color: var(--primary-color); }
-details.dialogue-info:not([open]) > summary::before { content: '▸'; }
-.section-summary { font-size: 12px; opacity: 0.7; text-transform: none; letter-spacing: 0; }
-details.dialogue-info[open] .section-summary { display: none; }
+details.dialogue-info > summary:hover,
+details.dialogue-info > summary:focus-visible { background: rgba(var(--primary-rgb), 0.08); outline: none; }
+details.dialogue-info > summary .section-title { margin: 0; padding: 0; border: none; }
+details.dialogue-info[open] > summary { border-bottom: 1px solid var(--primary-border); }
+.dialogue-info-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; min-width: 0; }
+details.dialogue-info[open] .dialogue-info-chips { display: none; }
+.info-chip {
+    padding: 2px 8px;
+    border: 1px solid var(--primary-border);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.info-chip.chip-freq { font-family: 'JetBrains Mono', 'Courier New', monospace; color: var(--primary-color); border-color: var(--primary-color); }
+.info-chip.chip-on { color: var(--rel-positive, #4fd18b); border-color: currentColor; }
+.info-chip.chip-off { color: var(--rel-negative, #e5484d); border-color: currentColor; }
+.dialogue-info-toggle {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1px solid var(--primary-border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--primary-color);
+}
+.dialogue-info-toggle b { display: inline-block; transition: transform 0.2s; font-weight: normal; }
+details.dialogue-info[open] .dialogue-info-toggle b { transform: rotate(180deg); }
+details.dialogue-info[open] .dialogue-info-toggle .when-closed,
+details.dialogue-info:not([open]) .dialogue-info-toggle .when-open { display: none; }
+details.dialogue-info > summary:hover .dialogue-info-toggle { border-color: var(--primary-color); }
+
+.dialogue-info-grid {
+    display: grid;
+    grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) minmax(130px, 170px);
+    gap: 12px 16px;
+    padding: 14px;
+    align-items: start;
+}
+.dialogue-info-grid .form-group { margin: 0; display: flex; flex-direction: column; gap: 5px; }
+.dialogue-info-grid .form-group > label { font-size: 12px; opacity: 0.85; }
+.dialogue-info-grid .form-help { font-size: 11px; margin: 0; }
+.dialogue-info-access { grid-column: 1 / 3; }
+.dialogue-info-active { grid-column: 3; }
+.form-label-spacer { font-size: 12px; }
+.switch-label { display: flex; align-items: center; gap: 8px; min-height: 34px; cursor: pointer; }
+.dialogue-info-users { grid-column: 1 / -1; margin-top: 0; }
+.dialogue-info-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--primary-border);
+}
+@media (max-width: 760px) {
+    .dialogue-info-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .dialogue-info-grid > .form-group:nth-child(2) { grid-column: 1 / -1; grid-row: 1; }
+    .dialogue-info-access, .dialogue-info-active { grid-column: auto; }
+}
 .dirty-mark { font-size: 11px; color: var(--primary-color); margin-left: 8px; letter-spacing: 0; }
 
 .studio-center .characters-container { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
@@ -2061,19 +2134,11 @@ details.dialogue-info[open] .section-summary { display: none; }
 .props-placeholder p { font-size: 13px; opacity: 0.8; line-height: 1.5; }
 .props-panel .form-row { flex-direction: column; gap: 0; }
 .props-panel .form-group { margin-bottom: 14px; }
-.props-panel .form-textarea { min-height: 120px; }
-.sticky-actions {
-    position: sticky;
-    bottom: -20px;
-    margin: 16px -20px -20px;
-    padding: 12px 20px;
-    background: var(--bg-card);
-    border-top: 1px solid var(--primary-border);
-    justify-content: flex-end;
-}
-/* Кнопка плеера «P» висит в правом нижнем углу — не даём ей закрыть «Сохранить». */
-.studio-page .sticky-actions { padding-right: 72px; }
 
+/* Редактор реплики — модальное окно (как до студии): ПКМ / двойной клик / ✎ по реплике. */
+#conversation-modal .modal-content { max-width: 760px; width: calc(100% - 32px); }
+#conversation-modal .form-group { margin-bottom: 14px; }
+#conversation-modal .form-textarea { min-height: 110px; }
 .speaker-card {
     margin-top: 12px;
     padding: 12px;
@@ -2083,9 +2148,7 @@ details.dialogue-info[open] .section-summary { display: none; }
 .speaker-card p { margin: 6px 0 10px; font-size: 12px; opacity: 0.85; }
 .speaker-card .btn { margin: 0 6px 6px 0; }
 
-.props-panel .choice-options-container .choice-option-main { flex-wrap: wrap; }
-.props-panel .choice-option-main .option-text { flex: 1 1 100%; }
-.props-panel .relation-header { width: 100%; border: none; color: inherit; font: inherit; font-size: 11px; text-align: left; }
+#conversation-modal .relation-header { width: 100%; border: none; color: inherit; font: inherit; font-size: 11px; text-align: left; }
 
 /* --- Превью портрета: настоящая рамка канала терминала (258×319) --- */
 .pf-side {
@@ -2200,11 +2263,13 @@ details.dialogue-info[open] .section-summary { display: none; }
 /* Узкие экраны: колонки друг под другом */
 @media (max-width: 1500px) {
     .studio { grid-template-columns: 240px minmax(0, 1fr) 360px; }
+    .studio[data-mode="dialogues"] { grid-template-columns: 240px minmax(0, 1fr); }
     .pf-frame { zoom: 0.9; }
 }
 
 @media (max-width: 1150px) {
-    .studio { grid-template-columns: 1fr; height: auto; }
+    .studio,
+    .studio[data-mode="dialogues"] { grid-template-columns: 1fr; height: auto; }
     .studio-col { max-height: none; overflow: visible; }
     .studio-list .dialogue-list { max-height: 320px; }
     .pf-frame { zoom: 1; }
@@ -2238,7 +2303,41 @@ details.dialogue-info[open] .section-summary { display: none; }
     border: 1px dashed var(--primary-border);
 }
 .variant-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.variant-fields { margin-top: 12px; }
+.variant-section > .form-help { margin: 4px 0 0 24px; }
+.variant-fields { margin-top: 12px; display: grid; gap: 10px; }
+.variant-fields[hidden] { display: none; }
+.variant-block {
+    margin: 0;
+    padding: 8px 12px 12px;
+    border: 1px solid var(--primary-border);
+    background: rgba(var(--primary-rgb), 0.04);
+    min-width: 0;
+}
+.variant-block legend { padding: 0 6px; }
+.variant-block legend label { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--primary-color); letter-spacing: 0.06em; }
+.variant-block.is-off { background: transparent; border-style: dashed; }
+.variant-block.is-off legend label { opacity: 0.75; }
+.variant-off-note { margin: 0; }
+.variant-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 170px); gap: 10px; }
+.variant-row .form-group { margin-bottom: 0; }
+.variant-block .voiceline-selector { display: flex; gap: 6px; align-items: center; }
+.variant-block .voiceline-selector select { flex: 1 1 auto; min-width: 0; }
+@media (max-width: 640px) { .variant-row { grid-template-columns: 1fr; } }
+
+/* Вариант ответа: тексты для сословий */
+.option-estates { margin-top: 6px; }
+.option-estates-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.option-estates-fields { display: grid; gap: 6px; margin: 6px 0 0 20px; }
+.option-estates-fields[hidden] { display: none; }
+.option-estate-row { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px; align-items: center; }
+.option-estate-row label { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.option-estate-row.is-off .option-estate-text { opacity: 0.45; }
+.choice-option-main .option-text { flex: 1 1 260px; min-width: 0; }
+.relation-summary { opacity: 0.85; }
+.choice-option-relation.has-relation .relation-summary { color: var(--primary-color); opacity: 1; }
+.relation-fields .form-input:disabled { opacity: 0.4; }
+.relation-help { margin-top: 2px; }
+@media (max-width: 640px) { .option-estate-row { grid-template-columns: 1fr; } }
 
 .conversation-preview {
     margin: 0 0 16px;
@@ -2255,3 +2354,91 @@ details.dialogue-info[open] .section-summary { display: none; }
 .preview-line.is-variant .preview-who::after { content: ' ⇄'; color: var(--primary-color); }
 
 .tree-node-badge.variant-badge { border-color: var(--primary-color); color: var(--primary-color); }
+
+/* ==========================================================================
+   ИГРОКИ: пилоты выбранного игрока и их правка
+   ========================================================================== */
+.player-pilots { display: grid; gap: 8px; margin-bottom: 6px; }
+.pilot-card {
+    padding: 10px 12px;
+    border: 1px solid var(--primary-border);
+    background: rgba(var(--primary-rgb), 0.04);
+    display: grid;
+    gap: 6px;
+}
+.pilot-card.is-active { border-color: var(--primary-color); box-shadow: inset 3px 0 0 var(--primary-color); }
+.pilot-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.pilot-slot { font-size: 11px; opacity: 0.6; letter-spacing: 0.08em; }
+.pilot-callsign { letter-spacing: 0.08em; }
+.pilot-card-meta { font-size: 12px; opacity: 0.8; overflow-wrap: anywhere; }
+.pilot-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.pilot-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.pilot-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; }
+.pilot-form-grid .form-group { margin: 0; }
+.pilot-form-grid .pilot-wide { grid-column: 1 / -1; }
+.pilot-cavalier { padding: 10px 12px; border: 1px dashed var(--primary-border); }
+#pilot-modal input[type="color"] { height: 36px; padding: 2px; }
+@media (max-width: 640px) { .pilot-form-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ==========================================================================
+   ДЕРЕВО: протягивание связи за курсором и ножницы
+   ========================================================================== */
+/* Тема красит все пути дерева (!important) — зоне попадания нужен свой прозрачный цвет. */
+.dialogue-tree-svg .tree-edge-hit { fill: none; stroke: transparent !important; pointer-events: stroke; cursor: pointer; }
+.tree-edge.edge-hover { opacity: 1; stroke-width: 3px; }
+
+/* Перемычки: двойной клик по связи — кружок едет по линии, ЛКМ ставит, ПКМ отменяет.
+   Готовую перемычку тянут ЛКМ, убирают ПКМ. */
+.dialogue-tree-svg .tree-reroute {
+    fill: var(--bg-card, #111);
+    stroke: var(--t-accent, var(--primary-color));
+    stroke-width: 2px;
+    pointer-events: all;
+    cursor: grab;
+}
+.dialogue-tree-svg .tree-reroute.choice-reroute { stroke: #f39c12; }
+.dialogue-tree-svg .tree-reroute:hover { fill: var(--t-accent, var(--primary-color)); }
+.dialogue-tree-svg .tree-reroute-ghost { pointer-events: none; fill: var(--t-accent, var(--primary-color)); opacity: 0.85; }
+.dialogue-tree-container.placing,
+.dialogue-tree-container.placing * { cursor: crosshair !important; }
+.dialogue-tree-container.dragging-point,
+.dialogue-tree-container.dragging-point * { cursor: grabbing !important; }
+.dialogue-tree-container.placing::after {
+    content: 'Перемычка: ЛКМ — поставить · ПКМ или Esc — отмена';
+    position: absolute; left: 10px; bottom: 10px; padding: 4px 10px;
+    border: 1px solid var(--primary-border); background: var(--bg-card);
+    font-size: 11px; pointer-events: none; z-index: 5;
+}
+.tree-edge-preview { stroke-dasharray: 6, 4; opacity: 1; pointer-events: none; }
+
+/* Связь тянется за курсором: цели подсвечиваются, ПКМ или Esc — отмена. */
+.dialogue-tree-container.connecting { cursor: crosshair; }
+.dialogue-tree-container.connecting .tree-node-visual { cursor: copy; }
+.dialogue-tree-container.connecting .tree-node-visual:not(.connecting-mode):not(.has-choice):hover {
+    outline: 2px dashed var(--primary-color);
+    outline-offset: 3px;
+}
+.dialogue-tree-container.connecting .tree-node-visual.has-choice { cursor: not-allowed; }
+
+/* Ножницы: наведите на связь и нажмите. ПКМ или Esc — отмена. */
+.dialogue-tree-container.cutting { cursor: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' stroke='%23111' stroke-width='4' stroke-linecap='round'%3E%3Ccircle cx='7' cy='21' r='3.5'/%3E%3Ccircle cx='21' cy='21' r='3.5'/%3E%3Cpath d='M9.5 18.5 20 4M18.5 18.5 8 4'/%3E%3C/g%3E%3Cg fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='21' r='3.5'/%3E%3Ccircle cx='21' cy='21' r='3.5'/%3E%3Cpath d='M9.5 18.5 20 4M18.5 18.5 8 4'/%3E%3C/g%3E%3C/svg%3E") 14 14, crosshair; }
+.dialogue-tree-container.cutting .tree-edge-hit { pointer-events: stroke; cursor: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' stroke='%23111' stroke-width='4' stroke-linecap='round'%3E%3Ccircle cx='7' cy='21' r='3.5'/%3E%3Ccircle cx='21' cy='21' r='3.5'/%3E%3Cpath d='M9.5 18.5 20 4M18.5 18.5 8 4'/%3E%3C/g%3E%3Cg fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='21' r='3.5'/%3E%3Ccircle cx='21' cy='21' r='3.5'/%3E%3Cpath d='M9.5 18.5 20 4M18.5 18.5 8 4'/%3E%3C/g%3E%3C/svg%3E") 14 14, crosshair; }
+.dialogue-tree-container.cutting .tree-node-visual { pointer-events: none; opacity: 0.75; }
+.tree-edge.cut-hover { stroke: var(--danger-color, #ff5a4e) !important; opacity: 1; stroke-width: 4px; stroke-dasharray: 6, 4; }
+
+/* Подсказка режима в углу дерева */
+.dialogue-tree-container.connecting::after,
+.dialogue-tree-container.cutting::after {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    padding: 4px 10px;
+    border: 1px solid var(--primary-border);
+    background: var(--bg-card);
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 5;
+}
+.dialogue-tree-container.connecting::after { content: 'Связь: нажмите на реплику · ПКМ или Esc — отмена'; }
+.dialogue-tree-container.cutting::after { content: 'Ножницы: наведите на связь и нажмите · ПКМ или Esc — отмена'; }

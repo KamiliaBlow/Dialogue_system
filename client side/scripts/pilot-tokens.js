@@ -7,14 +7,14 @@
 //   <House>    — Дом в родительном падеже              Дома Стекла
 // Пустая метка забирает за собой один пробел: «<Title> <Name>» у Лансера даёт «HAMMER».
 //
-// Вариант реплики: у реплики может быть замена для аудитории 'cavalier' или 'lancer'.
-// Кавалер в Доме — аудитория 'cavalier'; Лансер и Кавалер-изгнанник — 'lancer'
-// (так же, как в теме КТБ: изгнанник видит интерфейс неблагородных).
+// Вариант реплики: основная реплика звучит Лансеру; у неё может быть замена для Кавалера
+// в Доме ('cavalier') и для Кавалера-изгнанника ('exile'). Нет замены — звучит основная.
+// То же у вариантов ответа: свой текст для Кавалера и для изгнанника.
 // Используется терминалом (dialogue.js) и превью студии.
 
 export const TOKENS = Object.freeze(['Name', 'FullName', 'Title', 'House']);
-export const AUDIENCES = Object.freeze(['cavalier', 'lancer']);
-export const AUDIENCE_LABELS = Object.freeze({ cavalier: 'Кавалер', lancer: 'Лансер' });
+export const AUDIENCES = Object.freeze(['cavalier', 'exile']);
+export const AUDIENCE_LABELS = Object.freeze({ cavalier: 'Кавалер в Доме', exile: 'Изгнанник', lancer: 'Лансер' });
 
 const TOKEN_RE = /<(Name|FullName|Title|House)>( ?)/g;
 const TOKEN_TEST = /<(?:Name|FullName|Title|House)>/;
@@ -23,9 +23,11 @@ function clean(value) {
     return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
 }
 
+// cavalier — Кавалер в Доме, exile — Кавалер-изгнанник, lancer — Лансер.
 export function audienceOf(profile) {
     const p = profile || {};
-    return p.estate === 'cavalier' && p.house_standing !== 'exile' ? 'cavalier' : 'lancer';
+    if (p.estate !== 'cavalier') return 'lancer';
+    return p.house_standing === 'exile' ? 'exile' : 'cavalier';
 }
 
 function houseGenitive(profile) {
@@ -46,7 +48,7 @@ export function tokenValues(profile) {
         .replace(/^(?:леди|лорд)\s+/i, '')
         .replace(/\s+из\s+дома?\s+.+$/i, '')
         .trim();
-    const isNobleCavalier = audienceOf(p) === 'cavalier';
+    const isNobleCavalier = audienceOf(p) === 'cavalier';   // изгнанник титула не носит
     const title = isNobleCavalier ? ({ female: 'леди', male: 'лорд' }[p.gender] || '') : '';
     return {
         Name: callsign,
@@ -90,17 +92,23 @@ export function resolveVariant(conversation, audience) {
 export function prepareConversation(conversation, profile) {
     if (!conversation || typeof conversation !== 'object') return conversation;
     const values = tokenValues(profile);
-    const resolved = resolveVariant(conversation, audienceOf(profile));
+    const audience = audienceOf(profile);
+    const resolved = resolveVariant(conversation, audience);
     const out = { ...resolved, text: applyTokens(resolved.text, values) };
     if (out.fakeName) out.fakeName = applyTokens(out.fakeName, values);
     if (out.choice?.options) {
         out.choice = {
             ...out.choice,
-            options: out.choice.options.map(opt => ({
-                ...opt,
-                rawText: opt.rawText ?? opt.text,
-                text: applyTokens(opt.text, values)
-            }))
+            options: out.choice.options.map(opt => {
+                const shown = opt.variants?.[audience] || opt.text;
+                const prepared = {
+                    ...opt,
+                    rawText: opt.rawText ?? opt.text,   // в статистику — основной текст ответа
+                    text: applyTokens(shown, values)
+                };
+                delete prepared.variants;
+                return prepared;
+            })
         };
     }
     delete out.variants;

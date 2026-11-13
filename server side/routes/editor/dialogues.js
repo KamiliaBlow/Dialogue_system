@@ -62,7 +62,12 @@ module.exports = (db, upload) => {
                             db.all(`SELECT * FROM conversation_variants WHERE conversation_id IN (${convIds.map(() => '?').join(',')})`,
                                 convIds, (err, variants) => {
                                 if (err) return res.status(500).json({ message: 'Ошибка получения вариантов реплик' });
-                                res.json({ dialogue, characters, branches, conversations, choices, variants });
+                                db.all('SELECT edge_key, points FROM dialogue_edge_points WHERE dialogue_id = ?', [dialogue.id], (err, rows) => {
+                                    if (err) return res.status(500).json({ message: 'Ошибка получения перемычек' });
+                                    const edgePoints = {};
+                                    (rows || []).forEach(r => { try { edgePoints[r.edge_key] = JSON.parse(r.points); } catch { /* битая запись */ } });
+                                    res.json({ dialogue, characters, branches, conversations, choices, variants, edgePoints });
+                                });
                             });
                         });
                     });
@@ -266,9 +271,9 @@ router.post('/conversations', (req, res) => {
     });
 
     // ==================== ВАРИАНТЫ РЕПЛИК ДЛЯ СОСЛОВИЙ ====================
-    // Вариант заменяет реплику для аудитории: cavalier (Кавалер в Доме) или lancer
-    // (Лансер и Кавалер-изгнанник). Своя озвучка обязательна к своему тексту.
-    const AUDIENCES = ['cavalier', 'lancer'];
+    // Основная реплика — для Лансера. Вариант заменяет её для аудитории: cavalier (Кавалер в Доме)
+    // или exile (Кавалер-изгнанник). Своя озвучка обязательна к своему тексту.
+    const AUDIENCES = ['cavalier', 'exile'];
     const assetOrEmpty = value => {
         if (value === undefined || value === null || value === '') return '';
         const safe = typeof value === 'string' ? sanitizeAssetPath(value) : null;
@@ -400,6 +405,8 @@ router.post('/conversations', (req, res) => {
     // Создать ветку с репликой и выбором (для новых веток из choices)
     router.post('/branches/with-conversation', (req, res) => {
         const { dialogueId, branchId, characterId, conversationId, choiceId, optionId, optionText, sortOrder } = req.body;
+        const relation = relationFields(req.body);
+        const estateTexts = optionEstateTexts(req.body);
         
         if (!dialogueId || !branchId || !characterId) {
             return res.status(400).json({ message: 'dialogueId, branchId и characterId обязательны' });
@@ -425,8 +432,12 @@ router.post('/conversations', (req, res) => {
                                 return res.status(500).json({ message: 'Ошибка создания реплики' });
                             }
                             
-                            db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order, relation_npc_id, relation_require_min, relation_require_max, relation_effect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                                [conversationId, choiceId, optionId, optionText, branchId, sortOrder || 0, null, -100, 100, 0], (err) => {
+                            db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order,
+                                        relation_global_char_id, relation_require_min, relation_require_max, relation_effect,
+                                        option_text_cavalier, option_text_exile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                [conversationId, choiceId, optionId, optionText, branchId, sortOrder || 0,
+                                 relation.charId, relation.min, relation.max, relation.effect,
+                                 estateTexts.cavalier, estateTexts.exile], function(err) {
                                     if (err) {
                                         db.run('ROLLBACK');
                                         return res.status(500).json({ message: 'Ошибка создания выбора' });
@@ -486,55 +497,65 @@ router.post('/conversations', (req, res) => {
     });
 
     // Создать sequential связь между репликами
+    // Создать связь A → B (протягивание связи в студии).
+    // B и все реплики после неё в её ветке переезжают в конец ветки A — так отрезанное ножницами
+    // дерево пришивается обратно целиком. Нельзя: если у A уже есть следующая реплика или выбор,
+    // если B — начало ветки ответа, и если связь замкнёт цикл.
     router.post('/conversations/link', (req, res) => {
         const { fromConversationId, toConversationId } = req.body;
-        
         if (!fromConversationId || !toConversationId) {
             return res.status(400).json({ message: 'fromConversationId и toConversationId обязательны' });
         }
-        
-        if (fromConversationId === toConversationId) {
+        if (String(fromConversationId) === String(toConversationId)) {
             return res.status(400).json({ message: 'Нельзя связать реплику саму с собой' });
         }
-        
-        db.serialize(() => {
-            db.get('SELECT * FROM conversations WHERE id = ?', [fromConversationId], (err, fromConv) => {
-                if (err) return res.status(500).json({ message: 'Ошибка получения исходной реплики' });
-                if (!fromConv) return res.status(404).json({ message: 'Исходная реплика не найдена' });
-                
-                db.get('SELECT * FROM conversations WHERE id = ?', [toConversationId], (err, toConv) => {
-                    if (err) return res.status(500).json({ message: 'Ошибка получения целевой реплики' });
-                    if (!toConv) return res.status(404).json({ message: 'Целевая реплика не найдена' });
-                    
-                    db.get('SELECT id FROM choice_options WHERE conversation_id = ?', [fromConversationId], (err, fromChoice) => {
-                        if (err) return res.status(500).json({ message: 'Ошибка проверки выбора' });
-                        if (fromChoice) return res.status(400).json({ message: 'Исходная реплика имеет выбор' });
-                        
-                        db.get('SELECT id FROM choice_options WHERE conversation_id = ?', [toConversationId], (err, toChoice) => {
-                            if (err) return res.status(500).json({ message: 'Ошибка проверки выбора' });
-                            if (toChoice) return res.status(400).json({ message: 'Целевая реплика имеет выбор' });
-                            
-                            const dialogueId = fromConv.dialogue_id;
-                            const targetBranch = fromConv.branch_id;
-                            
-                            db.get(
-                                'SELECT MAX(sort_order) as maxSort FROM conversations WHERE dialogue_id = ? AND branch_id = ?',
-                                [dialogueId, targetBranch],
-                                (err, row) => {
-                                    if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
-                                    
-                                    const newSortOrder = (row.maxSort || 0) + 1;
-                                    
-                                    db.run(
-                                        'UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
-                                        [targetBranch, newSortOrder, toConversationId],
-                                        (err) => {
-                                            if (err) return res.status(500).json({ message: 'Ошибка создания связи' });
-                                            res.json({ message: 'Связь создана' });
-                                        }
-                                    );
+        db.all('SELECT * FROM conversations WHERE id IN (?, ?)', [fromConversationId, toConversationId], (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+            const from = rows.find(r => String(r.id) === String(fromConversationId));
+            const to = rows.find(r => String(r.id) === String(toConversationId));
+            if (!from || !to) return res.status(404).json({ message: 'Реплика не найдена' });
+
+            db.get('SELECT id FROM choice_options WHERE conversation_id = ? LIMIT 1', [from.id], (err, fromChoice) => {
+                if (err) return res.status(500).json({ message: 'Ошибка проверки выбора' });
+                if (fromChoice) return res.status(400).json({ message: 'У исходной реплики есть выбор: она ведёт в ветки ответов' });
+
+                db.get('SELECT id FROM conversations WHERE dialogue_id = ? AND branch_id = ? AND sort_order > ? LIMIT 1',
+                    [from.dialogue_id, from.branch_id, from.sort_order], (err, next) => {
+                    if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+                    if (next) return res.status(400).json({ message: 'У реплики уже есть следующая. Сначала обрежьте ту связь ножницами' });
+
+                    db.all(`SELECT id, sort_order FROM conversations WHERE dialogue_id = ? AND branch_id = ? AND sort_order >= ?
+                            ORDER BY sort_order, id`, [to.dialogue_id, to.branch_id, to.sort_order], (err, tail) => {
+                        if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+                        if (tail.some(t => t.id === from.id)) {
+                            return res.status(400).json({ message: 'Связь замкнёт диалог в круг' });
+                        }
+                        db.get(`SELECT COUNT(*) AS n FROM conversations WHERE dialogue_id = ? AND branch_id = ? AND sort_order < ?`,
+                            [to.dialogue_id, to.branch_id, to.sort_order], (err, before) => {
+                            if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+                            const isBranchStart = before.n === 0;
+                            db.get('SELECT id FROM choice_options WHERE target_branch = ? AND target_branch != ? LIMIT 1',
+                                [to.branch_id, 'main'], (err, choiceInto) => {
+                                if (err) return res.status(500).json({ message: 'Ошибка проверки выбора' });
+                                if (isBranchStart && choiceInto) {
+                                    return res.status(400).json({ message: 'Реплика — начало ветки ответа. Сначала обрежьте связь ответа ножницами' });
                                 }
-                            );
+                                if (isBranchStart && to.branch_id === 'main') {
+                                    return res.status(400).json({ message: 'Это начало диалога — к нему нельзя присоединить' });
+                                }
+                                db.serialize(() => {
+                                    db.run('BEGIN TRANSACTION');
+                                    tail.forEach((t, i) => db.run('UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?',
+                                        [from.branch_id, from.sort_order + 1 + i, t.id]));
+                                    db.run('COMMIT', (err) => {
+                                        if (err) {
+                                            db.run('ROLLBACK');
+                                            return res.status(500).json({ message: 'Ошибка создания связи' });
+                                        }
+                                        res.json({ message: 'Связь создана', moved: tail.length });
+                                    });
+                                });
+                            });
                         });
                     });
                 });
@@ -571,6 +592,78 @@ router.post('/conversations', (req, res) => {
                 });
             }
         );
+    });
+
+    // Перемычки линии связи (студия): пустой список — линия снова идёт напрямую.
+    router.put('/dialogues/:id/edge-points', (req, res) => {
+        const { edgeKey, points } = req.body;
+        if (typeof edgeKey !== 'string' || !/^(seq:\d+:\d+|choice:\d+)$/.test(edgeKey)) {
+            return res.status(400).json({ message: 'Неизвестная связь' });
+        }
+        if (!Array.isArray(points) || points.length > 30) return res.status(400).json({ message: 'Некорректные точки' });
+        const clean = points.map(p => ({
+            dx: Math.round(Math.max(-20000, Math.min(20000, Number(p?.dx) || 0)) * 10) / 10,
+            dy: Math.round(Math.max(-20000, Math.min(20000, Number(p?.dy) || 0)) * 10) / 10
+        }));
+        const done = err => err ? res.status(500).json({ message: 'Ошибка сохранения перемычек' }) : res.json({ message: 'Сохранено' });
+        if (!clean.length) {
+            return db.run('DELETE FROM dialogue_edge_points WHERE dialogue_id = ? AND edge_key = ?', [req.params.id, edgeKey], done);
+        }
+        db.run(`INSERT INTO dialogue_edge_points (dialogue_id, edge_key, points, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(dialogue_id, edge_key) DO UPDATE SET points = excluded.points, updated_at = CURRENT_TIMESTAMP`,
+            [req.params.id, edgeKey, JSON.stringify(clean)], done);
+    });
+
+    // Обрезать связь в дереве (ножницы в студии).
+    //  - sequential: A → B внутри ветки. B и всё после неё уходят в новую ветку detached_*,
+    //    порядок сохраняется; ветка до A остаётся на месте.
+    //  - choice: ответ → ветка. Ответ остаётся, но больше никуда не ведёт (диалог на нём завершается).
+    router.post('/conversations/cut', (req, res) => {
+        const { type, fromConversationId, toConversationId, choiceOptionId } = req.body;
+
+        if (type === 'choice') {
+            if (!choiceOptionId) return res.status(400).json({ message: 'choiceOptionId обязателен' });
+            return db.run('UPDATE choice_options SET target_branch = NULL WHERE id = ?', [choiceOptionId], function(err) {
+                if (err) return res.status(500).json({ message: 'Ошибка обрезки связи' });
+                if (this.changes === 0) return res.status(404).json({ message: 'Ответ не найден' });
+                db.run('DELETE FROM dialogue_edge_points WHERE edge_key = ?', [`choice:${choiceOptionId}`]);
+                res.json({ message: 'Связь ответа обрезана' });
+            });
+        }
+
+        if (type !== 'sequential' || !fromConversationId || !toConversationId) {
+            return res.status(400).json({ message: 'Неизвестная связь' });
+        }
+        db.all('SELECT * FROM conversations WHERE id IN (?, ?)', [fromConversationId, toConversationId], (err, rows) => {
+            if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+            const from = rows.find(r => String(r.id) === String(fromConversationId));
+            const to = rows.find(r => String(r.id) === String(toConversationId));
+            if (!from || !to) return res.status(404).json({ message: 'Реплика не найдена' });
+            if (from.branch_id !== to.branch_id || to.sort_order < from.sort_order) {
+                return res.status(400).json({ message: 'Реплики не связаны напрямую' });
+            }
+            db.all(`SELECT id FROM conversations WHERE dialogue_id = ? AND branch_id = ? AND sort_order >= ?
+                    ORDER BY sort_order, id`, [to.dialogue_id, to.branch_id, to.sort_order], (err, tail) => {
+                if (err) return res.status(500).json({ message: 'Ошибка получения реплик' });
+                const tailIds = tail.map(t => t.id);
+                // to — первая в хвосте; если между from и to есть реплики, связи нет.
+                if (tailIds[0] !== to.id) return res.status(400).json({ message: 'Реплики не связаны напрямую' });
+                const detachedBranch = `detached_${Date.now()}`;
+                db.serialize(() => {
+                    db.run('BEGIN TRANSACTION');
+                    db.run('INSERT INTO conversation_branches (dialogue_id, branch_id) VALUES (?, ?)', [to.dialogue_id, detachedBranch]);
+                    db.run('DELETE FROM dialogue_edge_points WHERE dialogue_id = ? AND edge_key = ?', [to.dialogue_id, `seq:${from.id}:${to.id}`]);
+                    tailIds.forEach((id, i) => db.run('UPDATE conversations SET branch_id = ?, sort_order = ? WHERE id = ?', [detachedBranch, i, id]));
+                    db.run('COMMIT', (err) => {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ message: 'Ошибка обрезки связи' });
+                        }
+                        res.json({ message: 'Связь обрезана', newBranch: detachedBranch, moved: tailIds.length });
+                    });
+                });
+            });
+        });
     });
 
     // Отсоединить реплику (перенести в отдельную ветку)
@@ -614,19 +707,35 @@ router.post('/conversations', (req, res) => {
     // ==================== ВЫБОРЫ ====================
     
     // Создать выбор
+    // Отношения варианта ответа: без персонажа ответ ни на чьё отношение не влияет,
+    // пороги и эффект тогда сбрасываются, чтобы не остались «висящие» значения.
+    function relationFields(body) {
+        const charId = parseInt(body.relationGlobalCharId) || null;
+        const num = (v, fallback) => Number.isFinite(parseInt(v)) ? Math.max(-100, Math.min(100, parseInt(v))) : fallback;
+        if (!charId) return { charId: null, min: -100, max: 100, effect: 0 };
+        return { charId, min: num(body.relationRequireMin, -100), max: num(body.relationRequireMax, 100), effect: num(body.relationEffect, 0) };
+    }
+
+    // Текст ответа для Кавалера в Доме и для изгнанника; пусто — основной текст.
+    function optionEstateTexts(body) {
+        const clean = v => (typeof v === 'string' ? v.trim().slice(0, 1000) : '');
+        return { cavalier: clean(body.optionTextCavalier), exile: clean(body.optionTextExile) };
+    }
+
     router.post('/choices', (req, res) => {
-        const { conversationId, choiceId, optionId, optionText, targetBranch, sortOrder, relationGlobalCharId, relationRequireMin, relationRequireMax, relationEffect } = req.body;
-        
+        const { conversationId, choiceId, optionId, optionText, targetBranch, sortOrder } = req.body;
+
         if (!conversationId || !choiceId || !optionId || !optionText) {
             return res.status(400).json({ message: 'Не все обязательные поля заполнены' });
         }
-        
-        db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order, relation_global_char_id, relation_require_min, relation_require_max, relation_effect) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        const relation = relationFields(req.body);
+        const estateTexts = optionEstateTexts(req.body);
+
+        db.run(`INSERT INTO choice_options (conversation_id, choice_id, option_id, option_text, target_branch, sort_order,
+                    relation_global_char_id, relation_require_min, relation_require_max, relation_effect,
+                    option_text_cavalier, option_text_exile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [conversationId, choiceId, optionId, optionText, targetBranch, sortOrder || 0,
-             relationGlobalCharId || null,
-             relationRequireMin !== undefined ? relationRequireMin : -100,
-             relationRequireMax !== undefined ? relationRequireMax : 100,
-             relationEffect || 0],
+             relation.charId, relation.min, relation.max, relation.effect, estateTexts.cavalier, estateTexts.exile],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания выбора' });
                 res.status(201).json({ message: 'Выбор создан', choiceOptionId: this.lastID });
@@ -635,14 +744,16 @@ router.post('/conversations', (req, res) => {
 
     router.put('/choices/:id', (req, res) => {
         const { id } = req.params;
-        const { choiceId, optionId, optionText, targetBranch, sortOrder, relationGlobalCharId, relationRequireMin, relationRequireMax, relationEffect } = req.body;
-        
-        db.run(`UPDATE choice_options SET choice_id = ?, option_id = ?, option_text = ?, target_branch = ?, sort_order = ?, relation_global_char_id = ?, relation_require_min = ?, relation_require_max = ?, relation_effect = ? WHERE id = ?`,
+        const { choiceId, optionId, optionText, targetBranch, sortOrder } = req.body;
+        const relation = relationFields(req.body);
+        const estateTexts = optionEstateTexts(req.body);
+
+        db.run(`UPDATE choice_options SET choice_id = ?, option_id = ?, option_text = ?, target_branch = ?, sort_order = ?,
+                    relation_global_char_id = ?, relation_npc_id = NULL, relation_require_min = ?, relation_require_max = ?, relation_effect = ?,
+                    option_text_cavalier = ?, option_text_exile = ? WHERE id = ?`,
             [choiceId, optionId, optionText, targetBranch, sortOrder,
-             relationGlobalCharId || null,
-             relationRequireMin !== undefined ? relationRequireMin : -100,
-             relationRequireMax !== undefined ? relationRequireMax : 100,
-             relationEffect || 0, id],
+             relation.charId, relation.min, relation.max, relation.effect,
+             estateTexts.cavalier, estateTexts.exile, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления выбора' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Выбор не найден' });

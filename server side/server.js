@@ -525,12 +525,13 @@ function initDatabase() {
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`,
-        // Вариант реплики для сословия пилота: заменяет основную реплику, когда аудитория совпадает.
-        // cavalier — Кавалер в Доме; lancer — Лансер и Кавалер-изгнанник (client side/scripts/pilot-tokens.js).
+        // Вариант реплики для сословия пилота. Основная реплика — для Лансера; вариант её заменяет,
+        // когда сословие совпадает: cavalier — Кавалер в Доме, exile — Кавалер-изгнанник.
+        // Нет варианта — звучит основная реплика (client side/scripts/pilot-tokens.js).
         `CREATE TABLE IF NOT EXISTS conversation_variants (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             conversation_id INTEGER NOT NULL,
-            audience TEXT NOT NULL CHECK (audience IN ('cavalier', 'lancer')),
+            audience TEXT NOT NULL CHECK (audience IN ('cavalier', 'exile')),
             text TEXT NOT NULL,
             voiceline TEXT NOT NULL DEFAULT '',
             fake_name TEXT NOT NULL DEFAULT '',
@@ -539,6 +540,16 @@ function initDatabase() {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
             UNIQUE(conversation_id, audience)
+        )`,
+        // Перемычки связей в дереве студии: точки, через которые идёт линия связи.
+        // edge_key — seq:<из>:<в> (реплики подряд) или choice:<id ответа>; points — JSON [{dx, dy}],
+        // смещения от нижней середины исходной реплики (так перемычки едут вместе с ней).
+        `CREATE TABLE IF NOT EXISTS dialogue_edge_points (
+            dialogue_id INTEGER NOT NULL,
+            edge_key TEXT NOT NULL,
+            points TEXT NOT NULL DEFAULT '[]',
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (dialogue_id, edge_key)
         )`,
         // Реплику удаляют из разных мест (реплика, ветка, диалог) — варианты уходят вместе с ней
         // независимо от PRAGMA foreign_keys.
@@ -724,6 +735,17 @@ tables.forEach(sql => db.run(sql));
             Logger.error('Migration error (relation_global_char_id):', err.message);
         }
     });
+
+    // Текст варианта ответа для Кавалера в Доме и для изгнанника; пусто — основной текст.
+    ['option_text_cavalier', 'option_text_exile'].forEach(column => {
+        db.run(`ALTER TABLE choice_options ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                Logger.error(`Migration error (${column}):`, err.message);
+            }
+        });
+    });
+
+    migrateConversationVariants();
 
     db.all("PRAGMA table_info(user_relations)", [], (err, cols) => {
         if (!err && cols && cols.length > 0) {
@@ -953,7 +975,9 @@ app.use('/api', authRoutes);
 
 // Совпадает с client side/scripts/ktb-houses.js.
 const KTB_HOUSE_KEYS = ['order', 'glass', 'smoke', 'stone', 'sand', 'water', 'dust', 'moments', 'remembrance', 'promise'];
-const KTB_SIGILS = [...KTB_HOUSE_KEYS, 'crown', 'tower', 'blade', 'wing', 'star', 'key'];
+// Знак своего Дома: id из набора client side/scripts/ktb-houses.js (набор пополняется,
+// поэтому проверяется формат id); незнакомый id клиент рисует короной.
+const KTB_SIGIL_ID = /^[a-z][a-z0-9-]{0,23}$/;
 const VALID_THEMES = ['yellow', 'green', 'ktb'];
 
 // Тема по умолчанию для нового пилота — последняя выбранная пользователем (user_settings.theme).
@@ -1009,64 +1033,62 @@ pilotRoutes.get('/pilot-profiles/active', requireAuth, (req, res) => {
         });
 });
 
-pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
-    const { slot_number, callsign, full_name, mech_name, avatar_path, gender, estate, is_nhp,
-        house_key, house_custom, house_color, house_sigil, house_standing, theme } = req.body;
-    const userId = req.session.userId;
+// Проверка и нормализация полей пилота — общая для досье игрока и админ-панели.
+// Возвращает { error } или { pilot } (тема — null, если не передана).
+function normalizePilotFields(body) {
+    const { callsign, full_name, mech_name, gender, estate, is_nhp,
+        house_key, house_custom, house_color, house_sigil, house_standing, theme } = body || {};
     const normalizedGender = gender === undefined ? 'neutral' : gender;
     const normalizedEstate = estate === undefined ? 'lancer' : estate;
+
+    if (typeof callsign !== 'string' || callsign.trim() === '') return { error: 'Позывной обязателен' };
+    if (typeof mech_name !== 'string' || mech_name.trim() === '') return { error: 'Название меха обязательно' };
+    if (full_name !== undefined && full_name !== null && typeof full_name !== 'string') return { error: 'Некорректное полное имя' };
+    if (!['female', 'male', 'neutral'].includes(normalizedGender)) return { error: 'Неизвестная форма обращения' };
+    if (!['cavalier', 'lancer'].includes(normalizedEstate)) return { error: 'Неизвестный статус персонажа' };
+    if (is_nhp !== undefined && ![0, 1, '0', '1', true, false].includes(is_nhp)) return { error: 'Некорректный признак НЧЛ' };
+
+    // Дом хранится только у Кавалера; у Лансера поля обнуляются.
+    const isCavalier = normalizedEstate === 'cavalier';
+    const houseKey = isCavalier && typeof house_key === 'string' ? house_key : '';
+    if (houseKey && !KTB_HOUSE_KEYS.includes(houseKey) && houseKey !== 'custom') return { error: 'Неизвестный Дом' };
+    const houseCustom = houseKey === 'custom' && typeof house_custom === 'string'
+        ? house_custom.trim().replace(/\s+/g, ' ').slice(0, 60) : '';
+    if (houseKey === 'custom' && !houseCustom) return { error: 'Укажите название своего Дома' };
+
+    // Тема пилота: не передана — у существующего пилота сохраняется, новому достаётся тема пользователя.
+    if (theme !== undefined && theme !== null && theme !== '' && !VALID_THEMES.includes(theme)) return { error: 'Неизвестная тема' };
+
+    return {
+        pilot: {
+            callsign: callsign.trim().slice(0, 60),
+            full_name: typeof full_name === 'string' ? full_name.trim().slice(0, 160) : '',
+            mech_name: mech_name.trim().slice(0, 60),
+            gender: normalizedGender,
+            estate: normalizedEstate,
+            is_nhp: [1, '1', true].includes(is_nhp) ? 1 : 0,
+            house_key: houseKey,
+            house_custom: houseCustom,
+            house_color: houseKey === 'custom' && typeof house_color === 'string' && /^#[0-9a-f]{6}$/i.test(house_color)
+                ? house_color.toLowerCase() : '',
+            house_sigil: houseKey === 'custom' && typeof house_sigil === 'string' && KTB_SIGIL_ID.test(house_sigil) ? house_sigil : '',
+            house_standing: isCavalier && house_standing === 'exile' ? 'exile' : 'member',
+            theme: VALID_THEMES.includes(theme) ? theme : null
+        }
+    };
+}
+
+pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
+    const { slot_number, avatar_path } = req.body;
+    const userId = req.session.userId;
 
     if (!slot_number || slot_number < 1 || slot_number > 3) {
         return res.status(400).json({ message: 'Номер слота должен быть от 1 до 3' });
     }
-
-    if (typeof callsign !== 'string' || callsign.trim() === '') {
-        return res.status(400).json({ message: 'Позывной обязателен' });
-    }
-
-    if (typeof mech_name !== 'string' || mech_name.trim() === '') {
-        return res.status(400).json({ message: 'Название меха обязательно' });
-    }
-
-    if (full_name !== undefined && full_name !== null && typeof full_name !== 'string') {
-        return res.status(400).json({ message: 'Некорректное полное имя' });
-    }
-
-    if (!['female', 'male', 'neutral'].includes(normalizedGender)) {
-        return res.status(400).json({ message: 'Неизвестная форма обращения' });
-    }
-
-    if (!['cavalier', 'lancer'].includes(normalizedEstate)) {
-        return res.status(400).json({ message: 'Неизвестный статус персонажа' });
-    }
-
-    if (is_nhp !== undefined && ![0, 1, '0', '1', true, false].includes(is_nhp)) {
-        return res.status(400).json({ message: 'Некорректный признак НЧЛ' });
-    }
-
-    const normalizedIsNhp = [1, '1', true].includes(is_nhp) ? 1 : 0;
-
-    // Дом хранится только у Кавалера; у Лансера поля обнуляются.
-    const isCavalier = normalizedEstate === 'cavalier';
-    const normalizedHouseKey = isCavalier && typeof house_key === 'string' ? house_key : '';
-    if (normalizedHouseKey && !KTB_HOUSE_KEYS.includes(normalizedHouseKey) && normalizedHouseKey !== 'custom') {
-        return res.status(400).json({ message: 'Неизвестный Дом' });
-    }
-    const normalizedHouseCustom = normalizedHouseKey === 'custom' && typeof house_custom === 'string'
-        ? house_custom.trim().replace(/\s+/g, ' ').slice(0, 60) : '';
-    if (normalizedHouseKey === 'custom' && !normalizedHouseCustom) {
-        return res.status(400).json({ message: 'Укажите название своего Дома' });
-    }
-    const normalizedHouseColor = normalizedHouseKey === 'custom' && typeof house_color === 'string' && /^#[0-9a-f]{6}$/i.test(house_color)
-        ? house_color.toLowerCase() : '';
-    const normalizedHouseSigil = normalizedHouseKey === 'custom' && KTB_SIGILS.includes(house_sigil) ? house_sigil : '';
-    const normalizedStanding = isCavalier && house_standing === 'exile' ? 'exile' : 'member';
-
-    // Тема пилота: не передана — у существующего пилота сохраняется, новому достаётся тема пользователя.
-    if (theme !== undefined && theme !== null && theme !== '' && !VALID_THEMES.includes(theme)) {
-        return res.status(400).json({ message: 'Неизвестная тема' });
-    }
-    const requestedTheme = VALID_THEMES.includes(theme) ? theme : null;
+    const checked = normalizePilotFields(req.body);
+    if (checked.error) return res.status(400).json({ message: checked.error });
+    const p = checked.pilot;
+    const requestedTheme = p.theme;
 
     // avatar_path должен указывать только на директорию аватаров (защита от path traversal).
     let safeAvatarPath = null;
@@ -1100,9 +1122,9 @@ pilotRoutes.post('/pilot-profiles', requireAuth, (req, res) => {
                 theme = CASE WHEN ? THEN excluded.theme ELSE pilot_profiles.theme END,
                 is_nhp = excluded.is_nhp,
                 updated_at = CURRENT_TIMESTAMP`,
-        [userId, slot_number, callsign.trim(), full_name ? full_name.trim() : '', mech_name.trim(), safeAvatarPath, normalizedGender, normalizedEstate,
-            normalizedHouseKey, normalizedHouseCustom, normalizedHouseColor, normalizedHouseSigil, normalizedStanding,
-            requestedTheme || defaultTheme, normalizedIsNhp, requestedTheme ? 1 : 0],
+        [userId, slot_number, p.callsign, p.full_name, p.mech_name, safeAvatarPath, p.gender, p.estate,
+            p.house_key, p.house_custom, p.house_color, p.house_sigil, p.house_standing,
+            requestedTheme || defaultTheme, p.is_nhp, requestedTheme ? 1 : 0],
         function(err) {
             if (err) return res.status(500).json({ message: 'Ошибка сохранения профиля' });
 
@@ -1412,6 +1434,75 @@ adminRoutes.get('/users', adminMiddleware, (req, res) => {
     db.all('SELECT id, username, created_at FROM users ORDER BY created_at DESC', (err, users) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения списка' });
         res.json({ users });
+    });
+});
+
+// Переименование: меняется логин. Правила и регистр — как при регистрации (Validator.username,
+// первая буква заглавная), имя уникально без учёта регистра.
+adminRoutes.post('/rename-user', adminMiddleware, validateBody({
+    userId: Validator.userId,
+    username: Validator.username
+}), (req, res) => {
+    const { userId, username } = req.sanitizedBody;
+    const normalized = username.charAt(0).toUpperCase() + username.slice(1).toLowerCase();
+
+    db.get('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?', [normalized, userId], (err, taken) => {
+        if (err) return res.status(500).json({ message: 'Ошибка сервера' });
+        if (taken) return res.status(400).json({ message: 'Пользователь с таким именем уже существует' });
+        db.run('UPDATE users SET username = ? WHERE id = ?', [normalized, userId], function(err) {
+            if (err) return res.status(500).json({ message: 'Ошибка переименования' });
+            if (this.changes === 0) return res.status(404).json({ message: 'Пользователь не найден' });
+            // Своё имя админ видит сразу; у переименованного игрока — после следующего входа.
+            if (Number(userId) === Number(req.session.userId)) req.session.username = normalized;
+            res.json({ message: 'Пользователь переименован', username: normalized });
+        });
+    });
+});
+
+// Пилоты игрока со всеми полями досье — для просмотра и правки в админ-панели.
+adminRoutes.get('/users/:userId/pilots', adminMiddleware, (req, res) => {
+    db.all(`SELECT id, slot_number, callsign, full_name, mech_name, avatar_path, gender, estate,
+                   house_key, house_custom, house_color, house_sigil, house_standing, theme, is_nhp, is_active, updated_at
+            FROM pilot_profiles WHERE user_id = ? ORDER BY slot_number`, [req.params.userId], (err, pilots) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения пилотов' });
+        res.json({ pilots: pilots || [] });
+    });
+});
+
+// Правка существующего пилота игрока. Аватар и признак НЧЛ не меняются.
+adminRoutes.put('/users/:userId/pilots/:slot', adminMiddleware, (req, res) => {
+    const { userId, slot } = req.params;
+    const checked = normalizePilotFields(req.body);
+    if (checked.error) return res.status(400).json({ message: checked.error });
+    const p = checked.pilot;
+
+    db.run(`UPDATE pilot_profiles SET callsign = ?, full_name = ?, mech_name = ?, gender = ?, estate = ?,
+                house_key = ?, house_custom = ?, house_color = ?, house_sigil = ?, house_standing = ?,
+                theme = COALESCE(?, theme), updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND slot_number = ?`,
+        [p.callsign, p.full_name, p.mech_name, p.gender, p.estate,
+         p.house_key, p.house_custom, p.house_color, p.house_sigil, p.house_standing,
+         p.theme, userId, slot],
+        function(err) {
+            if (err) return res.status(500).json({ message: 'Ошибка сохранения пилота' });
+            if (this.changes === 0) return res.status(404).json({ message: 'Пилот не найден' });
+            res.json({ message: 'Пилот сохранён' });
+        });
+});
+
+// Сделать пилота игрока активным (его тема, сословие и репутация — в терминале игрока).
+adminRoutes.post('/users/:userId/pilots/:slot/activate', adminMiddleware, (req, res) => {
+    const { userId, slot } = req.params;
+    db.get('SELECT id FROM pilot_profiles WHERE user_id = ? AND slot_number = ?', [userId, slot], (err, pilot) => {
+        if (err) return res.status(500).json({ message: 'Ошибка' });
+        if (!pilot) return res.status(404).json({ message: 'Пилот не найден' });
+        db.serialize(() => {
+            db.run('UPDATE pilot_profiles SET is_active = 0 WHERE user_id = ?', [userId]);
+            db.run('UPDATE pilot_profiles SET is_active = 1 WHERE id = ?', [pilot.id], (err) => {
+                if (err) return res.status(500).json({ message: 'Ошибка' });
+                res.json({ message: 'Пилот назначен активным' });
+            });
+        });
     });
 });
 
@@ -1986,6 +2077,79 @@ app.get('/api/dialogue/:frequency', requireAuth, (req, res) => {
     });
 });
 
+// Переход вариантов реплик на схему «основная реплика — для Лансера».
+// Было: аудитории cavalier и lancer (lancer — Лансер и изгнанник). Стало: cavalier и exile.
+// Вариант «lancer» переворачивается: его текст становится основной репликой, а прежний основной
+// текст — вариантом для Кавалера. Кто что слышал, не меняется.
+function migrateConversationVariants() {
+    db.get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversation_variants'", (err, row) => {
+        if (err || !row || row.sql.includes("'exile'")) return;
+        db.all(`SELECT v.*, c.text AS base_text, c.voiceline AS base_voiceline, c.fake_name AS base_fake_name,
+                       c.custom_image AS base_custom_image, c.typing_speed AS base_typing_speed,
+                       (SELECT COALESCE(gc.name, ch.name) FROM characters ch LEFT JOIN global_characters gc ON gc.id = ch.global_character_id
+                        WHERE ch.id = c.character_id) AS speaker_name,
+                       (SELECT COALESCE(gc.image, ch.image) FROM characters ch LEFT JOIN global_characters gc ON gc.id = ch.global_character_id
+                        WHERE ch.id = c.character_id) AS speaker_image,
+                       (SELECT COUNT(*) FROM conversation_variants cv
+                        WHERE cv.conversation_id = v.conversation_id AND cv.audience = 'cavalier') AS has_cavalier
+                FROM conversation_variants v JOIN conversations c ON c.id = v.conversation_id
+                WHERE v.audience = 'lancer'`, [], (err, lancerRows) => {
+            if (err) return Logger.error('Migration error (variants read):', err.message);
+            db.serialize(() => {
+                db.run('BEGIN TRANSACTION');
+                (lancerRows || []).forEach(v => {
+                    if (!v.has_cavalier) {
+                        db.run(`INSERT INTO conversation_variants (conversation_id, audience, text, voiceline, fake_name, custom_image, typing_speed)
+                                VALUES (?, 'cavalier', ?, ?, ?, ?, ?)`,
+                            // Пустое имя или портрет у варианта значит «как у основной реплики». Основной
+                            // теперь станет лансерская — поэтому Кавалеру явно возвращаем его прежние.
+                            [v.conversation_id, v.base_text, v.base_voiceline || '',
+                             v.base_fake_name || (v.fake_name ? v.speaker_name || '' : ''),
+                             v.base_custom_image || (v.custom_image ? v.speaker_image || '' : ''),
+                             v.base_typing_speed || 0]);
+                    }
+                    db.run(`UPDATE conversations SET text = ?, voiceline = ?, typing_speed = ?,
+                                fake_name = ?, custom_image = ? WHERE id = ?`,
+                        [v.text, v.voiceline || '', v.typing_speed || 0,
+                         v.fake_name || v.base_fake_name || '', v.custom_image || v.base_custom_image || '', v.conversation_id]);
+                });
+                db.run('DROP TRIGGER IF EXISTS conversation_variants_cleanup');
+                db.run(`CREATE TABLE conversation_variants_v2 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id INTEGER NOT NULL,
+                    audience TEXT NOT NULL CHECK (audience IN ('cavalier', 'exile')),
+                    text TEXT NOT NULL,
+                    voiceline TEXT NOT NULL DEFAULT '',
+                    fake_name TEXT NOT NULL DEFAULT '',
+                    custom_image TEXT NOT NULL DEFAULT '',
+                    typing_speed REAL NOT NULL DEFAULT 0,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+                    UNIQUE(conversation_id, audience)
+                )`);
+                db.run(`INSERT INTO conversation_variants_v2 (id, conversation_id, audience, text, voiceline, fake_name, custom_image, typing_speed, updated_at)
+                        SELECT id, conversation_id, audience, text, voiceline, fake_name, custom_image, typing_speed, updated_at
+                        FROM conversation_variants WHERE audience = 'cavalier'`);
+                db.run('DROP TABLE conversation_variants');
+                db.run('ALTER TABLE conversation_variants_v2 RENAME TO conversation_variants');
+                db.run(`CREATE TRIGGER IF NOT EXISTS conversation_variants_cleanup
+                        AFTER DELETE ON conversations
+                        BEGIN
+                            DELETE FROM conversation_variants WHERE conversation_id = OLD.id;
+                        END`);
+                db.run('COMMIT', (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        Logger.error('Migration failed (conversation_variants):', err.message);
+                    } else {
+                        Logger.info(`conversation_variants: основная реплика — для Лансера (перевёрнуто вариантов: ${(lancerRows || []).length})`);
+                    }
+                });
+            });
+        });
+    });
+}
+
 function formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap = {}, relMap = {}, variants = []) {
     const result = {
         characters: characters.map(c => ({
@@ -2065,6 +2229,11 @@ function formatDialogueForClient(dialogue, characters, conversations, choices, g
                         opt.relationRequireMax = ch.relation_require_max !== null && ch.relation_require_max !== undefined ? ch.relation_require_max : 100;
                         opt.relationEffect = ch.relation_effect || 0;
                     }
+                    // Текст ответа для сословия: нужный выбирает клиент по профилю пилота.
+                    const optionVariants = {};
+                    if (ch.option_text_cavalier) optionVariants.cavalier = ch.option_text_cavalier;
+                    if (ch.option_text_exile) optionVariants.exile = ch.option_text_exile;
+                    if (Object.keys(optionVariants).length) opt.variants = optionVariants;
                     return opt;
                 })
             };

@@ -9,6 +9,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Темы GMS / IPS-N / КТБ в языке терминала: подключается последней. -->
     <link rel="stylesheet" href="styles/admin-themes.css">
+    <!-- Дома КТБ: названия и знаки для правки пилотов игрока -->
+    <script src="./scripts/ktb-houses.js"></script>
+  <link rel="stylesheet" href="./styles/scrollbars.css">
 </head>
 <body class="panel-page">
     <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
@@ -146,8 +149,11 @@
 
                     <aside class="admin-card player-detail" id="player-detail" aria-live="polite">
                         <div class="admin-card-title" id="player-detail-title">Игрок</div>
-                        <div id="player-placeholder" class="no-data">Выберите игрока в таблице, чтобы увидеть его отношения с персонажами и прогресс.<br>Клик по персонажу раскрывает отношения по пилотам.</div>
+                        <div id="player-placeholder" class="no-data">Выберите игрока в таблице, чтобы увидеть его пилотов, отношения с персонажами и прогресс.<br>Клик по персонажу раскрывает отношения по пилотам.</div>
                         <div id="player-content" hidden>
+                            <h3 class="section-title">Пилоты</h3>
+                            <div id="player-pilots" class="player-pilots"></div>
+
                             <h3 class="section-title">Отношения с персонажами</h3>
                             <div id="relations-loading" class="loading" style="display:none;">
                                 <div class="loading-spinner"></div>
@@ -288,6 +294,107 @@
             </div>
             <div class="modal-actions">
                 <button id="close-details" class="btn">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Переименование пользователя -->
+    <div id="rename-user-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title">Переименовать пользователя</div>
+            <div class="modal-body">
+                <input type="hidden" id="rename-user-id">
+                <div class="form-group">
+                    <label class="form-label" for="rename-username">Новый логин:</label>
+                    <input type="text" id="rename-username" class="form-input" maxlength="50" autocomplete="off">
+                    <div class="form-help">Латинские буквы, цифры и _, от 3 до 50 символов. Первая буква станет заглавной, как при регистрации. Пароль не меняется; игрок увидит новое имя после следующего входа.</div>
+                </div>
+                <div id="rename-error" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-rename" class="btn">Отмена</button>
+                <button id="confirm-rename" class="btn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Правка пилота игрока -->
+    <div id="pilot-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-title" id="pilot-modal-title">Пилот</div>
+            <div class="modal-body">
+                <input type="hidden" id="pilot-user-id">
+                <input type="hidden" id="pilot-slot">
+                <div class="pilot-form-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="pilot-callsign">Позывной *</label>
+                        <input type="text" id="pilot-callsign" class="form-input" maxlength="60">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="pilot-mech">Мех *</label>
+                        <input type="text" id="pilot-mech" class="form-input" maxlength="60">
+                    </div>
+                    <div class="form-group pilot-wide">
+                        <label class="form-label" for="pilot-full-name">Полное имя</label>
+                        <input type="text" id="pilot-full-name" class="form-input" maxlength="160">
+                        <div class="form-help">У Кавалера обычно «титул имя из Дома …» — так оно показывается в досье.</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="pilot-estate">Сословие</label>
+                        <select id="pilot-estate" class="form-input">
+                            <option value="lancer">Лансер</option>
+                            <option value="cavalier">Кавалер</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="pilot-gender">Форма обращения</label>
+                        <select id="pilot-gender" class="form-input">
+                            <option value="neutral">Нейтральная</option>
+                            <option value="female">Женская — леди</option>
+                            <option value="male">Мужская — лорд</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="pilot-theme">Тема терминала</label>
+                        <select id="pilot-theme" class="form-input">
+                            <option value="yellow">IPS-N</option>
+                            <option value="green">GMS</option>
+                            <option value="ktb">КТБ</option>
+                        </select>
+                    </div>
+                    <div class="pilot-cavalier pilot-wide" id="pilot-cavalier">
+                        <div class="pilot-form-grid">
+                            <div class="form-group">
+                                <label class="form-label" for="pilot-house">Дом</label>
+                                <select id="pilot-house" class="form-input"></select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="pilot-standing">Положение</label>
+                                <select id="pilot-standing" class="form-input">
+                                    <option value="member">Состоит в Доме</option>
+                                    <option value="exile">Изгнанник</option>
+                                </select>
+                            </div>
+                            <div class="form-group pilot-custom-house">
+                                <label class="form-label" for="pilot-house-custom">Свой Дом: название</label>
+                                <input type="text" id="pilot-house-custom" class="form-input" maxlength="60" placeholder="Ветров">
+                            </div>
+                            <div class="form-group pilot-custom-house">
+                                <label class="form-label" for="pilot-house-color">Цвет ливреи</label>
+                                <input type="color" id="pilot-house-color" class="form-input" value="#b8a27a">
+                            </div>
+                            <div class="form-group pilot-custom-house">
+                                <label class="form-label" for="pilot-house-sigil">Знак</label>
+                                <select id="pilot-house-sigil" class="form-input"></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="pilot-error" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-pilot" class="btn">Отмена</button>
+                <button id="save-pilot" class="btn">Сохранить</button>
             </div>
         </div>
     </div>
