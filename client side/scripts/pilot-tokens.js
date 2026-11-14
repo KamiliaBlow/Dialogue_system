@@ -72,7 +72,7 @@ export function applyTokens(text, values) {
 }
 
 // Реплика для конкретной аудитории: поля варианта заменяют основные.
-// Текст, озвучка и скорость печати — всегда от варианта (своя запись под свою фразу);
+// Текст, озвучка, скорость печати (и по фразам) и задержка до голоса — всегда от варианта (своя запись под свою фразу);
 // поддельное имя и портрет — от варианта, если заданы, иначе основные.
 export function resolveVariant(conversation, audience) {
     const variant = conversation?.variants?.[audience];
@@ -82,6 +82,10 @@ export function resolveVariant(conversation, audience) {
     else delete resolved.voiceline;
     if (variant.typingSpeed > 0) resolved.typingSpeed = variant.typingSpeed;
     else delete resolved.typingSpeed;
+    if (variant.voiceOffset > 0) resolved.voiceOffset = variant.voiceOffset;
+    else delete resolved.voiceOffset;
+    if (Array.isArray(variant.typingProfile) && variant.typingProfile.length) resolved.typingProfile = variant.typingProfile;
+    else delete resolved.typingProfile;
     if (variant.fakeName) resolved.fakeName = variant.fakeName;
     if (variant.image) resolved.image = variant.image;
     return resolved;

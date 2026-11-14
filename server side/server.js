@@ -537,6 +537,8 @@ function initDatabase() {
             fake_name TEXT NOT NULL DEFAULT '',
             custom_image TEXT NOT NULL DEFAULT '',
             typing_speed REAL NOT NULL DEFAULT 0,
+            voice_offset INTEGER NOT NULL DEFAULT 0,
+            typing_profile TEXT NOT NULL DEFAULT '',
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
             UNIQUE(conversation_id, audience)
@@ -580,6 +582,22 @@ tables.forEach(sql => db.run(sql));
         if (err && !err.message.includes('duplicate column')) {
             Logger.error('Migration error (typing_speed):', err.message);
         }
+    });
+
+    // Тишина в начале озвучки, мс: терминал начинает печать вместе с голосом
+    // (ROADMAP, задача 9, шаг B; считает кнопка «Авто» в студии).
+    // Скорость по фразам (шаг C): JSON [[внутри, после], …] на каждую фразу текста; пусто — одна скорость typing_speed.
+    ['conversations', 'conversation_variants'].forEach(table => {
+        db.run(`ALTER TABLE ${table} ADD COLUMN voice_offset INTEGER NOT NULL DEFAULT 0`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                Logger.error(`Migration error (${table}.voice_offset):`, err.message);
+            }
+        });
+        db.run(`ALTER TABLE ${table} ADD COLUMN typing_profile TEXT NOT NULL DEFAULT ''`, (err) => {
+            if (err && !err.message.includes('duplicate column')) {
+                Logger.error(`Migration error (${table}.typing_profile):`, err.message);
+            }
+        });
     });
     
     db.run(`ALTER TABLE dialogues ADD COLUMN is_active INTEGER DEFAULT 1`, (err) => {
@@ -650,6 +668,14 @@ tables.forEach(sql => db.run(sql));
                                   WHERE us.user_id = pilot_profiles.user_id AND us.theme IN ('yellow', 'green', 'ktb')), 'yellow')
             WHERE theme IS NULL OR theme NOT IN ('yellow', 'green', 'ktb')`, (err) => {
         if (err) Logger.error('Migration error (pilot theme backfill):', err.message);
+    });
+
+    // Масштаб интерфейса по классам экрана (phone / tablet / desktop / large): новое устройство
+    // берёт значение своего класса, своё значение на устройстве главнее (client side/scripts/ui-scale.js).
+    db.run(`ALTER TABLE user_settings ADD COLUMN ui_scales TEXT NOT NULL DEFAULT '{}'`, (err) => {
+        if (err && !err.message.includes('duplicate column')) {
+            Logger.error('Migration error (ui_scales):', err.message);
+        }
     });
 
     db.run(`ALTER TABLE user_settings ADD COLUMN skip_boot INTEGER DEFAULT 0`, (err) => {
@@ -1923,7 +1949,7 @@ app.get('/api/user-settings', (req, res) => {
     }
     
     // Тема — активного пилота; без пилота остаётся тема из настроек пользователя.
-    db.get('SELECT auto_play_music, theme, skip_boot FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
+    db.get('SELECT auto_play_music, theme, skip_boot, ui_scales FROM user_settings WHERE user_id = ?', [req.session.userId], (err, settings) => {
         if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
 
         db.get('SELECT theme FROM pilot_profiles WHERE user_id = ? AND is_active = 1', [req.session.userId], (err, pilot) => {
@@ -1938,11 +1964,46 @@ app.get('/api/user-settings', (req, res) => {
                 db.run('INSERT INTO user_settings (user_id, auto_play_music, theme, skip_boot) VALUES (?, 1, ?, 0)', [req.session.userId, 'yellow'], (err) => {
                     if (err) Logger.error('Error creating user settings:', err.message);
                 });
-                return res.json({ auto_play_music: 1, theme, theme_source: themeSource, skip_boot: 0 });
+                return res.json({ auto_play_music: 1, theme, theme_source: themeSource, skip_boot: 0, ui_scales: {} });
             }
 
-            res.json({ auto_play_music: settings.auto_play_music, theme, theme_source: themeSource, skip_boot: settings.skip_boot || 0 });
+            res.json({ auto_play_music: settings.auto_play_music, theme, theme_source: themeSource, skip_boot: settings.skip_boot || 0,
+                ui_scales: parseUiScales(settings.ui_scales) });
         });
+    });
+});
+
+const UI_SCALE_CLASSES = ['phone', 'tablet', 'desktop', 'large'];
+
+function parseUiScales(raw) {
+    let data = {};
+    try { data = JSON.parse(raw || '{}') || {}; } catch { data = {}; }
+    const clean = {};
+    UI_SCALE_CLASSES.forEach(c => {
+        const v = Number(data[c]);
+        if (Number.isFinite(v) && v >= 0.75 && v <= 1.5) clean[c] = Math.round(v * 20) / 20;
+    });
+    return clean;
+}
+
+// Множитель масштаба для класса экрана (0.75–1.5, шаг 0.05).
+app.post('/api/user-settings/ui-scale', (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ message: 'Не авторизован' });
+    const { deviceClass, value } = req.body;
+    const v = Number(value);
+    if (!UI_SCALE_CLASSES.includes(deviceClass)) return res.status(400).json({ message: 'Неизвестный класс экрана' });
+    if (!Number.isFinite(v) || v < 0.75 || v > 1.5) return res.status(400).json({ message: 'Масштаб — от 75 до 150 %' });
+
+    db.get('SELECT ui_scales FROM user_settings WHERE user_id = ?', [req.session.userId], (err, row) => {
+        if (err) return res.status(500).json({ message: 'Ошибка получения настроек' });
+        const scales = parseUiScales(row?.ui_scales);
+        scales[deviceClass] = Math.round(v * 20) / 20;
+        db.run(`INSERT INTO user_settings (user_id, ui_scales) VALUES (?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET ui_scales = excluded.ui_scales`,
+            [req.session.userId, JSON.stringify(scales)], (err) => {
+                if (err) return res.status(500).json({ message: 'Ошибка сохранения масштаба' });
+                res.json({ success: true, ui_scales: scales });
+            });
     });
 });
 
@@ -1973,7 +2034,10 @@ app.post('/api/user-settings', (req, res) => {
         const newTheme = theme || existing?.theme || 'yellow';
         const newSkipBoot = skip_boot !== undefined ? (skip_boot ? 1 : 0) : (existing?.skip_boot || 0);
 
-        db.run('INSERT OR REPLACE INTO user_settings (user_id, auto_play_music, theme, skip_boot) VALUES (?, ?, ?, ?)',
+        // Upsert только этих полей: INSERT OR REPLACE переписал бы строку целиком и стёр ui_scales.
+        db.run(`INSERT INTO user_settings (user_id, auto_play_music, theme, skip_boot) VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET auto_play_music = excluded.auto_play_music,
+                    theme = excluded.theme, skip_boot = excluded.skip_boot`,
             [req.session.userId, newAutoPlay, newTheme, newSkipBoot],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка сохранения настроек' });
@@ -2123,6 +2187,8 @@ function migrateConversationVariants() {
                     fake_name TEXT NOT NULL DEFAULT '',
                     custom_image TEXT NOT NULL DEFAULT '',
                     typing_speed REAL NOT NULL DEFAULT 0,
+                    voice_offset INTEGER NOT NULL DEFAULT 0,
+                    typing_profile TEXT NOT NULL DEFAULT '',
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
                     UNIQUE(conversation_id, audience)
@@ -2148,6 +2214,17 @@ function migrateConversationVariants() {
             });
         });
     });
+}
+
+// Профиль скорости по фразам из базы — массив [[внутри, после], …] или null.
+function parseTypingProfile(raw) {
+    if (!raw) return null;
+    try {
+        const list = JSON.parse(raw);
+        return Array.isArray(list) && list.length ? list : null;
+    } catch {
+        return null;
+    }
 }
 
 function formatDialogueForClient(dialogue, characters, conversations, choices, globalCharMap = {}, relMap = {}, variants = []) {
@@ -2197,6 +2274,9 @@ function formatDialogueForClient(dialogue, characters, conversations, choices, g
         if (c.fake_name) convObj.fakeName = c.fake_name;
         if (c.voiceline) convObj.voiceline = c.voiceline;
         if (c.typing_speed && c.typing_speed > 0) convObj.typingSpeed = c.typing_speed;
+        if (c.voice_offset > 0) convObj.voiceOffset = c.voice_offset;
+        const profile = parseTypingProfile(c.typing_profile);
+        if (profile) convObj.typingProfile = profile;
 
         const convVariants = variants.filter(v => v.conversation_id === c.id && v.text);
         if (convVariants.length > 0) {
@@ -2207,7 +2287,9 @@ function formatDialogueForClient(dialogue, characters, conversations, choices, g
                     voiceline: v.voiceline || '',
                     fakeName: v.fake_name || '',
                     image: v.custom_image || '',
-                    typingSpeed: v.typing_speed > 0 ? v.typing_speed : 0
+                    typingSpeed: v.typing_speed > 0 ? v.typing_speed : 0,
+                    voiceOffset: v.voice_offset > 0 ? v.voice_offset : 0,
+                    typingProfile: parseTypingProfile(v.typing_profile)
                 };
             });
         }

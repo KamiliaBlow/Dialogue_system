@@ -1,6 +1,7 @@
 import debug, { debugGroup, debugGroupEnd } from './debug.js';
 import { readPortrait, applyPortrait, watchFrame } from './portrait-frame.js';
 import { prepareDialogue } from './pilot-tokens.js';
+import { parseTypingText, punctuationDelay, expandProfile, speedAt } from './typing-text.js';
 
 let games = null;
 let API_URL = null;
@@ -1051,7 +1052,9 @@ function handleChoiceDialog(conversation) {
             // Сохраняем ID выбора для дальнейшего ветвления
             state.currentChoiceId = conversation.choice.choiceId;
         },
-        conversation.typingSpeed || 0
+        conversation.typingSpeed || 0,
+        conversation.voiceOffset || 0,
+        conversation.typingProfile || null
     );
 }
 
@@ -1301,7 +1304,9 @@ function processObjectDialogLine(conversation) {
             const currentFrequency = getCurrentFrequency();
             saveDialogueProgress(currentFrequency, false);
         },
-        conversation.typingSpeed || 0
+        conversation.typingSpeed || 0,
+        conversation.voiceOffset || 0,
+        conversation.typingProfile || null
     );
 }
 
@@ -1988,126 +1993,7 @@ function checkAndActivateGlitchEffects(text) {
     return cleanText;
 }
 
-/**
- * Извлечение пауз из текста
- * Формат паузы: [2s], [1.5s], [0.5s] и т.д.
- * @param {string} text - Исходный текст
- * @returns {Object} - Объект с текстом без пауз и массивом пауз
- */
-function extractPauses(text) {
-    const pauses = [];
-    let cleanText = '';
-    let currentIndex = 0;
-    
-    const pauseRegex = /\[(\d+\.?\d*)s\]/g;
-    let match;
-    let lastIndex = 0;
-    
-    while ((match = pauseRegex.exec(text)) !== null) {
-        // Добавляем текст до паузы
-        const textBefore = text.substring(lastIndex, match.index);
-        cleanText += textBefore;
-        
-        // Записываем паузу для позиции после добавленного текста
-        const pauseDuration = parseFloat(match[1]);
-        pauses[cleanText.length] = pauseDuration;
-        
-        lastIndex = match.index + match[0].length;
-    }
-    
-    // Добавляем оставшийся текст
-    cleanText += text.substring(lastIndex);
-    
-    return { text: cleanText, pauses };
-}
-
-/**
- * Валидирует значение цвета для безопасной вставки в CSS-атрибут style.
- * Разрешает: hex (#rgb / #rrggbb / #rrggbbaa), именованные цвета, rgb()/rgba() с цифрами.
- * Всё прочее (включая url(), expression, точки с запятой) отклоняется.
- * @param {string} raw - Сырое значение из тега [Color:...]
- * @returns {string|null} - Очищенное значение или null (тогда стиль не применяется)
- */
-function sanitizeColor(raw) {
-    if (!raw || typeof raw !== 'string') return null;
-    const v = raw.trim();
-    if (!v) return null;
-    // Hex
-    if (/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v)) return v;
-    // rgb()/rgba() — только числа и запятые/пробелы внутри скобок, без выражений
-    if (/^rgba?\(\s*[\d.,%\s]+\s*\)$/i.test(v)) return v;
-    // Именованные цвета (включая CSS-цвета) — буквы/дефис, без спецсимволов и скобок
-    if (/^[a-zA-Z-]+$/.test(v)) return v;
-    return null;
-}
-
-/**
- * Парсит теги форматирования и возвращает массив сегментов с стилями
- * @param {string} text - Текст с тегами
- * @returns {Array} - Массив сегментов {char, style}
- */
-function parseFormatting(text) {
-    if (!text) return [];
-
-    const segments = [];
-    let style = { shake: false, color: null, size: null };
-    let i = 0;
-
-    while (i < text.length) {
-        let found = false;
-
-        // Сначала проверяем теги с значениями (S, Color)
-        const sMatch = text.slice(i).match(/^\[S:(\d+\.?\d*)\]/);
-        if (sMatch) {
-            const v = parseFloat(sMatch[1]);
-            if (v >= 0.8 && v <= 1.3) style.size = v;
-            i += sMatch[0].length;
-            found = true;
-        }
-        
-        if (!found) {
-            const colorMatch = text.slice(i).match(/^\[Color:(.+?)\]/);
-            if (colorMatch) {
-                // Строгая валидация значения цвета (защита от инъекции в атрибут style).
-                style.color = sanitizeColor(colorMatch[1]);
-                i += colorMatch[0].length;
-                found = true;
-            }
-        }
-        
-        // Потом простые строковые теги
-        if (!found && text.slice(i, i + 7) === '[Shake]') {
-            style.shake = true;
-            i += 7;
-            found = true;
-        }
-        
-        if (!found && text.slice(i, i + 8) === '[ShakeE]') {
-            style.shake = false;
-            i += 8;
-            found = true;
-        }
-        
-        if (!found && text.slice(i, i + 8) === '[ColorE]') {
-            style.color = null;
-            i += 8;
-            found = true;
-        }
-        
-        if (!found && text.slice(i, i + 4) === '[SE]') {
-            style.size = null;
-            i += 4;
-            found = true;
-        }
-        
-        if (!found) {
-            segments.push({ char: text[i], style: {...style} });
-            i++;
-        }
-    }
-    
-    return segments;
-}
+// Разбор пауз [Ns] и разметки ([Shake], [Color:…], [S:…]) — scripts/typing-text.js (parseTypingText).
 
 /**
  * Строит HTML из сегментов
@@ -2146,7 +2032,10 @@ function buildHtml(segments) {
  * @param {function} onComplete - Функция для вызова после завершения
  * @param {number} customTypingSpeed - Кастомная скорость печати (мс/символ)
  */
-function typeText(text, element, characterVoice, characterName, onComplete = null, customTypingSpeed = 0) {
+// voiceOffset — тишина в начале озвучки, мс: печать ждёт, пока зазвучит голос (ROADMAP, задача 9, шаг B).
+// typingProfile — скорость по фразам ([[внутри, после], …] на каждую фразу, шаг C); не подходит к тексту —
+// печать одной скоростью customTypingSpeed.
+function typeText(text, element, characterVoice, characterName, onComplete = null, customTypingSpeed = 0, voiceOffset = 0, typingProfile = null) {
     if (!text) text = '';
     if (!characterName) characterName = 'Система';
     
@@ -2157,8 +2046,10 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     debug(`typeText: voiceMode=${voiceMode}, autoPlayMusic=${state.autoPlayMusic}`);
     
     const cleanText = checkAndActivateGlitchEffects(text) || '';
-    const { text: textWithoutPauses, pauses } = extractPauses(cleanText);
-    const segments = parseFormatting(textWithoutPauses || '');
+    // Паузы и разметка снимаются за один проход: пауза привязана к печатаемому символу.
+    const { segments, pauses, plain: textWithoutPauses } = parseTypingText(cleanText);
+    // Скорость по фразам раскладывается по этому тексту (имя пилота уже подставлено).
+    const charProfile = typingProfile ? expandProfile(segments, pauses, typingProfile) : null;
     
     debug(`Печать текста: "${textWithoutPauses.substring(0, 30)}..." от персонажа "${characterName}", режим звука: ${voiceMode}, скорость: ${customTypingSpeed || 'авто'}`);
     
@@ -2199,26 +2090,37 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         return;
     }
     
+    let voicelinePlay = null;
     if (voiceMode === 'voiceline' && voiceAudio) {
         try {
             const voicelineClone = voiceAudio.cloneNode();
             voicelineClone.volume = 0.8;
             state.currentVoiceline = voicelineClone;
-            voicelineClone.play().catch(err => console.warn('Не удалось воспроизвести озвучку:', err));
+            voicelinePlay = Promise.resolve(voicelineClone.play());
+            voicelinePlay.catch(err => console.warn('Не удалось воспроизвести озвучку:', err));
         } catch (e) {
             console.warn('Ошибка при воспроизведении озвучки:', e);
         }
     }
     
+    // Задержки отсчитываются от общего графика, а не от прошлого таймера: таймеры браузера
+    // опаздывают на несколько мс, и за реплику это копилось бы в заметный отрыв от озвучки.
+    // Вкладка была в фоне (таймеры замедлены) — график сдвигается, без пулемётной очереди букв.
+    let nextAt = null;
+    function schedule(fn, delay) {
+        const now = performance.now();
+        if (nextAt === null || now - nextAt > 250) nextAt = now;
+        nextAt += delay;
+        state.typingTimeout = setTimeout(fn, Math.max(0, nextAt - now));
+    }
+
     function typing(voiceBuffer) {
         const isGlitchActive = glitchEffects.isActive && getCurrentFrequency() === 'PER';
-        
+
         if (i < segments.length && $('#text-con').hasClass('typing-in-progress')) {
             const pauseBefore = pauses[i];
             if (pauseBefore > 0) {
-                state.typingTimeout = setTimeout(() => {
-                    processCharacter(voiceBuffer);
-                }, pauseBefore * 1000);
+                schedule(() => processCharacter(voiceBuffer), pauseBefore * 1000);
                 return;
             }
             
@@ -2236,8 +2138,9 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
         element.html(currentHtml);
         
         let delay;
-        if (customTypingSpeed > 0) {
-            delay = customTypingSpeed + (Math.random() * 10 - 5);
+        const charSpeed = charProfile ? speedAt(charProfile, i, customTypingSpeed) : customTypingSpeed;
+        if (charSpeed > 0) {
+            delay = charSpeed + (Math.random() * 10 - 5);
         } else {
             delay = Math.random() * 40 + 30;
         }
@@ -2283,24 +2186,14 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
             playBeep(voiceBuffer, volume, rate);
         }
         
-        const prevChar = segments[i - 1] ? segments[i - 1].char : '';
-        if (i > 0 && punctuationMarks.includes(prevChar)) {
-            if (prevChar === '.') {
-                delay += 350;
-            } else if (prevChar === '!' || prevChar === '?') {
-                delay += 300;
-            } else if (prevChar === ':' || prevChar === ';') {
-                delay += 250;
-            } else if (prevChar === ',') {
-                delay += 150;
-            }
-        }
+        // Добавка за знак препинания — из typing-text.js: по ней же студия считает скорость под озвучку.
+        if (i > 0) delay += punctuationDelay(segments[i - 1].char);
         
         delay *= (0.9 + Math.random() * 0.2);
         
         i++;
         
-        state.typingTimeout = setTimeout(() => typing(voiceBuffer), delay);
+        schedule(() => typing(voiceBuffer), delay);
     }
     
     function skipTyping() {
@@ -2318,8 +2211,31 @@ function typeText(text, element, characterVoice, characterName, onComplete = nul
     }
     
     $('#text-con').one('click.skipTyping', skipTyping);
-    
-    typing();
+
+    const clip = state.currentVoiceline;
+    if (voiceOffset > 0 && clip && voicelinePlay) {
+        startWithVoice(clip);
+    } else {
+        typing();
+    }
+
+    // Печать начинается вместе с голосом: ждём, пока запись заиграет (буферизация бывает
+    // небольшой), и отсчитываем тишину в её начале от реальной позиции воспроизведения.
+    function startWithVoice(audio) {
+        let started = false;
+        const begin = (waitMs) => {
+            // Реплику пропустили или уже началась следующая — эта печать не нужна.
+            if (started || !isTyping || state.currentVoiceline !== audio) return;
+            started = true;
+            clearTimeout(state.typingTimeout);
+            state.typingTimeout = setTimeout(() => typing(), Math.max(0, waitMs));
+        };
+        audio.addEventListener('playing', () => begin(voiceOffset - audio.currentTime * 1000), { once: true });
+        // Запись не заиграла (автовоспроизведение запрещено) — печатаем сразу, без голоса.
+        voicelinePlay.catch(() => begin(0));
+        // Запись грузится слишком долго — не держим реплику, ждём только тишину.
+        state.typingTimeout = setTimeout(() => begin(voiceOffset), 1500);
+    }
 }
 
 
@@ -3167,7 +3083,9 @@ function triggerRandomGlitch() {
 function playGlitchSound() {
     // Создаем осциллятор для генерации звука
     try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Общий контекст: новый на каждый звук быстро упирается в лимит (Safari — несколько штук),
+        // после чего звук пропадает совсем.
+        const audioContext = getAudioContext();
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
         

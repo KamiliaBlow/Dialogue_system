@@ -321,9 +321,19 @@
                     <label for="conversation-typing-speed">Скорость печати (мс/символ):</label>
                     <div class="typing-speed-section">
                         <input type="number" id="conversation-typing-speed" class="form-input" min="0" max="500" step="5" placeholder="0 = авто">
+                        <label class="typing-offset" title="Тишина в начале записи: печать ждёт, пока зазвучит голос">
+                            голос с <input type="number" id="conversation-voice-offset" class="form-input" min="0" max="10000" step="10" placeholder="0"> мс
+                        </label>
                         <button id="auto-calc-speed-btn" class="btn btn-small" type="button">Авто</button>
+                        <button id="preview-typing-btn" class="btn btn-small" type="button" title="Напечатать реплику вместе с озвучкой, как в терминале (без эффектов разметки)">Проверить</button>
                     </div>
-                    <div class="typing-speed-help">0 = стандартная скорость. Укажите значение для синхронизации с озвучкой.</div>
+                    <input type="hidden" id="conversation-typing-profile">
+                    <div class="typing-profile-note" id="conversation-typing-profile-note" hidden>
+                        <span class="typing-profile-text"></span>
+                        <button type="button" class="typing-profile-reset" title="Убрать скорость по фразам: вся реплика печатается скоростью из поля">Одна скорость</button>
+                    </div>
+                    <div class="typing-preview" id="conversation-typing-preview" hidden></div>
+                    <div class="typing-speed-help">0 = стандартная скорость. «Авто» находит в записи начало, конец и паузы речи: печать начинается вместе с голосом, а каждая фраза идёт со своей скоростью под свой отрезок записи. «Проверить» печатает реплику вместе с озвучкой.</div>
                 </div>
 
                 <!-- Вариант реплики для другого сословия (scripts/pilot-tokens.js) -->
@@ -463,8 +473,18 @@
                         <label>Печать, мс/символ:</label>
                         <div class="typing-speed-section">
                             <input type="number" class="form-input variant-typing-speed" min="0" max="500" step="5" placeholder="0 = авто">
+                            <label class="typing-offset" title="Тишина в начале записи: печать ждёт, пока зазвучит голос">
+                                голос с <input type="number" class="form-input variant-voice-offset" min="0" max="10000" step="10" placeholder="0"> мс
+                            </label>
                             <button class="btn btn-small variant-auto-speed" type="button">Авто</button>
+                            <button class="btn btn-small variant-preview-typing" type="button" title="Напечатать реплику вместе с озвучкой, как в терминале (без эффектов разметки)">Проверить</button>
                         </div>
+                        <input type="hidden" class="variant-typing-profile">
+                        <div class="typing-profile-note variant-typing-profile-note" hidden>
+                            <span class="typing-profile-text"></span>
+                            <button type="button" class="typing-profile-reset" title="Убрать скорость по фразам: вся реплика печатается скоростью из поля">Одна скорость</button>
+                        </div>
+                        <div class="typing-preview variant-typing-preview" hidden></div>
                     </div>
                 </div>
             </div>

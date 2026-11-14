@@ -1231,6 +1231,101 @@ body.theme-ktb .admin-card {
     margin-top: 4px;
 }
 
+/* «голос с … мс» — задержка печати до начала речи в записи */
+.typing-speed-section .typing-offset {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0.85;
+}
+
+.typing-speed-section .typing-offset .form-input {
+    flex: 0 0 72px;
+    width: 72px;
+}
+
+.typing-speed-section {
+    flex-wrap: wrap;
+}
+
+/* Скорость по фразам из «Авто» (ROADMAP, задача 9, шаг C) */
+.typing-profile-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-left: 2px solid var(--t-accent, currentColor);
+}
+
+.typing-profile-note[hidden] {
+    display: none;
+}
+
+.typing-profile-note.is-stale {
+    border-left-color: var(--rel-neutral, #f2c94c);
+    color: var(--rel-neutral, #f2c94c);
+}
+
+.typing-profile-text {
+    flex: 1;
+}
+
+.typing-profile-reset {
+    padding: 2px 8px;
+    font: inherit;
+    font-size: 11px;
+    color: inherit;
+    background: transparent;
+    border: 1px solid currentColor;
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.typing-profile-reset:hover,
+.typing-profile-reset:focus-visible {
+    opacity: 1;
+}
+
+/* «Проверить»: реплика печатается вместе с озвучкой */
+.typing-preview {
+    margin-top: 6px;
+    min-height: 3.2em;
+    padding: 8px 10px;
+    font-family: var(--t-font-data, monospace);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    border: 1px solid var(--t-line-soft, rgba(255, 255, 255, 0.15));
+    background: var(--t-panel-2, rgba(0, 0, 0, 0.25));
+}
+
+.typing-preview[hidden] {
+    display: none;
+}
+
+.typing-preview .typing-preview-cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 1em;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    background: currentColor;
+    animation: typing-preview-blink 1s steps(1) infinite;
+}
+
+@keyframes typing-preview-blink {
+    50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .typing-preview .typing-preview-cursor { animation: none; }
+}
+
 @media (max-width: 1200px) {
     .editor-layout {
         grid-template-columns: 200px 1fr;

@@ -5,7 +5,9 @@
  *    Экраны меньше 1080p уже обслуживает адаптивная вёрстка (медиазапросы), поэтому
  *    авто только увеличивает интерфейс на 2K / 4K, а не ужимает его на ноутбуке.
  *  - Пользовательский множитель: 75–150 %, шаг 5 %. Хранится в localStorage, то есть
- *    на устройство: на 2K-мониторе и телефоне нужны разные значения.
+ *    на устройство: на 2K-мониторе и телефоне нужны разные значения. Дополнительно он
+ *    сохраняется в аккаунте для класса экрана (телефон / планшет / монитор / большой монитор):
+ *    новое устройство, где масштаб ещё не выбирали, берёт значение своего класса.
  *  - Защита: выбранный блок (на терминале — #mCodec) целиком помещается в окно
  *    и не заезжает под кнопки у краёв экрана.
  *
@@ -132,13 +134,61 @@
         frame = root.requestAnimationFrame(() => { frame = 0; apply(); });
     }
 
+    // ---------- синхронизация с аккаунтом по классу экрана ----------
+
+    // API — тот же адрес, что в scripts/config.js (скрипт подключается до модулей).
+    const API_URL = `${root.location.protocol}//${root.location.hostname}:3000/api`;
+    const CLASS_LABELS = { phone: 'телефон', tablet: 'планшет', desktop: 'монитор', large: 'большой монитор' };
+
+    function deviceClass() {
+        const s = root.screen || {};
+        const longSide = Math.max(s.width || root.innerWidth, s.height || root.innerHeight);
+        const touch = root.matchMedia && root.matchMedia('(pointer: coarse)').matches;
+        if (touch) return longSide < 1000 ? 'phone' : 'tablet';
+        return longSide < 2200 ? 'desktop' : 'large';
+    }
+
+    function hasLocalValue() {
+        try { return root.localStorage.getItem(STORAGE_KEY) !== null; } catch (e) { return false; }
+    }
+
+    let pushTimer = 0;
+    function pushToAccount(user) {
+        clearTimeout(pushTimer);
+        pushTimer = setTimeout(() => {
+            root.fetch(`${API_URL}/user-settings/ui-scale`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceClass: deviceClass(), value: user })
+            }).catch(() => { /* нет связи — значение останется на устройстве */ });
+        }, 600);
+    }
+
+    // Устройство без своего значения берёт масштаб своего класса из аккаунта.
+    function pullFromAccount() {
+        if (hasLocalValue() || !root.fetch) return;
+        root.fetch(`${API_URL}/user-settings`, { credentials: 'include' })
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+                const v = Number(data?.ui_scales?.[deviceClass()]);
+                if (!Number.isFinite(v) || hasLocalValue()) return;
+                storeLocal(clamp(roundStep(v), USER_MIN, USER_MAX));
+                apply();
+            })
+            .catch(() => { /* не вошли или нет связи */ });
+    }
+
+    function storeLocal(user) {
+        // Сохраняем и 100 %: «выбрано на этом устройстве» должно отличаться от «ещё не выбирали».
+        try { root.localStorage.setItem(STORAGE_KEY, String(user)); } catch (e) { /* хранилище недоступно */ }
+        userInMemory = user;
+    }
+
     function setUser(value) {
         const user = clamp(roundStep(Number(value) || 1), USER_MIN, USER_MAX);
-        try {
-            if (Math.abs(user - 1) < 0.001) root.localStorage.removeItem(STORAGE_KEY);
-            else root.localStorage.setItem(STORAGE_KEY, String(user));
-        } catch (e) { /* хранилище недоступно — масштаб действует до перезагрузки */ }
-        userInMemory = user;
+        storeLocal(user);
+        pushToAccount(user);
         return apply();
     }
 
@@ -192,6 +242,7 @@
             resetBtn.disabled = Math.abs(state.user - 1) < 0.001;
             let text = `Экран ×${(Math.round(state.auto * 100) / 100).toFixed(2)} · итог ${percent(state.scale)}`;
             if (state.fitted) text += ' — уменьшено, чтобы всё поместилось в окно';
+            text += `. Запоминается на этом устройстве и в аккаунте для класса «${CLASS_LABELS[deviceClass()]}».`;
             note.textContent = text;
         }
 
@@ -224,7 +275,8 @@
         getAuto,
         get state() { return Object.assign({}, current); },
         onChange,
-        mountControl
+        mountControl,
+        deviceClass
     };
 
     // Ранний расчёт до отрисовки: без защиты от переполнения (DOM ещё не построен).
@@ -235,6 +287,7 @@
     // Другая вкладка поменяла масштаб — применяем и здесь.
     root.addEventListener('storage', event => { if (event.key === STORAGE_KEY) { userInMemory = null; schedule(); } });
     if (root.document.fonts && root.document.fonts.ready) root.document.fonts.ready.then(schedule).catch(() => {});
+    pullFromAccount();
 
     root.UiScale = api;
 })(window);

@@ -2,6 +2,7 @@
 const express = require('express');
 const Logger = require('../../utils/logger');
 const { sanitizeAssetPath } = require('./shared');
+const { portraitForClient } = require('../../utils/portrait');
 
 module.exports = (db, upload) => {
     const router = express.Router();
@@ -254,6 +255,32 @@ module.exports = (db, upload) => {
 
     // ==================== РЕПЛИКИ ====================
     
+    // Тишина в начале озвучки, мс (0–10 с): терминал начинает печать вместе с голосом.
+    const voiceOffsetOf = value => Math.max(0, Math.min(10000, Math.round(parseFloat(value) || 0)));
+
+    // Скорость по фразам (ROADMAP, задача 9, шаг C): на каждую фразу текста [мс/символ внутри, мс/символ после]
+    // (client side/scripts/typing-text.js, expandProfile). Хранится JSON-строкой; что угодно другое — пусто
+    // (терминал возьмёт одну скорость).
+    const typingProfileOf = value => {
+        let list = value;
+        if (typeof list === 'string') {
+            try { list = JSON.parse(list); } catch { return ''; }
+        }
+        if (!Array.isArray(list) || !list.length || list.length > 500) return '';
+        const clean = [];
+        for (const entry of list) {
+            if (!Array.isArray(entry) || entry.length !== 2) return '';
+            const speeds = entry.map(Number);
+            if (!speeds.every(s => Number.isFinite(s) && s >= 1 && s <= 500)) return '';
+            clean.push(speeds.map(Math.round));
+        }
+        return JSON.stringify(clean);
+    };
+    const parseProfile = raw => {
+        if (!raw) return null;
+        try { const list = JSON.parse(raw); return Array.isArray(list) && list.length ? list : null; } catch { return null; }
+    };
+
     // Создать реплику
 router.post('/conversations', (req, res) => {
         const { dialogueId, branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder } = req.body;
@@ -262,8 +289,8 @@ router.post('/conversations', (req, res) => {
             return res.status(400).json({ message: 'dialogueId, characterId и text обязательны' });
         }
         
-        db.run(`INSERT INTO conversations (dialogue_id, branch_id, character_id, text, custom_image, fake_name, voiceline, typing_speed, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [dialogueId, branchId || 'main', characterId, text, customImage, fakeName, voiceline, typingSpeed || 0, sortOrder || 0],
+        db.run(`INSERT INTO conversations (dialogue_id, branch_id, character_id, text, custom_image, fake_name, voiceline, typing_speed, voice_offset, typing_profile, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [dialogueId, branchId || 'main', characterId, text, customImage, fakeName, voiceline, typingSpeed || 0, voiceOffsetOf(req.body.voiceOffset), typingProfileOf(req.body.typingProfile), sortOrder || 0],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка создания реплики' });
                 res.status(201).json({ message: 'Реплика создана', conversationId: this.lastID });
@@ -293,20 +320,24 @@ router.post('/conversations', (req, res) => {
         if (voiceline === null || customImage === null) return res.status(400).json({ message: 'Недопустимый путь файла' });
         const fakeName = typeof req.body.fakeName === 'string' ? req.body.fakeName.trim().slice(0, 100) : '';
         const typingSpeed = Math.max(0, Math.min(500, parseFloat(req.body.typingSpeed) || 0));
+        const voiceOffset = voiceOffsetOf(req.body.voiceOffset);
+        const typingProfile = typingProfileOf(req.body.typingProfile);
 
         db.get('SELECT id FROM conversations WHERE id = ?', [id], (err, conversation) => {
             if (err) return res.status(500).json({ message: 'Ошибка' });
             if (!conversation) return res.status(404).json({ message: 'Реплика не найдена' });
-            db.run(`INSERT INTO conversation_variants (conversation_id, audience, text, voiceline, fake_name, custom_image, typing_speed, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            db.run(`INSERT INTO conversation_variants (conversation_id, audience, text, voiceline, fake_name, custom_image, typing_speed, voice_offset, typing_profile, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     ON CONFLICT(conversation_id, audience) DO UPDATE SET
                         text = excluded.text,
                         voiceline = excluded.voiceline,
                         fake_name = excluded.fake_name,
                         custom_image = excluded.custom_image,
                         typing_speed = excluded.typing_speed,
+                        voice_offset = excluded.voice_offset,
+                        typing_profile = excluded.typing_profile,
                         updated_at = CURRENT_TIMESTAMP`,
-                [id, audience, text, voiceline, fakeName, customImage, typingSpeed],
+                [id, audience, text, voiceline, fakeName, customImage, typingSpeed, voiceOffset, typingProfile],
                 function(err) {
                     if (err) return res.status(500).json({ message: 'Ошибка сохранения варианта' });
                     res.json({ message: 'Вариант сохранён' });
@@ -327,8 +358,8 @@ router.post('/conversations', (req, res) => {
         const { id } = req.params;
         const { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder } = req.body;
         
-        db.run(`UPDATE conversations SET branch_id = ?, character_id = ?, text = ?, custom_image = ?, fake_name = ?, voiceline = ?, typing_speed = ?, sort_order = ? WHERE id = ?`,
-            [branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed || 0, sortOrder, id],
+        db.run(`UPDATE conversations SET branch_id = ?, character_id = ?, text = ?, custom_image = ?, fake_name = ?, voiceline = ?, typing_speed = ?, voice_offset = ?, typing_profile = ?, sort_order = ? WHERE id = ?`,
+            [branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed || 0, voiceOffsetOf(req.body.voiceOffset), typingProfileOf(req.body.typingProfile), sortOrder, id],
             function(err) {
                 if (err) return res.status(500).json({ message: 'Ошибка обновления реплики' });
                 if (this.changes === 0) return res.status(404).json({ message: 'Реплика не найдена' });
@@ -798,18 +829,23 @@ router.post('/conversations', (req, res) => {
                         return;
                     }
                     
-                    db.all(`SELECT * FROM choice_options WHERE conversation_id IN (${convIds.map(() => '?').join(',')}) ORDER BY sort_order`, 
+                    db.all(`SELECT * FROM choice_options WHERE conversation_id IN (${convIds.map(() => '?').join(',')}) ORDER BY sort_order`,
                         convIds, (err, choices) => {
                         if (err) return res.status(500).json({ message: 'Ошибка' });
-                        res.json(formatDialogueExport(dialogue, characters, conversations, choices));
+                        db.all(`SELECT * FROM conversation_variants WHERE conversation_id IN (${convIds.map(() => '?').join(',')})`,
+                            convIds, (err, variants) => {
+                            if (err) return res.status(500).json({ message: 'Ошибка' });
+                            res.json(formatDialogueExport(dialogue, characters, conversations, choices, variants));
+                        });
                     });
                 });
             });
         });
     });
 
-// Форматирование диалога для клиента
-    function formatDialogueExport(dialogue, characters, conversations, choices) {
+    // Экспорт диалога в формате терминала (как /api/dialogue/:frequency, без отношений игрока):
+    // портреты персонажей, варианты реплик для сословий и тексты ответов для сословий.
+    function formatDialogueExport(dialogue, characters, conversations, choices, variants = []) {
         const result = {
             frequency: dialogue.frequency,
             characters: characters.map(c => ({
@@ -818,7 +854,12 @@ router.post('/conversations', (req, res) => {
                 voice: c.voice,
                 voiceMode: c.voice_mode || 'none',
                 voiceDuration: c.voice_duration,
-                window: c.window
+                window: c.window,
+                ...portraitForClient(c.global_character_id ? {
+                    portrait_scale: c.gc_portrait_scale, portrait_x: c.gc_portrait_x, portrait_y: c.gc_portrait_y,
+                    portrait_mirror: c.gc_portrait_mirror, portrait_x_rel: c.gc_portrait_x_rel, portrait_y_rel: c.gc_portrait_y_rel
+                } : c),
+                globalCharacterId: c.global_character_id
             })),
             allowedUsers: JSON.parse(dialogue.allowed_users || '[-1]'),
             isActive: dialogue.is_active !== 0,
@@ -836,8 +877,8 @@ router.post('/conversations', (req, res) => {
             const convChoices = choices.filter(ch => ch.conversation_id === c.id);
             const char = characters.find(ch => ch.id === c.character_id);
             
-const convObj = {
-                speaker: char ? char.name : 'Система',
+            const convObj = {
+                speaker: char ? (char.gc_name || char.name) : 'Система',
                 text: c.text
             };
             
@@ -845,7 +886,25 @@ const convObj = {
             if (c.fake_name) convObj.fakeName = c.fake_name;
             if (c.voiceline) convObj.voiceline = c.voiceline;
             if (c.typing_speed && c.typing_speed > 0) convObj.typingSpeed = c.typing_speed;
-            
+            if (c.voice_offset > 0) convObj.voiceOffset = c.voice_offset;
+            if (parseProfile(c.typing_profile)) convObj.typingProfile = parseProfile(c.typing_profile);
+
+            const convVariants = variants.filter(v => v.conversation_id === c.id && v.text);
+            if (convVariants.length > 0) {
+                convObj.variants = {};
+                convVariants.forEach(v => {
+                    convObj.variants[v.audience] = {
+                        text: v.text,
+                        voiceline: v.voiceline || '',
+                        fakeName: v.fake_name || '',
+                        image: v.custom_image || '',
+                        typingSpeed: v.typing_speed > 0 ? v.typing_speed : 0,
+                        voiceOffset: v.voice_offset > 0 ? v.voice_offset : 0,
+                        typingProfile: parseProfile(v.typing_profile)
+                    };
+                });
+            }
+
             if (convChoices.length > 0) {
                 const choice = convChoices[0];
                 convObj.hasChoice = true;
@@ -866,6 +925,10 @@ const convObj = {
                                 opt.relationEffect = ch.relation_effect || 0;
                             }
                         }
+                        const optionVariants = {};
+                        if (ch.option_text_cavalier) optionVariants.cavalier = ch.option_text_cavalier;
+                        if (ch.option_text_exile) optionVariants.exile = ch.option_text_exile;
+                        if (Object.keys(optionVariants).length) opt.variants = optionVariants;
                         return opt;
                     })
                 };

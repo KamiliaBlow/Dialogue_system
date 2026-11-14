@@ -6,7 +6,9 @@ import debug from '../debug.js';
 import { escapeHtml, escapeAttr } from '../escape-utils.js';
 import { readPortrait, portraitCss } from '../portrait-frame.js';
 import DialogueTreeVisualizer from './dialogue-tree-visualizer.js';
-import { TOKENS, hasTokens, prepareConversation } from '../pilot-tokens.js';
+import { TOKENS, hasTokens, prepareConversation, applyTokens, tokenValues } from '../pilot-tokens.js';
+import { planTyping, typingTimeline } from '../typing-text.js';
+import { analyzeVoice } from '../voice-analysis.js';
 import store, { assetUrl, fileName } from './studio-store.js';
 
 const STATIC_PORTRAIT = 'assets/images/portraits/static.gif';
@@ -38,6 +40,23 @@ const ESTATES = [
 const INFO_OPEN_KEY = 'studioDialogueInfoOpen';
 // Разметка терминала ([1s], [Shake]…[ShakeE]) в предпросмотре не нужна.
 const stripMarkup = text => String(text || '').replace(/\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').trim();
+// Русское число: plural(3, 'фраза', 'фразы', 'фраз') → «фразы».
+function plural(n, one, few, many) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+}
+// Скорость по фразам из базы (typing_profile — JSON [[внутри, после], …]) или null.
+function parseStoredProfile(raw) {
+    if (!raw) return null;
+    try {
+        const list = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(list) && list.length ? list : null;
+    } catch {
+        return null;
+    }
+}
 
 export default class DialogueEditor {
     constructor(studio) {
@@ -450,6 +469,9 @@ export default class DialogueEditor {
         this.el('conversation-fake-name').value = conv?.fake_name || '';
         selectValue(this.el('conversation-voiceline'), conv?.voiceline);
         this.el('conversation-typing-speed').value = conv?.typing_speed || 0;
+        this.el('conversation-voice-offset').value = conv?.voice_offset || 0;
+        this.stopTypingPreview();
+        this.setTypingProfile(this.typingUi(), parseStoredProfile(conv?.typing_profile));
         this.el('conversation-forced-sort').value = !conv && forcedSortOrder !== null ? forcedSortOrder : '';
 
         this.fillVariantFields(conv);
@@ -510,6 +532,9 @@ export default class DialogueEditor {
             q('.variant-fake-name').value = v?.fake_name || '';
             selectValue(q('.variant-custom-image'), v?.custom_image);
             q('.variant-typing-speed').value = v?.typing_speed || 0;
+            q('.variant-voice-offset').value = v?.voice_offset || 0;
+            const typing = this.typingUi(block);
+            this.setTypingProfile(typing, parseStoredProfile(v?.typing_profile));
 
             const sync = () => {
                 const on = q('.variant-enabled').checked;
@@ -525,8 +550,7 @@ export default class DialogueEditor {
             q('.variant-preview').addEventListener('click', () => this.previewSound(q('.variant-voiceline')));
             q('.variant-upload-btn').addEventListener('click', () => q('.variant-upload').click());
             q('.variant-upload').addEventListener('change', e => this.uploadFile(e, 'voiceline', q('.variant-voiceline')));
-            q('.variant-auto-speed').addEventListener('click', () =>
-                this.autoCalculateTypingSpeed(q('.variant-voiceline'), q('.variant-text'), q('.variant-typing-speed')));
+            this.bindTypingControls(typing);
             q('.variant-voiceline').addEventListener('change', () => this.updateConversationHints());
             sync();
 
@@ -590,7 +614,9 @@ export default class DialogueEditor {
             const text = block.querySelector('.variant-text').value;
             warnEl(block.querySelector('.variant-token-warning'), `${text} ${block.querySelector('.variant-fake-name').value}`);
             block.querySelector('.variant-voice-hint').hidden = !(block.querySelector('.variant-voiceline').value && hasTokens(text));
+            this.refreshTypingProfile(this.typingUi(block));
         });
+        this.refreshTypingProfile(this.typingUi());
 
         const conv = this.formConversation();
         document.querySelectorAll('.conversation-preview .preview-line').forEach(line => {
@@ -633,12 +659,15 @@ export default class DialogueEditor {
                 voiceline: block.querySelector('.variant-voiceline').value,
                 fakeName: block.querySelector('.variant-fake-name').value.trim(),
                 customImage: block.querySelector('.variant-custom-image').value,
-                typingSpeed: parseFloat(block.querySelector('.variant-typing-speed').value) || 0
+                typingSpeed: parseFloat(block.querySelector('.variant-typing-speed').value) || 0,
+                voiceOffset: parseInt(block.querySelector('.variant-voice-offset').value, 10) || 0,
+                typingProfile: this.typingProfileOf(this.typingUi(block))
             });
         }
     }
 
     closeConversation() {
+        this.stopTypingPreview();
         this.el('conversation-modal').style.display = 'none';
     }
 
@@ -755,6 +784,7 @@ export default class DialogueEditor {
         const fakeName = this.el('conversation-fake-name').value;
         const voiceline = this.el('conversation-voiceline').value;
         const typingSpeed = parseFloat(this.el('conversation-typing-speed').value) || 0;
+        const voiceOffset = parseInt(this.el('conversation-voice-offset').value, 10) || 0;
         const hasChoice = this.el('has-choice').checked;
 
         if (!characterId || !text) {
@@ -792,7 +822,8 @@ export default class DialogueEditor {
             sortOrder = this.state.conversations.find(c => String(c.id) === String(id))?.sort_order;
         }
 
-        const fields = { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, sortOrder };
+        const typingProfile = this.typingProfileOf(this.typingUi());
+        const fields = { branchId, characterId, text, customImage, fakeName, voiceline, typingSpeed, voiceOffset, typingProfile, sortOrder };
         try {
             let conversationId = id;
             if (id) {
@@ -972,22 +1003,225 @@ export default class DialogueEditor {
         this.state.audioPreview.play().catch(err => debug('Audio play error:', err));
     }
 
-    autoCalculateTypingSpeed(voicelineEl = this.el('conversation-voiceline'), textEl = this.el('conversation-text'), speedEl = this.el('conversation-typing-speed')) {
-        const voicelinePath = voicelineEl.value;
-        if (!voicelinePath) return toast('Сначала выберите файл озвучки', 'error');
-        const charCount = textEl.value.replace(/\[\d+\.?\d*s\]/g, '').trim().length;
-        if (!charCount) return toast('Сначала введите текст реплики', 'error');
+    // ===================== печать под озвучку (ROADMAP, задача 9) =====================
 
-        const audio = new Audio(assetUrl(voicelinePath));
-        audio.addEventListener('loadedmetadata', () => {
-            if (!(audio.duration > 0) || !isFinite(audio.duration)) {
-                toast('Не удалось получить длительность аудиофайла', 'error');
-                return;
-            }
-            speedEl.value = Math.round(audio.duration * 1000 / charCount);
+    // Поля печати основной реплики (block = null) или варианта для сословия.
+    typingUi(block = null) {
+        if (!block) {
+            return {
+                speed: this.el('conversation-typing-speed'),
+                offset: this.el('conversation-voice-offset'),
+                profile: this.el('conversation-typing-profile'),
+                note: this.el('conversation-typing-profile-note'),
+                preview: this.el('conversation-typing-preview'),
+                auto: this.el('auto-calc-speed-btn'),
+                check: this.el('preview-typing-btn'),
+                voiceline: this.el('conversation-voiceline'),
+                text: this.el('conversation-text'),
+                audience: 'lancer'
+            };
+        }
+        const q = cls => block.querySelector(cls);
+        return {
+            speed: q('.variant-typing-speed'),
+            offset: q('.variant-voice-offset'),
+            profile: q('.variant-typing-profile'),
+            note: q('.variant-typing-profile-note'),
+            preview: q('.variant-typing-preview'),
+            auto: q('.variant-auto-speed'),
+            check: q('.variant-preview-typing'),
+            voiceline: q('.variant-voiceline'),
+            text: q('.variant-text'),
+            audience: block.dataset.audience
+        };
+    }
+
+    bindTypingControls(ui) {
+        ui.auto.addEventListener('click', () => this.autoCalculateTypingSpeed(ui));
+        ui.check.addEventListener('click', () => this.previewTyping(ui));
+        ui.note.querySelector('.typing-profile-reset').addEventListener('click', () => {
+            this.setTypingProfile(ui, null);
+            toast('Скорость по фразам убрана: реплика печатается скоростью из поля', 'success');
         });
-        audio.addEventListener('error', () => toast('Не удалось загрузить аудиофайл для расчёта', 'error'));
-        audio.load();
+        // Скорость поправили руками — значит, нужна одна скорость на всю реплику.
+        ui.speed.addEventListener('input', () => { if (ui.profile.value) this.setTypingProfile(ui, null); });
+    }
+
+    // Скорость по фразам ([[внутри, после], …] на каждую фразу текста) хранится вместе с тем,
+    // для какого текста и записи её посчитали: поменяли их — профиль больше не годится.
+    setTypingProfile(ui, profile, summary = '') {
+        const list = parseStoredProfile(profile);
+        ui.profile.value = list ? JSON.stringify(list) : '';
+        ui.profile.dataset.text = list ? ui.text.value : '';
+        ui.profile.dataset.voiceline = list ? ui.voiceline.value : '';
+        ui.profile.dataset.summary = list
+            ? summary || `Скорость по фразам из «Авто»: ${list.length} ${plural(list.length, 'фраза', 'фразы', 'фраз')} текста. Поле скорости — запасное.`
+            : '';
+        this.refreshTypingProfile(ui);
+    }
+
+    // Профиль для сохранения: null, если его нет или текст / озвучка с тех пор изменились.
+    typingProfileOf(ui) {
+        if (!ui.profile.value) return null;
+        if (ui.profile.dataset.text !== ui.text.value || ui.profile.dataset.voiceline !== ui.voiceline.value) return null;
+        return parseStoredProfile(ui.profile.value);
+    }
+
+    refreshTypingProfile(ui) {
+        const stored = !!ui.profile.value;
+        const valid = !!this.typingProfileOf(ui);
+        ui.note.hidden = !stored;
+        ui.note.classList.toggle('is-stale', stored && !valid);
+        if (!stored) return;
+        ui.note.querySelector('.typing-profile-text').textContent = valid
+            ? ui.profile.dataset.summary
+            : 'Текст или озвучка изменились — скорость по фразам не сохранится. Нажмите «Авто» ещё раз или оставьте одну скорость.';
+    }
+
+    // «Авто» (шаги A–C). Запись декодируется целиком (voice-analysis.js): точная длина, границы речи
+    // и паузы внутри неё. Тишина в начале уходит в «голос с … мс» — терминал ждёт её. Фразы текста
+    // сопоставляются с участками речи, и у каждой своя скорость (typing-text.js, planTyping);
+    // в поле скорости — одна скорость на всю речь: её терминал берёт, если фраз не получилось.
+    // Текст — как его напечатает терминал: паузы [Ns] и добавки за знаки препинания вычитаются,
+    // разметка и маркеры помех — не символы, метки пилота — имя тестового пилота этого сословия.
+    autoCalculateTypingSpeed(ui = this.typingUi()) {
+        const voicelinePath = ui.voiceline.value;
+        if (!voicelinePath) return toast('Сначала выберите файл озвучки', 'error');
+        const pilot = PREVIEW_PILOTS[ui.audience] || PREVIEW_PILOTS.lancer;
+        const text = applyTokens(ui.text.value, tokenValues(pilot));
+        if (!text.trim()) return toast('Сначала введите текст реплики', 'error');
+
+        return withBusy(ui.auto, async () => {
+            let voice;
+            let approximate = false;
+            try {
+                voice = await analyzeVoice(assetUrl(voicelinePath));
+            } catch (error) {
+                // Формат, который браузер играет, но не декодирует целиком, — по заголовку файла, без обрезки тишины.
+                debug('Анализ озвучки не удался, длительность по заголовку:', error);
+                const duration = await this.mediaDuration(assetUrl(voicelinePath));
+                if (!duration) return toast('Не удалось загрузить аудиофайл для расчёта', 'error');
+                voice = { duration, start: 0, end: duration, speech: duration, leadSilence: 0, tailSilence: 0,
+                    segments: [{ start: 0, end: duration }], silent: true };
+                approximate = true;
+            }
+
+            const plan = planTyping(text, voice);
+            if (plan.error) return toast(plan.error, 'error');
+            ui.speed.value = plan.speed;
+            const offset = Math.round(voice.leadSilence * 1000);
+            ui.offset.value = offset;
+
+            const byPhrases = Array.isArray(plan.phraseProfile) && plan.phraseProfile.length > 0;
+            const sec = v => `${v.toFixed(1)} с`;
+            const parts = [];
+            if (approximate) parts.push(`запись не разобрана, длина по заголовку ${sec(voice.duration)}`);
+            else if (voice.silent) parts.push(`голос в записи не найден, взята вся длина ${sec(voice.duration)}`);
+            else parts.push(`речь ${sec(voice.speech)} из ${sec(voice.duration)} (тишина: в начале ${sec(voice.leadSilence)}, в конце ${sec(voice.tailSilence)})`);
+
+            let summary = '';
+            if (byPhrases) {
+                const speeds = plan.phraseProfile.map(p => p[0]);
+                const range = `${Math.min(...speeds)}–${Math.max(...speeds)} мс/символ`;
+                summary = `Скорость по фразам: ${plan.phrases} ${plural(plan.phrases, 'отрезок', 'отрезка', 'отрезков')} речи `
+                    + `на ${plan.phrasesInText} ${plural(plan.phrasesInText, 'фразу', 'фразы', 'фраз')} текста, ${range}. `
+                    + `Поле скорости — запасное: им печатается, если текст поменяют.`;
+                parts.push(`по фразам — ${plan.phrases} ${plural(plan.phrases, 'отрезок', 'отрезка', 'отрезков')} (в записи ${plan.speechParts}, в тексте ${plan.phrasesInText}), ${range}`);
+            } else if (!approximate && !voice.silent) {
+                parts.push(plan.phrasesInText < 2 ? 'одна скорость: в тексте одна фраза' : 'одна скорость: в записи нет пауз между фразами');
+            }
+            this.setTypingProfile(ui, byPhrases ? plan.phraseProfile : null, summary);
+
+            const waits = [];
+            if (plan.pauseSec > 0) waits.push(`паузы [Ns] ${sec(plan.pauseSec)}`);
+            if (plan.punctSec > 0) waits.push(`знаки препинания ${sec(plan.punctSec)}`);
+            if (waits.length) parts.push(`учтены ${waits.join(' и ')}`);
+            if (hasTokens(ui.text.value)) parts.push(`метки пилота — как у ${pilot.callsign}`);
+            toast(`${byPhrases ? 'Запасная скорость' : 'Скорость'} ${plan.speed} мс/символ, голос с ${offset} мс: ${parts.join('; ')}`, 'success');
+        });
+    }
+
+    // «Проверить»: реплика печатается вместе с озвучкой по тем же правилам, что в терминале
+    // (средние задержки, без случайностей и эффектов разметки). Повторное нажатие — стоп.
+    previewTyping(ui) {
+        const same = this.typingPreview?.box === ui.preview;
+        this.stopTypingPreview();
+        if (same) return;
+
+        const pilot = PREVIEW_PILOTS[ui.audience] || PREVIEW_PILOTS.lancer;
+        const text = applyTokens(ui.text.value, tokenValues(pilot));
+        if (!text.trim()) return toast('Сначала введите текст реплики', 'error');
+        const { segments, times } = typingTimeline(text, {
+            speed: parseFloat(ui.speed.value) || 0,
+            phraseProfile: this.typingProfileOf(ui)
+        });
+        const offset = parseInt(ui.offset.value, 10) || 0;
+        const path = ui.voiceline.value;
+        const audio = path ? new Audio(assetUrl(path)) : null;
+
+        const box = ui.preview;
+        const shown = document.createTextNode('');
+        const cursor = document.createElement('span');
+        cursor.className = 'typing-preview-cursor';
+        box.replaceChildren(shown, cursor);
+        box.hidden = false;
+        ui.check.textContent = 'Стоп';
+
+        const preview = { box, button: ui.check, audio, raf: 0, startAt: null };
+        this.typingPreview = preview;
+        let printed = -1;
+        const tick = () => {
+            if (this.typingPreview !== preview) return;
+            if (preview.startAt !== null) {
+                const elapsed = performance.now() - preview.startAt;
+                let k = Math.max(printed, 0);
+                while (k < times.length && times[k] <= elapsed) k++;
+                if (k !== printed) {
+                    printed = k;
+                    shown.data = segments.slice(0, k).map(s => s.char).join('');
+                }
+                if (k >= times.length && (!audio || audio.ended || audio.paused)) {
+                    this.stopTypingPreview();
+                    return;
+                }
+            }
+            preview.raf = requestAnimationFrame(tick);
+        };
+
+        if (audio) {
+            // Отсчёт — от фактического начала звука, как в терминале.
+            audio.addEventListener('playing', () => {
+                if (preview.startAt === null) preview.startAt = performance.now() - audio.currentTime * 1000 + offset;
+            }, { once: true });
+            audio.play().catch(() => {
+                if (this.typingPreview !== preview) return;
+                preview.startAt = performance.now();
+                toast('Озвучка не запустилась — печать без звука', 'error');
+            });
+        } else {
+            preview.startAt = performance.now();
+        }
+        tick();
+    }
+
+    stopTypingPreview() {
+        const preview = this.typingPreview;
+        if (!preview) return;
+        this.typingPreview = null;
+        cancelAnimationFrame(preview.raf);
+        if (preview.audio) preview.audio.pause();
+        preview.button.textContent = 'Проверить';
+        preview.box.querySelector('.typing-preview-cursor')?.remove();
+    }
+
+    // Длительность по заголовку файла — запасной путь, если запись не декодируется.
+    mediaDuration(url) {
+        return new Promise(resolve => {
+            const audio = new Audio(url);
+            audio.addEventListener('loadedmetadata', () => resolve(isFinite(audio.duration) ? audio.duration : 0));
+            audio.addEventListener('error', () => resolve(0));
+            audio.load();
+        });
     }
 
     // targetSelect — список озвучки, в котором выбрать загруженный файл (по умолчанию основной).
@@ -1059,7 +1293,7 @@ export default class DialogueEditor {
         on('preview-conversation-voiceline-btn', 'click', () => this.previewSound('conversation-voiceline'));
         on('upload-conversation-voiceline-btn', 'click', () => this.el('upload-conversation-voiceline').click());
         on('upload-conversation-voiceline', 'change', e => this.uploadFile(e, 'voiceline'));
-        on('auto-calc-speed-btn', 'click', () => this.autoCalculateTypingSpeed());
+        this.bindTypingControls(this.typingUi());
 
         // Варианты для сословий и метки пилота
         on('has-variant', 'change', e => {
