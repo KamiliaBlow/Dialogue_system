@@ -7,11 +7,13 @@
   <link rel="stylesheet" href="./styles/themes.css">
   <script src="./scripts/ktb-houses.js"></script>
   <script src="./scripts/ui-scale.js"></script>
+  <!-- HORUS: случайные повреждения корпуса на фоне, свои на каждую загрузку -->
+  <script src="./scripts/horus-damage.js" defer></script>
 
   <link rel="stylesheet" href="./styles/scrollbars.css">
 </head>
 <body>
-<script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);if(window.KtbHouses)KtbHouses.applyCached(document.body);}catch(e){}})();</script>
+<script>(function(){try{var t=localStorage.getItem('userTheme');if(['yellow','green','ktb','horus','ssc','ha'].indexOf(t)>=0)document.body.classList.add('theme-'+t);if(window.KtbHouses)KtbHouses.applyCached(document.body);}catch(e){}})();</script>
 <!-- partial:index.partial.html -->
 <html lang="ru">
 <head>

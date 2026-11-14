@@ -17,6 +17,12 @@ const { requireAuth, requireAdmin } = require('./middleware/auth');
 const { Validator, validateBody } = require('./utils/validator');
 const { BASE_FRAME_WIDTH: PORTRAIT_BASE_WIDTH, portraitForClient } = require('./utils/portrait');
 
+// Темы терминала. green = GMS, yellow = IPS-N, ktb = КТБ, horus = HORUS, ssc = Smith-Shimano Corpro,
+// ha = Harrison Armory.
+// Список один на весь сервер: миграция пилотов при запуске сбрасывает тему, которой в нём нет.
+const VALID_THEMES = ['yellow', 'green', 'ktb', 'horus', 'ssc', 'ha'];
+const VALID_THEMES_SQL = VALID_THEMES.map(t => `'${t}'`).join(', ');
+
 // ====== Утилиты безопасности ======
 
 // Проверка сигнатур (magic bytes) загружаемых файлов.
@@ -665,8 +671,8 @@ tables.forEach(sql => db.run(sql));
     });
     db.run(`UPDATE pilot_profiles
             SET theme = COALESCE((SELECT us.theme FROM user_settings us
-                                  WHERE us.user_id = pilot_profiles.user_id AND us.theme IN ('yellow', 'green', 'ktb')), 'yellow')
-            WHERE theme IS NULL OR theme NOT IN ('yellow', 'green', 'ktb')`, (err) => {
+                                  WHERE us.user_id = pilot_profiles.user_id AND us.theme IN (${VALID_THEMES_SQL})), 'yellow')
+            WHERE theme IS NULL OR theme NOT IN (${VALID_THEMES_SQL})`, (err) => {
         if (err) Logger.error('Migration error (pilot theme backfill):', err.message);
     });
 
@@ -1004,7 +1010,6 @@ const KTB_HOUSE_KEYS = ['order', 'glass', 'smoke', 'stone', 'sand', 'water', 'du
 // Знак своего Дома: id из набора client side/scripts/ktb-houses.js (набор пополняется,
 // поэтому проверяется формат id); незнакомый id клиент рисует короной.
 const KTB_SIGIL_ID = /^[a-z][a-z0-9-]{0,23}$/;
-const VALID_THEMES = ['yellow', 'green', 'ktb'];
 
 // Тема по умолчанию для нового пилота — последняя выбранная пользователем (user_settings.theme).
 function getUserTheme(userId, callback) {
@@ -1245,7 +1250,7 @@ app.use('/api', pilotRoutes);
 
 // Плейлист темы для авторизованных пользователей (воспроизведение в терминале).
 app.get('/api/music-playlist/:theme', requireAuth, (req, res) => {
-    const theme = ['yellow', 'green', 'ktb'].includes(req.params.theme) ? req.params.theme : 'yellow';
+    const theme = VALID_THEMES.includes(req.params.theme) ? req.params.theme : 'yellow';
     db.all('SELECT id, title, file_path, volume, sort_order FROM music_playlist WHERE theme = ? ORDER BY sort_order, id',
         [theme], (err, rows) => {
             if (err) return res.status(500).json({ message: 'Ошибка получения плейлиста' });
@@ -1855,7 +1860,7 @@ adminRoutes.get('/music', adminMiddleware, (req, res) => {
 
 // Загрузка трека в плейлист темы.
 adminRoutes.post('/music/upload', adminMiddleware, uploadMusic.single('music'), (req, res) => {
-    const theme = ['yellow', 'green', 'ktb'].includes(req.body.theme) ? req.body.theme : 'yellow';
+    const theme = VALID_THEMES.includes(req.body.theme) ? req.body.theme : 'yellow';
 
     if (!req.file) {
         Logger.warn('Music upload: файл не получен (поле "music" отсутствует или отклонено фильтром)');

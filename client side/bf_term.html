@@ -1022,7 +1022,7 @@
       try {
         const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
         const data = await response.json();
-        try { localStorage.setItem('userTheme', ['green', 'ktb'].includes(data.theme) ? data.theme : 'yellow'); } catch (e) {}
+        try { localStorage.setItem('userTheme', ['green', 'ktb', 'horus', 'ssc', 'ha'].includes(data.theme) ? data.theme : 'yellow'); } catch (e) {}
         document.body.classList.remove('theme-green', 'theme-ktb');
         if (data.theme === 'green' || data.theme === 'ktb') {
           document.body.classList.add(`theme-${data.theme}`);

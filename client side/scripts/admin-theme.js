@@ -1,12 +1,15 @@
 import AppConfig from './config.js';
 
-const VALID_THEMES = ['yellow', 'green', 'ktb'];
+const VALID_THEMES = ['yellow', 'green', 'ktb', 'horus', 'ssc', 'ha'];
 
 // Имя системы в заголовках админ-страниц совпадает с терминалом активной темы.
 const SYSTEM_NAMES = {
     green: 'GMS-4521',
     yellow: 'IPS-N-7.4.2',
-    ktb: 'ORACULUM-5.5.0'
+    ktb: 'ORACULUM-5.5.0',
+    horus: '[UNLISTED]',
+    ssc: 'LUX-ICONIC-01',
+    ha: 'HA-PURVIEW-9'
 };
 
 function applySystemName(theme) {
@@ -19,7 +22,7 @@ function applySystemName(theme) {
 
 // Применяет тему из профиля пользователя (user-settings.theme) к админ-страницам.
 // Токены и оформление тем — в styles/admin-styles.css и styles/admin-themes.css
-// (green = GMS, yellow = IPS-N, ktb = КТБ).
+// (green = GMS, yellow = IPS-N, ktb = КТБ, horus = HORUS, ssc = Smith-Shimano Corpro, ha = Harrison Armory).
 export async function applyAdminTheme() {
     try {
         const response = await fetch(`${AppConfig.API_URL}/user-settings`, {
@@ -30,7 +33,7 @@ export async function applyAdminTheme() {
         const data = await response.json();
         const theme = VALID_THEMES.includes(data?.theme) ? data.theme : 'green';
         try { localStorage.setItem('userTheme', theme); } catch (e) {}
-        document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
+        document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb', 'theme-horus', 'theme-ssc', 'theme-ha');
         document.body.classList.add(`theme-${theme}`);
         applySystemName(theme);
     } catch (e) {

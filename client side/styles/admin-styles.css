@@ -645,8 +645,40 @@ body.theme-ktb {
     background-attachment: fixed;
 }
 
+/* HORUS: фосфорный зелёный #00A256 (COMP/CON). SSC: янтарь #D1920A (COMP/CON). */
+body.theme-horus {
+    --primary-color: #00a256;
+    --primary-rgb: 0, 162, 86;
+    --text-color: #b4e6c6;
+    --bg-dark: #030604;
+    --bg-card: rgba(4, 12, 7, 0.9);
+    --danger-color: #ff2e88;
+}
+
+body.theme-ssc {
+    --primary-color: #d1920a;
+    --primary-rgb: 209, 146, 10;
+    --text-color: #efeae0;
+    --bg-dark: #090a0d;
+    --bg-card: rgba(16, 17, 21, 0.9);
+    --danger-color: #e06a5a;
+}
+
+/* HA: фирменный пурпур #A15EA8 (COMP/CON). */
+body.theme-ha {
+    --primary-color: #a15ea8;
+    --primary-rgb: 161, 94, 168;
+    --text-color: #e6e0ea;
+    --bg-dark: #0b090d;
+    --bg-card: rgba(20, 16, 24, 0.9);
+    --danger-color: #e5484d;
+}
+
 body.theme-yellow,
-body.theme-green { background-color: var(--bg-dark); }
+body.theme-green,
+body.theme-horus,
+body.theme-ssc,
+body.theme-ha { background-color: var(--bg-dark); }
 
 body.theme-ktb .admin-title,
 body.theme-ktb .admin-card-title {
@@ -2354,6 +2386,12 @@ details.dialogue-info > summary:hover .dialogue-info-toggle { border-color: var(
 .pf-mini.pf-theme-green figcaption { color: #db1a2d; }
 .pf-mini.pf-theme-yellow figcaption { color: #1c9ae8; }
 .pf-mini.pf-theme-ktb figcaption { color: #c6a052; }
+.pf-mini.pf-theme-horus  { --t-line: rgba(0, 162, 86, 0.6); --t-line-soft: rgba(0, 162, 86, 0.18); --t-accent: #00a256; --t-accent-soft: rgba(0, 162, 86, 0.14); --t-dim: #5f8f72; }
+.pf-mini.pf-theme-ssc    { --t-line: rgba(239, 234, 224, 0.12); --t-line-soft: rgba(239, 234, 224, 0.08); --t-accent: #d1920a; --t-accent-soft: rgba(209, 146, 10, 0.1); --t-dim: #8c8679; }
+.pf-mini.pf-theme-horus figcaption { color: #3dff9a; }
+.pf-mini.pf-theme-ssc figcaption { color: #d1920a; letter-spacing: 0.24em; }
+.pf-mini.pf-theme-ha     { --t-line: #6e4373; --t-line-soft: rgba(161, 94, 168, 0.2); --t-accent: #a15ea8; --t-accent-soft: rgba(161, 94, 168, 0.14); --t-dim: #8a7c90; }
+.pf-mini.pf-theme-ha figcaption { color: #a15ea8; font-weight: 600; }
 
 /* Узкие экраны: колонки друг под другом */
 @media (max-width: 1500px) {

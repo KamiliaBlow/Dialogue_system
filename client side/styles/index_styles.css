@@ -35,6 +35,40 @@
     font-display: swap;
 }
 
+/* HORUS: рукописные заметки на изоленте. SSC: рубленый Jost и текстовый Manrope. */
+@font-face {
+    font-family: 'Neucha';
+    src: url('../assets/fonts/Neucha-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Jost';
+    src: url('../assets/fonts/Jost-Variable.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+/* HA: узкий рубленый Oswald для заголовков и плашек. */
+@font-face {
+    font-family: 'Oswald';
+    src: url('../assets/fonts/Oswald-Variable.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 200 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Manrope';
+    src: url('../assets/fonts/Manrope-Variable.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 200 800;
+    font-display: swap;
+}
+
 @keyframes shake {
     0% { transform: translate(0, 0); }
     25% { transform: translate(-2px, 0); }

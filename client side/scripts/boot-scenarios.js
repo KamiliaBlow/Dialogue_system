@@ -5,7 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    const THEMES = ['green', 'yellow', 'ktb'];
+    const THEMES = ['green', 'yellow', 'ktb', 'horus', 'ssc', 'ha'];
     const GENDERS = ['female', 'male', 'neutral'];
     const ESTATES = ['cavalier', 'lancer'];
 
@@ -227,9 +227,110 @@
         });
     }
 
+    // HORUS: узел краденой омнисети. Лицензий нет, подписи нет; девиз — из COMP/CON
+    // («поздравляем, пилот, вы избраны; доступ ваш, пока можете его удержать»).
+    function buildHorusScenario(profile) {
+        const normalized = normalizeProfile(profile);
+        const callsign = normalized.callsign || 'безымянный';
+        const { hash } = hashOf(normalized);
+        const node = (0x1000 + (hash % 0xefff)).toString(16).toUpperCase();
+        const noise = 17 + (hash % 41);
+        return applyReadableTiming({
+            theme: 'horus',
+            system: '[UNLISTED]',
+            bannerTitle: 'H0RUS',
+            bannerSubtitle: `[UNLISTED] • УЗЕЛ 0x${node} • РЕГИСТРАЦИИ НЕТ`,
+            progressLabel: 'ВНЕДРЕНИЕ В КАНАЛ',
+            confirmLabel: 'Взять доступ',
+            typingSpeed: 14,
+            lines: [
+                '[ВХОДЯЩИЙ ПАКЕТ :: ИСТОЧНИК НЕ УКАЗАН]',
+                `h0rus//узел 0x${node} • сборка самопальная • подписи нет`,
+                '',
+                logLine('Перехват омнисети Союза', '[ВНУТРИ]'),
+                logLine('Подмена сертификата GMS', '[ПРОГЛОЧЕНО]'),
+                logLine('Лицензия пилота: проверка', '[ОБОЙДЕНА]'),
+                '> Маршрут: ретрансляция ×3 через мёртвые маяки',
+                logLine('Следящий демон Союза', '[УСЫПЛЁН]'),
+                logLine(`Шум в канале ▓▒░ ${noise}%`, '[ТЕРПИМО]'),
+                logLine('Паттерн рамы в реестре', '[НЕ НАЙДЕН · ТАК И НАДО]'),
+                `> Позывной ${callsign}: принят без вопросов`,
+                '> [ПОЗДРАВЛЯЕМ, ПИЛОТ. ВЫ ИЗБРАНЫ.]',
+                '> [ДОСТУП ВАШ — ПОКА ВЫ МОЖЕТЕ ЕГО УДЕРЖАТЬ.]'
+            ],
+            greeting: `Канал твой, ${callsign}. Держи его — или его возьмёт кто-то другой.`
+        });
+    }
+
+    // Smith-Shimano Corpro: штучные рамы LUX-Iconic, ремонт вместо замены; девиз — «Вам нужен только один».
+    function buildSscScenario(profile) {
+        const normalized = normalizeProfile(profile);
+        const name = normalized.full_name || normalized.callsign || 'владелец';
+        return applyReadableTiming({
+            theme: 'ssc',
+            system: 'LUX-ICONIC-01',
+            bannerTitle: 'SMITH-SHIMANO',
+            bannerSubtitle: 'LUX-ICONIC-01 • ЧАСТНАЯ ЛИНИЯ ВЛАДЕЛЬЦА',
+            progressLabel: 'ПОДГОТОВКА ЭКЗЕМПЛЯРА',
+            confirmLabel: 'Войти',
+            typingSpeed: 18,
+            lines: [
+                'SMITH-SHIMANO CORPRO // LUX-ICONIC',
+                'служба сопровождения владельца • экземпляр 01 из 01',
+                '',
+                logLine('Пробуждение систем', 'БЕЗУПРЕЧНО'),
+                logLine('Подпись мастера рамы', 'ПОДЛИННАЯ'),
+                logLine('Калибровка под пилота', 'ИНДИВИДУАЛЬНАЯ'),
+                logLine('Гарантия: ремонт, а не замена', 'ПОЖИЗНЕННАЯ'),
+                logLine('Частная линия SSC', 'ЗАЩИЩЕНА'),
+                logLine('Сопровождение', 'ПЕРСОНАЛЬНОЕ'),
+                `> Владелец: ${name}`,
+                '> Вам нужен только один.'
+            ],
+            greeting: `Добро пожаловать, ${name}. Терминал подготовлен лично для вас.`
+        });
+    }
+
+    // Harrison Armory: имперская корпорация-государство; подвластные ей миры — Ведение (Purview).
+    // Девиз из COMP/CON — «Superior by design», здесь «Превосходство замыслом».
+    function buildHaScenario(profile) {
+        const normalized = normalizeProfile(profile);
+        const callsign = normalized.callsign || 'без позывного';
+        const { hash } = hashOf(normalized);
+        const decree = `${1000 + (hash % 9000)}-${['А', 'В', 'К', 'Р', 'Т'][hash % 5]}`;
+        const sector = ROMAN[hash % ROMAN.length];
+        return applyReadableTiming({
+            theme: 'ha',
+            system: 'HA-PURVIEW-9',
+            bannerTitle: 'HARRISON ARMORY',
+            bannerSubtitle: `HA-PURVIEW-9 • СЕТЬ ВЕДЕНИЯ • СЕКТОР ${sector}`,
+            progressLabel: 'ПРОВЕРКА ПОДДАНСТВА',
+            confirmLabel: 'Принять условия Ведения',
+            typingSpeed: 16,
+            lines: [
+                'HARRISON ARMORY // СЕТЬ ВЕДЕНИЯ',
+                `указ о доступе № ${decree} • «Превосходство замыслом»`,
+                '',
+                logLine('Подданство пилота', 'ПОДТВЕРЖДЕНО'),
+                logLine('Лицензия Арсенала', 'ДЕЙСТВУЕТ'),
+                logLine('Сектор Ведения', sector),
+                logLine('Надзор за каналом', 'ВКЛЮЧЁН'),
+                logLine('Благонадёжность', 'В НОРМЕ'),
+                logLine('Каналы Союза', 'ЧЕРЕЗ ФИЛЬТР АРСЕНАЛА'),
+                logLine('Вооружение рамы: сверка с реестром', 'ПРЕВОСХОДИТ'),
+                `> Пилот ${callsign}: служите Арсеналу — и Арсенал защитит вас.`,
+                '> Превосходство замыслом.'
+            ],
+            greeting: `Доступ разрешён, пилот ${callsign}. Ваше присутствие в эфире зарегистрировано Арсеналом.`
+        });
+    }
+
     function buildScenario(theme, profile) {
         const normalizedTheme = THEMES.includes(theme) ? theme : 'yellow';
         if (normalizedTheme === 'ktb') return buildKtbScenario(profile);
+        if (normalizedTheme === 'horus') return buildHorusScenario(profile);
+        if (normalizedTheme === 'ssc') return buildSscScenario(profile);
+        if (normalizedTheme === 'ha') return buildHaScenario(profile);
 
         if (normalizedTheme === 'green') {
             return applyReadableTiming({

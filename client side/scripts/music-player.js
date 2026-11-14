@@ -4,7 +4,7 @@
 const SERVER_ORIGIN = `${window.location.protocol}//${window.location.hostname}:3000`;
 const API_URL = `${SERVER_ORIGIN}/api`;
 const STATE_KEY = 'musicPlayerStateV1';
-const VALID_THEMES = ['yellow', 'green', 'ktb'];
+const VALID_THEMES = ['yellow', 'green', 'ktb', 'horus', 'ssc', 'ha'];
 
 const PLAYER_CSS = `
 #music-float-btn {

@@ -38,7 +38,7 @@
 
     function applyTheme(theme) {
         try { localStorage.setItem('userTheme', theme); } catch (e) {}
-        document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
+        document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb', 'theme-horus', 'theme-ssc', 'theme-ha');
         document.body.classList.add(`theme-${theme}`);
     }
 
@@ -99,8 +99,9 @@
         canvas.style.imageRendering = 'pixelated';
         const imageData = ctx.createImageData(w, h);
         const data = imageData.data;
-        // Шум в цветах тем: позолота КТБ, синий IPS-N, красный GMS.
-        const palette = theme === 'ktb' ? [0.78, 0.63, 0.32] : theme === 'yellow' ? [0.11, 0.6, 0.91] : [0.86, 0.1, 0.18];
+        // Шум в цветах тем: позолота КТБ, синий IPS-N, красный GMS, фосфор HORUS, янтарь SSC, пурпур HA.
+        const PALETTES = { ktb: [0.78, 0.63, 0.32], yellow: [0.11, 0.6, 0.91], horus: [0.1, 0.9, 0.45], ssc: [0.82, 0.57, 0.04], ha: [0.63, 0.37, 0.66] };
+        const palette = PALETTES[theme] || [0.86, 0.1, 0.18];
         for (let i = 0; i < data.length; i += 4) {
             const value = Math.random() * 255 * intensity;
             data[i] = value * palette[0];

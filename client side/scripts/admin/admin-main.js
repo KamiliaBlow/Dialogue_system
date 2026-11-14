@@ -524,7 +524,7 @@ class AdminApp {
             host.innerHTML = '<div class="no-data">У игрока нет пилотов.</div>';
             return;
         }
-        const THEMES = { yellow: 'IPS-N', green: 'GMS', ktb: 'КТБ' };
+        const THEMES = { yellow: 'IPS-N', green: 'GMS', ktb: 'КТБ', horus: 'HORUS', ssc: 'SSC', ha: 'HA' };
         const GENDERS = { female: 'леди', male: 'лорд', neutral: 'нейтр.' };
         host.textContent = '';
         pilots.forEach(p => {
@@ -598,7 +598,7 @@ class AdminApp {
         set('pilot-full-name', p.full_name);
         set('pilot-estate', p.estate === 'cavalier' ? 'cavalier' : 'lancer');
         set('pilot-gender', ['female', 'male'].includes(p.gender) ? p.gender : 'neutral');
-        set('pilot-theme', ['yellow', 'green', 'ktb'].includes(p.theme) ? p.theme : 'yellow');
+        set('pilot-theme', ['yellow', 'green', 'ktb', 'horus', 'ssc', 'ha'].includes(p.theme) ? p.theme : 'yellow');
         set('pilot-house', p.house_key || '');
         set('pilot-standing', p.house_standing === 'exile' ? 'exile' : 'member');
         set('pilot-house-custom', p.house_custom);

@@ -110,10 +110,10 @@ async function loadTheme() {
     try {
         const response = await fetch(`${API_URL}/user-settings`, { credentials: 'include' });
         const data = await response.json();
-        const theme = ['yellow', 'green', 'ktb'].includes(data.theme) ? data.theme : 'yellow';
+        const theme = ['yellow', 'green', 'ktb', 'horus', 'ssc', 'ha'].includes(data.theme) ? data.theme : 'yellow';
         state.theme = theme;
         try { localStorage.setItem('userTheme', theme); } catch (e) {}
-        document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
+        document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb', 'theme-horus', 'theme-ssc', 'theme-ha');
         document.body.classList.add(`theme-${theme}`);
     } catch (e) {
         console.warn('Failed to load theme:', e);

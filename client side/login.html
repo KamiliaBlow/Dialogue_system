@@ -41,14 +41,16 @@
 
             <div class="form-group">
                 <label class="form-label">СОЗДАТЬ ПОЗЫВНОЙ:</label>
-                <input type="text" id="registerUsername" class="form-input" autocomplete="off">
-                <div id="registerUsernameError" class="form-error">Введите позывной (мин. 3 символа).</div>
+                <input type="text" id="registerUsername" class="form-input" autocomplete="off" maxlength="50" aria-describedby="registerUsernameHint registerUsernameError">
+                <div id="registerUsernameHint" class="form-hint">От 3 символов: латинские буквы, цифры и _</div>
+                <div id="registerUsernameError" class="form-error" role="alert">Позывной: от 3 символов, только латинские буквы, цифры и _.</div>
             </div>
 
             <div class="form-group">
                 <label class="form-label">СОЗДАТЬ КОД ДОСТУПА:</label>
-                <input type="password" id="registerPassword" class="form-input">
-                <div id="registerPasswordError" class="form-error">Введите код доступа (мин. 6 символов).</div>
+                <input type="password" id="registerPassword" class="form-input" maxlength="100" autocomplete="new-password" aria-describedby="registerPasswordHint registerPasswordError">
+                <div id="registerPasswordHint" class="form-hint">От 8 символов, обязательно буквы и цифры</div>
+                <div id="registerPasswordError" class="form-error" role="alert">Код доступа: от 8 символов, буквы и цифры.</div>
             </div>
 
             <div id="registerError" class="form-error">Ошибка при регистрации.</div>

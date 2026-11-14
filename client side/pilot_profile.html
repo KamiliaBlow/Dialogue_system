@@ -39,6 +39,34 @@
       font-weight: 100 800;
       font-display: swap;
     }
+    @font-face {
+      font-family: 'Neucha';
+      src: url('./assets/fonts/Neucha-Regular.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Jost';
+      src: url('./assets/fonts/Jost-Variable.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Oswald';
+      src: url('./assets/fonts/Oswald-Variable.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 200 700;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Manrope';
+      src: url('./assets/fonts/Manrope-Variable.ttf') format('truetype');
+      font-style: normal;
+      font-weight: 200 800;
+      font-display: swap;
+    }
 
     /* IPS-N (по умолчанию): глубокий морской синий, фирменный #1C9AE8 (COMP/CON). */
     :root {
@@ -146,7 +174,7 @@
     }
 
     /* IPS-N: морская навигация — кольца пеленга. */
-    body:not(.theme-green):not(.theme-ktb) .bg-grid {
+    body:not(.theme-green):not(.theme-ktb):not(.theme-horus):not(.theme-ssc):not(.theme-ha) .bg-grid {
       background-image:
         radial-gradient(circle at 85% 18%, transparent 0 120px, rgba(28, 154, 232, 0.08) 121px 122px, transparent 123px 200px, rgba(28, 154, 232, 0.06) 201px 202px, transparent 203px),
         linear-gradient(var(--grid-line) 1px, transparent 1px),
@@ -183,6 +211,168 @@
     }
 
     .theme-green .vignette { background: radial-gradient(ellipse at center, transparent 30%, rgba(5,5,6,0.85) 100%); }
+
+    /* HORUS: краденый узел — фосфор, пунктир, сбитые карточки, изолента (как терминал, styles/themes.css). */
+    .theme-horus {
+      --bg: #030604;
+      --screen-bg: rgba(4, 12, 7, 0.92);
+      --screen-border: rgba(0, 162, 86, 0.55);
+      --screen-glow: rgba(61, 255, 154, 0.16);
+      --text: #b4e6c6;
+      --text-dim: #5f8f72;
+      --accent: #00a256;
+      --accent-soft: rgba(0, 162, 86, 0.12);
+      --success: #3dff9a;
+      --danger: #ff2e88;
+      --grid-line: rgba(0, 162, 86, 0.05);
+    }
+    .theme-horus .bg-grid {
+      background-image:
+        radial-gradient(circle, rgba(61, 255, 154, 0.14) 0 1px, transparent 1.5px),
+        repeating-linear-gradient(0deg, transparent 0 173px, rgba(255, 46, 136, 0.05) 173px 175px, transparent 175px 311px);
+      background-size: 22px 22px, 100% 100%;
+    }
+    .theme-horus .scanlines {
+      opacity: 1;
+      background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.3) 0 1px, transparent 1px 3px);
+      animation: horusFlicker 5.3s steps(1, end) infinite;
+    }
+    .theme-horus .code-overlay { display: block; }
+    .theme-horus .code-line { color: rgba(0, 162, 86, 0.12); font-family: 'JetBrains Mono', monospace; }
+    .theme-horus .vignette { background: radial-gradient(ellipse at center, transparent 34%, rgba(0, 0, 0, 0.9) 100%); }
+    .theme-horus :is(.page-title, .header-title, .editor-header, .slot-callsign) {
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.16em;
+      text-shadow: -1px 0 rgba(255, 46, 136, 0.6), 1px 0 rgba(61, 255, 154, 0.45);
+    }
+    .theme-horus .editor-header { color: #3dff9a; }
+    .theme-horus :is(.slot-card, .profile-editor) {
+      border-style: dashed;
+      border-radius: 0;
+      box-shadow: 2px 0 0 rgba(255, 46, 136, 0.3), -2px 0 0 rgba(61, 255, 154, 0.2), 0 14px 40px rgba(0, 0, 0, 0.5);
+    }
+    .theme-horus .slot-card:nth-child(odd) { rotate: -0.5deg; }
+    .theme-horus .slot-card:nth-child(even) { rotate: 0.6deg; }
+    .theme-horus .slot-card.active { box-shadow: 0 0 0 1px #3dff9a, 2px 0 0 rgba(255, 46, 136, 0.4), 0 0 24px var(--screen-glow); }
+    .theme-horus .profile-editor { position: relative; }
+    .theme-horus .profile-editor::before {
+      content: "позывной не светить";
+      position: absolute;
+      top: 8px;
+      right: 22px;
+      padding: 1px 12px 2px;
+      background: rgba(217, 200, 90, 0.9);
+      color: #2a2608;
+      font: 15px/1.25 'Neucha', 'Comic Sans MS', cursive;
+      rotate: 2.5deg;
+      clip-path: polygon(0 12%, 3% 0, 30% 6%, 62% 0, 97% 5%, 100% 0, 98% 88%, 100% 100%, 70% 94%, 35% 100%, 3% 95%, 0 100%);
+      pointer-events: none;
+    }
+    .theme-horus :is(.form-input, .checkbox-group, .btn) { border-style: dashed; border-radius: 0; }
+    .theme-horus .form-input { font-family: 'JetBrains Mono', monospace; }
+    .theme-horus .btn:hover { animation: horusJitter 0.32s steps(2, end) infinite; }
+    @keyframes horusFlicker {
+      0%, 100% { opacity: 1; }
+      41% { opacity: 0.55; }
+      42% { opacity: 1; }
+      77% { opacity: 0.3; }
+      78% { opacity: 0.9; }
+      79% { opacity: 1; }
+    }
+    @keyframes horusJitter { 0% { translate: 0 0; } 50% { translate: 1px 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      .theme-horus :is(.scanlines, .btn) { animation: none !important; }
+    }
+
+    /* SSC: LUX-Iconic — чёрный лак, янтарная волосяная линия, Jost с разрядкой, крыло на фоне. */
+    .theme-ssc {
+      --bg: #090a0d;
+      --screen-bg: rgba(16, 17, 21, 0.9);
+      --screen-border: rgba(239, 234, 224, 0.12);
+      --screen-glow: rgba(209, 146, 10, 0.12);
+      --text: #efeae0;
+      --text-dim: #8c8679;
+      --accent: #d1920a;
+      --accent-soft: rgba(209, 146, 10, 0.1);
+      --success: #f0c062;
+      --danger: #e06a5a;
+      --grid-line: transparent;
+    }
+    body.theme-ssc { font-family: 'Manrope', 'Segoe UI', sans-serif; }
+    .theme-ssc .bg-grid {
+      background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700' fill='none' stroke='%23d1920a' stroke-opacity='0.055' stroke-width='1.2'%3E%3Cg id='w'%3E%3Cpath d='M600 330C520 210 360 80 140 60C80 150 110 270 240 330C340 350 480 350 600 340Z'/%3E%3Cpath d='M600 350C500 380 330 420 230 520C260 630 410 650 520 520C570 460 592 400 600 352Z'/%3E%3Cpath d='M600 335L190 100M600 338L230 230M600 342L300 330M600 356L300 520M600 360L440 600'/%3E%3C/g%3E%3Cuse href='%23w' transform='matrix(-1 0 0 1 1200 0)'/%3E%3Cpath d='M600 300C606 330 606 420 600 470C594 420 594 330 600 300Z'/%3E%3C/svg%3E"),
+        radial-gradient(ellipse 60% 45% at 50% 40%, rgba(209, 146, 10, 0.06), transparent 70%);
+      background-size: min(1500px, 125vw) auto, 100% 100%;
+      background-position: 50% 40%, 0 0;
+      background-repeat: no-repeat;
+    }
+    .theme-ssc .scanlines { display: none; }
+    .theme-ssc .vignette { background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.75) 100%); }
+    .theme-ssc :is(.page-title, .header-title, .editor-header, .slot-callsign) {
+      font-family: 'Jost', 'Manrope', sans-serif;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+    }
+    .theme-ssc .page-title { letter-spacing: 0.4em; }
+    .theme-ssc .slot-callsign { font-weight: 400; color: #f0c062; }
+    .theme-ssc :is(.slot-card, .profile-editor) {
+      border-radius: 2px;
+      background:
+        linear-gradient(90deg, transparent, var(--accent), transparent) 50% 0 / 120px 1px no-repeat,
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 38%),
+        var(--screen-bg);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 24px 60px rgba(0, 0, 0, 0.5);
+    }
+    .theme-ssc .slot-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(209, 146, 10, 0.35), 0 24px 60px rgba(0, 0, 0, 0.5); }
+    .theme-ssc :is(.form-input, .checkbox-group, .btn) { border-radius: 2px; }
+    .theme-ssc .form-input { font-family: 'Manrope', 'Segoe UI', sans-serif; }
+    .theme-ssc .btn { font-family: 'Jost', 'Manrope', sans-serif; font-weight: 400; letter-spacing: 0.3em; }
+
+    /* HA: имперский монумент — тяжёлая кромка, косынки в углах, шевроны, лучи плаката. */
+    .theme-ha {
+      --bg: #0b090d;
+      --screen-bg: rgba(20, 16, 24, 0.94);
+      --screen-border: #6e4373;
+      --screen-glow: rgba(161, 94, 168, 0.18);
+      --text: #e6e0ea;
+      --text-dim: #8a7c90;
+      --accent: #a15ea8;
+      --accent-soft: rgba(161, 94, 168, 0.14);
+      --success: #d9b8de;
+      --danger: #e5484d;
+      --grid-line: rgba(161, 94, 168, 0.035);
+    }
+    .theme-ha .bg-grid {
+      background-image:
+        repeating-conic-gradient(from -90deg at 50% -12%, rgba(161, 94, 168, 0.05) 0 2.5deg, transparent 2.5deg 7.5deg),
+        radial-gradient(ellipse 80% 55% at 50% -10%, rgba(110, 67, 115, 0.35), transparent 70%),
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 96px 96px, 96px 96px;
+    }
+    .theme-ha .scanlines { display: none; }
+    .theme-ha :is(.page-title, .header-title, .editor-header, .slot-callsign) {
+      font-family: 'Oswald', 'Arial Narrow', sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+    }
+    .theme-ha .slot-callsign { color: #d9b8de; }
+    .theme-ha :is(.slot-card, .profile-editor) {
+      border-width: 2px;
+      border-radius: 0;
+      background:
+        linear-gradient(135deg, #a15ea8 0 12px, transparent 12px) 0 0 / 24px 24px no-repeat,
+        linear-gradient(-45deg, #6e4373 0 12px, transparent 12px) 100% 100% / 24px 24px no-repeat,
+        repeating-linear-gradient(-45deg, #a15ea8 0 5px, transparent 5px 10px) 34px 0 / 70px 5px no-repeat,
+        linear-gradient(180deg, rgba(110, 67, 115, 0.2), transparent 32%),
+        var(--screen-bg);
+    }
+    .theme-ha .slot-card.active { border-color: var(--accent); box-shadow: 0 0 24px var(--screen-glow); }
+    .theme-ha :is(.form-input, .checkbox-group, .btn) { border-radius: 0; }
+    .theme-ha .btn { border-width: 2px; font-family: 'Oswald', 'Arial Narrow', sans-serif; font-weight: 500; letter-spacing: 0.2em; }
+    .theme-ha .btn-primary { background: #6e4373; border-color: #6e4373; color: #f2eef4; }
+    .theme-ha .btn-primary:hover { background: #a15ea8; border-color: #a15ea8; color: #140d17; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -371,6 +561,26 @@
     .theme-color.ktb {
       background: linear-gradient(135deg, #e9d7a5 0%, #c6a052 45%, #6e1f25 46%, #3a1014 100%);
       border: 1px solid #c6a052;
+    }
+
+    .theme-color.horus {
+      background:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 3px),
+        linear-gradient(135deg, #3dff9a 0 32%, #00a256 32% 54%, #ff2e88 54% 60%, #061209 60%);
+      border: 1px dashed #00a256;
+    }
+
+    .theme-color.ssc {
+      background: linear-gradient(135deg, #f0c062 0%, #d1920a 45%, #121317 46%);
+      border: 1px solid rgba(209, 146, 10, 0.6);
+    }
+
+    .theme-color.ha {
+      background:
+        repeating-linear-gradient(-45deg, #d9b8de 0 2px, transparent 2px 5px) 0 0 / 100% 30% no-repeat,
+        linear-gradient(135deg, #a15ea8 0 55%, #140d17 55%);
+      border: 2px solid #6e4373;
+      border-radius: 0;
     }
 
     .slots-container {
@@ -659,6 +869,28 @@
       background: var(--success);
       color: var(--bg);
       box-shadow: 0 0 20px var(--screen-glow);
+    }
+
+    .btn:disabled,
+    .btn:disabled:hover {
+      background: transparent;
+      color: var(--text-dim);
+      border-color: var(--screen-border);
+      box-shadow: none;
+      opacity: 0.55;
+      cursor: not-allowed;
+      animation: none;
+    }
+
+    /* Пилот уже активен: не кнопка, а отметка — сплошная мягкая заливка в цвете темы. */
+    .btn.btn-success.is-current,
+    .btn.btn-success.is-current:hover {
+      background: var(--accent-soft);
+      color: var(--success);
+      border-color: var(--success);
+      border-style: solid;
+      opacity: 1;
+      cursor: default;
     }
 
     .cavalier-block {
@@ -953,10 +1185,12 @@
     }
   </style>
   <script src="./scripts/ui-scale.js"></script>
+  <!-- HORUS: случайные повреждения корпуса на фоне, свои на каждую загрузку -->
+  <script src="./scripts/horus-damage.js" defer></script>
   <link rel="stylesheet" href="./styles/scrollbars.css">
 </head>
 <body>
-  <script>(function(){try{var t=localStorage.getItem('userTheme');if(t==='yellow'||t==='green'||t==='ktb')document.body.classList.add('theme-'+t);}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('userTheme');if(['yellow','green','ktb','horus','ssc','ha'].indexOf(t)>=0)document.body.classList.add('theme-'+t);}catch(e){}})();</script>
   <div class="bg-grid"></div>
   <div class="code-overlay" id="codeOverlay"></div>
   <div class="vignette"></div>
@@ -982,7 +1216,7 @@
     <div class="slots-container" id="slotsContainer"></div>
 
     <div class="profile-editor hidden" id="profileEditor">
-      <div class="editor-header">Edit Pilot Profile - Slot <span id="editorSlotNumber"></span></div>
+      <div class="editor-header">Редактирование профиля - Слот <span id="editorSlotNumber"></span></div>
       
       <div id="editorMessage"></div>
 
@@ -992,17 +1226,17 @@
             <span class="placeholder">◈</span>
           </div>
           <input type="file" id="avatarUpload" class="avatar-upload" accept="image/*" onchange="handleAvatarUpload(event)">
-          <label for="avatarUpload" class="avatar-upload-label">Upload Avatar</label>
+          <label for="avatarUpload" class="avatar-upload-label">Загрузить аватар</label>
         </div>
 
         <div class="form-section">
           <div class="form-group">
-            <label class="form-label">Callsign (Pilot Name) *</label>
+            <label class="form-label">Позывной *</label>
             <input type="text" class="form-input" id="callsignInput" placeholder="e.g., RAVEN">
           </div>
 
           <div class="form-group" id="fullNameGroup">
-            <label class="form-label" for="fullNameInput">Full Name / Каноническое имя</label>
+            <label class="form-label" for="fullNameInput">Каноническое имя</label>
             <input type="text" class="form-input" id="fullNameInput" placeholder="Кассия-Вейл из Дома Стекла" maxlength="160">
             <small class="form-hint">Для Лансера — как удобно. Кавалер заполняет титул и дом отдельными полями ниже.</small>
           </div>
@@ -1104,16 +1338,16 @@
           -->
 
           <div class="form-group">
-            <label class="form-label" for="mechNameInput">Mech Name *</label>
+            <label class="form-label" for="mechNameInput">Название меха *</label>
             <input type="text" class="form-input" id="mechNameInput" placeholder="e.g., STEEL HUNTER">
           </div>
         </div>
       </div>
 
       <div class="form-actions">
-        <button class="btn btn-success" onclick="setActiveProfile()">Set as Active</button>
-        <button class="btn btn-primary" onclick="saveProfile()">Save Profile</button>
-        <button class="btn btn-danger" onclick="deleteProfile()">Delete</button>
+        <button class="btn btn-success" id="activateBtn" type="button" onclick="setActiveProfile()">Активировать</button>
+        <button class="btn btn-primary" onclick="saveProfile()">Сохранить</button>
+        <button class="btn btn-danger" onclick="deleteProfile()">Удалить</button>
       </div>
     </div>
   </div>
@@ -1188,9 +1422,12 @@
     const THEMES = {
       yellow: { name: 'IPS-N', note: 'Конвои и фрахт, морская сталь' },
       green: { name: 'GMS', note: 'Армейский стандарт Союза' },
-      ktb: { name: 'KTB', note: 'Баронства: ливрея Дома или неблагородная канцелярия' }
+      ktb: { name: 'KTB', note: 'Баронства: ливрея Дома или неблагородная канцелярия' },
+      horus: { name: 'HORUS', note: 'Краденый узел омнисети: самосбор, помехи, без лицензии' },
+      ssc: { name: 'SSC', note: 'Smith-Shimano Corpro: штучная работа, янтарь и чёрный лак' },
+      ha: { name: 'HA', note: 'Harrison Armory: имперская броня, Ведение и превосходство замыслом' }
     };
-    const THEME_ORDER = ['yellow', 'green', 'ktb'];
+    const THEME_ORDER = ['yellow', 'green', 'ktb', 'horus', 'ssc', 'ha'];
     let accountTheme = null;   // тема из /user-settings — пока профили не загружены или пилота нет
     let editorTheme = 'yellow';
 
@@ -1224,9 +1461,9 @@
     }
 
     function applyTheme(theme) {
-      document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb');
+      document.body.classList.remove('theme-yellow', 'theme-green', 'theme-ktb', 'theme-horus', 'theme-ssc', 'theme-ha');
       document.body.classList.add(`theme-${THEMES[theme] ? theme : 'yellow'}`);
-      if (theme === 'green') initCodeOverlay();
+      if (theme === 'green' || theme === 'horus') initCodeOverlay();
     }
 
     // Оформление страницы + кэши для других страниц (тема и ливрея КТБ активного пилота).
@@ -1335,9 +1572,9 @@
         
         if (isEmpty) {
           slot.innerHTML = `
-            <span class="slot-number">Slot ${profile.slot_number}</span>
+            <span class="slot-number">Слот ${profile.slot_number}</span>
             <span class="slot-empty-icon">◈</span>
-            <span class="slot-empty-text">Empty Slot</span>
+            <span class="slot-empty-text">Пустой слот</span>
           `;
         } else {
           const avatarUrl = getAvatarUrl(profile.avatar_path);
@@ -1345,12 +1582,12 @@
             ? `<img src="${avatarUrl}" alt="${profile.callsign}" style="width:100%;height:100%;object-fit:cover;">`
             : `<span style="font-size:1.5rem;color:var(--accent);opacity:0.5;">◈</span>`;
           slot.innerHTML = `
-            <span class="slot-number">Slot ${profile.slot_number}</span>
+            <span class="slot-number">Слот ${profile.slot_number}</span>
             <div style="width:50px;height:50px;border:1px solid var(--accent);border-radius:3px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);margin-bottom:0.5rem;">
               ${avatarHtml}
             </div>
             <div class="slot-callsign">${profile.callsign}</div>
-            <div class="slot-mech">AC: ${profile.mech_name}</div>
+            <div class="slot-mech">Мех: ${profile.mech_name}</div>
           `;
           // Тема пилота мини-образцом.
           const themeId = THEMES[profile.theme] ? profile.theme : savedPageTheme();
@@ -1382,6 +1619,23 @@
         
         container.appendChild(slot);
       });
+      updateActivateButton();
+    }
+
+    // Кнопка «Активировать»: у активного пилота — некликабельная отметка «Профиль активен»,
+    // у несохранённого слота — недоступна, пока досье не сохранено.
+    function updateActivateButton() {
+      const btn = document.getElementById('activateBtn');
+      if (!btn) return;
+      const profile = currentProfiles.find(p => p.slot_number === selectedSlot);
+      const saved = !!profile?.callsign;
+      const isActive = saved && Number(profile.is_active) === 1;
+      btn.disabled = isActive || !saved;
+      btn.classList.toggle('is-current', isActive);
+      btn.textContent = isActive ? '✓ Профиль активен' : 'Активировать';
+      btn.title = isActive
+        ? 'Этот пилот уже активен: терминал работает от его имени'
+        : (saved ? 'Сделать этого пилота активным в терминале' : 'Сначала сохраните досье');
     }
 
     function selectSlot(slotNumber) {
@@ -1754,6 +2008,7 @@
     }
 
     async function setActiveProfile() {
+      if (document.getElementById('activateBtn')?.disabled) return;
       try {
         const response = await fetch(API_URL + `/pilot-profiles/set-active/${selectedSlot}`, {
           method: 'POST',
@@ -1794,12 +2049,12 @@
           // Use full_url if available, otherwise construct URL
           const avatarSrc = data.full_url || getAvatarUrl(data.avatar_path);
           avatarPreview.innerHTML = `<img src="${avatarSrc}" alt="Avatar">`;
-          showMessage('Avatar uploaded', 'success');
+          showMessage('Аватар загруже', 'success');
         } else {
-          showMessage(data.message || 'Failed to upload avatar', 'error');
+          showMessage(data.message || 'Ошибка загрузки аватара', 'error');
         }
       } catch (e) {
-        showMessage('Error uploading avatar', 'error');
+        showMessage('Ошибка загрузки аватара', 'error');
       }
     }
 

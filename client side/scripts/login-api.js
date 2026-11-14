@@ -92,26 +92,36 @@ async function handleLogin() {
     }
 }
 
+// Те же правила, что у сервера (server side/utils/validator.js): иначе форма пропускает
+// позывной или код доступа, а сервер потом отказывает.
+function usernameProblem(username) {
+    if (username.length < 3) return 'Позывной — минимум 3 символа.';
+    if (username.length > 50) return 'Позывной — максимум 50 символов.';
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) return 'Позывной: только латинские буквы, цифры и _.';
+    return '';
+}
+
+function passwordProblem(password) {
+    if (password.length < 8) return 'Код доступа — минимум 8 символов.';
+    if (password.length > 100) return 'Код доступа — максимум 100 символов.';
+    if (!/[a-zA-Zа-яА-ЯёЁ]/.test(password) || !/[0-9]/.test(password)) return 'Код доступа должен содержать и буквы, и цифры.';
+    return '';
+}
+
+function showFieldError(id, message) {
+    const el = document.getElementById(id);
+    el.textContent = message;
+    el.style.display = message ? 'block' : 'none';
+}
+
 async function handleRegister() {
     const username = document.getElementById('registerUsername').value.trim();
     const password = document.getElementById('registerPassword').value;
-    let hasErrors = false;
-
-    if (!username || username.length < 3) {
-        document.getElementById('registerUsernameError').style.display = 'block';
-        hasErrors = true;
-    } else {
-        document.getElementById('registerUsernameError').style.display = 'none';
-    }
-
-    if (!password || password.length < 6) {
-        document.getElementById('registerPasswordError').style.display = 'block';
-        hasErrors = true;
-    } else {
-        document.getElementById('registerPasswordError').style.display = 'none';
-    }
-
-    if (hasErrors) return;
+    const usernameError = usernameProblem(username);
+    const passwordError = passwordProblem(password);
+    showFieldError('registerUsernameError', usernameError);
+    showFieldError('registerPasswordError', passwordError);
+    if (usernameError || passwordError) return;
 
     try {
         const response = await fetch(`${API_URL}/register`, {

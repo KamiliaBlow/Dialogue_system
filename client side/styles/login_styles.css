@@ -87,6 +87,13 @@ body {
   cursor: pointer;
 }
 
+/* Правила заполнения — видны сразу, до первой ошибки. */
+.form-hint {
+  color: #8a8f97;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
 .form-error {
   color: #ff5555;
   font-size: 12px;

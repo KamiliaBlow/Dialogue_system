@@ -9,7 +9,10 @@ const STATIC_IMAGE = 'assets/images/portraits/static.gif';
 const THEMES = [
     { id: 'green', label: 'GMS' },
     { id: 'yellow', label: 'IPS-N' },
-    { id: 'ktb', label: 'КТБ' }
+    { id: 'ktb', label: 'КТБ' },
+    { id: 'horus', label: 'HORUS' },
+    { id: 'ssc', label: 'SSC' },
+    { id: 'ha', label: 'HA' }
 ];
 const SCALE_MIN = 0.2;
 const SCALE_MAX = 4;

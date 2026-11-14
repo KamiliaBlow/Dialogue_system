@@ -27,7 +27,7 @@ const Validator = {
             return { valid: false, error: 'Пароль максимум 100 символов' };
         }
         // Должен содержать буквы и цифры (минимальная сложность).
-        if (!/[a-zA-Zа-яА-Я]/.test(value) || !/[0-9]/.test(value)) {
+        if (!/[a-zA-Zа-яА-ЯёЁ]/.test(value) || !/[0-9]/.test(value)) {
             return { valid: false, error: 'Пароль должен содержать буквы и цифры' };
         }
         return { valid: true, value };

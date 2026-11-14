@@ -3,12 +3,17 @@
    Подключается после admin-styles.css (каркас, редактор и дерево диалога)
    и повторяет язык тем терминала (styles/themes.css): те же токены, шрифты
    и оформление панелей.
-   green = GMS (по умолчанию), yellow = IPS-N, ktb = КТБ.
+   green = GMS (по умолчанию), yellow = IPS-N, ktb = КТБ, horus = HORUS,
+   ssc = Smith-Shimano Corpro, ha = Harrison Armory. Админка — рабочий инструмент: у HORUS здесь
+   пунктир и разъезд каналов, но без сбоев и перекосов терминала.
    ===================================================================== */
 
 @font-face { font-family: 'Cormorant'; src: url('../assets/fonts/Cormorant-Variable.ttf') format('truetype'); font-weight: 300 700; font-display: swap; }
 @font-face { font-family: 'Alegreya'; src: url('../assets/fonts/Alegreya-Variable.ttf') format('truetype'); font-weight: 400 800; font-display: swap; }
 @font-face { font-family: 'JetBrains Mono'; src: url('../assets/fonts/JetBrainsMono-Variable.ttf') format('truetype'); font-weight: 100 800; font-display: swap; }
+@font-face { font-family: 'Jost'; src: url('../assets/fonts/Jost-Variable.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Oswald'; src: url('../assets/fonts/Oswald-Variable.ttf') format('truetype'); font-weight: 200 700; font-display: swap; }
+@font-face { font-family: 'Manrope'; src: url('../assets/fonts/Manrope-Variable.ttf') format('truetype'); font-weight: 200 800; font-display: swap; }
 
 /* ---------- Токены ---------- */
 :root,
@@ -60,6 +65,57 @@ body.theme-ktb {
   --t-font-data: 'JetBrains Mono', 'Courier New', monospace;
 }
 
+body.theme-horus {
+  --t-bg: #030604;
+  --t-panel: rgba(4, 12, 7, 0.94);
+  --t-panel-2: #06120b;
+  --t-line: rgba(0, 162, 86, 0.55);
+  --t-line-soft: rgba(0, 162, 86, 0.18);
+  --t-accent: #00a256;
+  --t-accent-light: #3dff9a;
+  --t-accent-deep: #046e3c;
+  --t-accent-soft: rgba(0, 162, 86, 0.14);
+  --t-text: #b4e6c6;
+  --t-dim: #5f8f72;
+  --t-font-label: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-text: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-data: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+body.theme-ssc {
+  --t-bg: #090a0d;
+  --t-panel: rgba(16, 17, 21, 0.94);
+  --t-panel-2: #121317;
+  --t-line: rgba(209, 146, 10, 0.4);
+  --t-line-soft: rgba(239, 234, 224, 0.1);
+  --t-accent: #d1920a;
+  --t-accent-light: #f0c062;
+  --t-accent-deep: #b57e07;
+  --t-accent-soft: rgba(209, 146, 10, 0.1);
+  --t-text: #efeae0;
+  --t-dim: #8c8679;
+  --t-font-label: 'Jost', 'Manrope', 'Segoe UI', sans-serif;
+  --t-font-text: 'Manrope', 'Segoe UI', sans-serif;
+  --t-font-data: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+body.theme-ha {
+  --t-bg: #0b090d;
+  --t-panel: rgba(20, 16, 24, 0.95);
+  --t-panel-2: #18121c;
+  --t-line: #6e4373;
+  --t-line-soft: rgba(161, 94, 168, 0.2);
+  --t-accent: #a15ea8;
+  --t-accent-light: #d9b8de;
+  --t-accent-deep: #6e4373;
+  --t-accent-soft: rgba(161, 94, 168, 0.14);
+  --t-text: #e6e0ea;
+  --t-dim: #8a7c90;
+  --t-font-label: 'Oswald', 'Arial Narrow', sans-serif;
+  --t-font-text: 'JetBrains Mono', 'Courier New', monospace;
+  --t-font-data: 'JetBrains Mono', 'Courier New', monospace;
+}
+
 /* ---------- Фон страниц: как у терминала ---------- */
 body {
   background-color: var(--t-bg) !important;
@@ -68,7 +124,7 @@ body {
   font-family: var(--t-font-text);
 }
 
-body:not(.theme-yellow):not(.theme-ktb) {
+body:not(.theme-yellow):not(.theme-ktb):not(.theme-horus):not(.theme-ssc):not(.theme-ha) {
   background-image:
     linear-gradient(rgba(228, 230, 233, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(228, 230, 233, 0.045) 1px, transparent 1px),
@@ -94,9 +150,30 @@ body.theme-ktb {
   background-size: auto !important;
 }
 
+body.theme-horus {
+  background-image:
+    radial-gradient(circle, rgba(61, 255, 154, 0.12) 0 1px, transparent 1.5px),
+    repeating-linear-gradient(0deg, rgba(0, 162, 86, 0.035) 0 1px, transparent 1px 4px) !important;
+  background-size: 22px 22px, 100% 4px !important;
+}
+
+body.theme-ssc {
+  background-image:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(209, 146, 10, 0.07), transparent 70%) !important;
+  background-size: auto !important;
+}
+
+body.theme-ha {
+  background-image:
+    repeating-conic-gradient(from -90deg at 50% -12%, rgba(161, 94, 168, 0.045) 0 2.5deg, transparent 2.5deg 7.5deg),
+    radial-gradient(ellipse 80% 55% at 50% -10%, rgba(110, 67, 115, 0.32), transparent 70%) !important;
+  background-size: auto !important;
+}
+
 /* Фоновый «машинный код» админки: едва заметный во всех темах. */
 .background-code, .background-code .code-line { color: rgba(228, 230, 233, 0.05) !important; text-shadow: none !important; }
-body.theme-ktb .background-code { display: none !important; }
+body:is(.theme-ktb, .theme-ssc, .theme-ha) .background-code { display: none !important; }
+body.theme-horus :is(.background-code, .background-code .code-line) { color: rgba(0, 162, 86, 0.09) !important; }
 
 /* ---------- Типографика ---------- */
 .admin-title,
@@ -142,11 +219,20 @@ body.theme-ktb .admin-title { font-size: 22px; color: var(--t-accent-light) !imp
 .statistic-icon { font-family: 'JetBrains Mono', 'Segoe UI Symbol', monospace !important; font-size: 26px; }
 body.theme-ktb :is(.admin-card-title, .section-title, .sidebar-header h3, .modal-title) { font-size: 20px; }
 body.theme-ktb .admin-tab { font-size: 16px; }
+body.theme-horus :is(.admin-title, .admin-card-title, .section-title, .modal-title) { text-shadow: -1px 0 rgba(255, 46, 136, 0.55), 1px 0 rgba(61, 255, 154, 0.4) !important; }
+body.theme-horus :is(.admin-card-title, .section-title, .modal-title)::before { content: "["; }
+body.theme-horus :is(.admin-card-title, .section-title, .modal-title)::after { content: "]"; }
+body.theme-ssc :is(.admin-title, .admin-card-title, .section-title, .sidebar-header h3, .modal-title, .admin-tab) { font-weight: 400; letter-spacing: 0.24em; }
+body.theme-ssc .admin-title { font-weight: 300; letter-spacing: 0.32em; }
+body.theme-ha :is(.admin-title, .admin-card-title, .section-title, .sidebar-header h3, .modal-title, .admin-tab, .user-table th) { font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; }
 
 /* ---------- Шапка ---------- */
 .admin-header { border-bottom: 1px solid var(--t-line) !important; box-shadow: 0 1px 0 var(--t-line-soft); }
 body.theme-green .admin-header { border-bottom: 3px solid var(--t-accent) !important; }
 body.theme-ktb .admin-header { border-bottom-color: var(--t-accent) !important; }
+body.theme-horus .admin-header { border-bottom: 1px dashed var(--t-accent) !important; }
+body.theme-ssc .admin-header { border-bottom-color: var(--t-line-soft) !important; box-shadow: 0 1px 0 rgba(209, 146, 10, 0.25); }
+body.theme-ha .admin-header { border-bottom: 3px solid var(--t-accent-deep) !important; }
 
 /* ---------- Крупные панели: оформление темы ---------- */
 :is(.admin-card, .sidebar, .editor-main, .modal-content) {
@@ -163,7 +249,7 @@ body.theme-ktb .admin-header { border-bottom-color: var(--t-accent) !important; 
 }
 
 /* GMS: красная полоса спецификации и регистрационные метки по нижним углам. */
-body:not(.theme-yellow):not(.theme-ktb) :is(.admin-card, .sidebar, .editor-main, .modal-content) {
+body:not(.theme-yellow):not(.theme-ktb):not(.theme-horus):not(.theme-ssc):not(.theme-ha) :is(.admin-card, .sidebar, .editor-main, .modal-content) {
   background:
     linear-gradient(var(--t-accent), var(--t-accent)) 0 0 / 100% 3px no-repeat,
     linear-gradient(var(--t-accent), var(--t-accent)) 6px calc(100% - 6px) / 12px 2px no-repeat,
@@ -194,6 +280,45 @@ body.theme-ktb :is(.admin-card, .sidebar, .editor-main, .modal-content) {
     var(--t-panel) !important;
   box-shadow: inset 0 0 0 4px rgba(22, 12, 12, 0.94), inset 0 0 0 5px rgba(198, 160, 82, 0.3), 0 20px 60px rgba(0, 0, 0, 0.55) !important;
 }
+
+/* HORUS: пунктир, уголки из фосфора, разъезд каналов по кромке. */
+body.theme-horus :is(.admin-card, .sidebar, .editor-main, .modal-content) {
+  border-style: dashed !important;
+  background:
+    linear-gradient(var(--t-accent-light), var(--t-accent-light)) 0 0 / 14px 2px no-repeat,
+    linear-gradient(var(--t-accent-light), var(--t-accent-light)) 0 0 / 2px 14px no-repeat,
+    linear-gradient(var(--t-accent-light), var(--t-accent-light)) 100% 100% / 14px 2px no-repeat,
+    linear-gradient(var(--t-accent-light), var(--t-accent-light)) 100% 100% / 2px 14px no-repeat,
+    var(--t-panel) !important;
+  box-shadow: 2px 0 0 rgba(255, 46, 136, 0.28), -2px 0 0 rgba(61, 255, 154, 0.18), 0 16px 44px rgba(0, 0, 0, 0.5) !important;
+}
+body.theme-horus :is(.btn, .btn-small, .btn-secondary, .admin-logout, .pagination-button, .tree-node-action-btn, .preview-btn, .form-input, .search-input, .form-textarea, select, textarea, input[type="text"], input[type="number"], input[type="search"]) { border-style: dashed !important; }
+
+/* SSC: лак, почти невидимая кромка и янтарная линия по центру верха. */
+body.theme-ssc :is(.admin-card, .sidebar, .editor-main, .modal-content) {
+  border-color: var(--t-line-soft) !important;
+  border-radius: 2px !important;
+  background:
+    linear-gradient(90deg, transparent, var(--t-accent), transparent) 50% 0 / 120px 1px no-repeat,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 38%),
+    var(--t-panel) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 24px 60px rgba(0, 0, 0, 0.5) !important;
+}
+body.theme-ssc :is(.btn, .btn-small, .btn-secondary, .admin-logout, .pagination-button, .preview-btn, .form-input, .search-input, .form-textarea, select, textarea, input[type="text"], input[type="number"], input[type="search"]) { border-radius: 2px !important; }
+body.theme-ssc :is(.btn, .btn-small, .btn-secondary, .admin-logout) { letter-spacing: 0.2em; }
+
+/* HA: тяжёлая кромка, косынки в углах, шевроны на верхней кромке. */
+body.theme-ha :is(.admin-card, .sidebar, .editor-main, .modal-content) {
+  border-width: 2px !important;
+  background:
+    linear-gradient(135deg, #a15ea8 0 12px, transparent 12px) 0 0 / 24px 24px no-repeat,
+        linear-gradient(-45deg, #6e4373 0 12px, transparent 12px) 100% 100% / 24px 24px no-repeat,
+        repeating-linear-gradient(-45deg, #a15ea8 0 5px, transparent 5px 10px) 34px 0 / 70px 5px no-repeat,
+    linear-gradient(180deg, rgba(110, 67, 115, 0.18), transparent 32%),
+    var(--t-panel) !important;
+}
+body.theme-ha :is(.btn, .btn-small, .btn-secondary, .admin-logout) { font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; }
+body.theme-ha :is(.admin-tab, .sub-tab).active { background: var(--t-accent-deep) !important; color: #f2eef4 !important; box-shadow: none !important; }
 
 /* Ромб-печать КТБ по центру верхней кромки крупных панелей. */
 body.theme-ktb :is(.admin-card, .modal-content)::before {
