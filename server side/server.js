@@ -198,9 +198,12 @@ function validateMusicMagicBytes(file) {
 
 config.validate();
 
+// Сертификат: полная цепочка (fullchain.pem или cert.pem + chain.pem), проверки при запуске
+// и подмена на лету после продления — utils/ssl.js.
+const ssl = require('./utils/ssl');
 const sslKeyPath = path.join(__dirname, config.SSL_KEY_PATH);
 const sslCertPath = path.join(__dirname, config.SSL_CERT_PATH);
-const hasSSL = fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath);
+const hasSSL = ssl.isAvailable(sslKeyPath, sslCertPath);
 
 // Запрет фолбэка на HTTP в проде: SSL обязателен, если явно не разрешён ALLOW_HTTP=1.
 if (!hasSSL && !config.ALLOW_HTTP) {
@@ -211,7 +214,7 @@ if (!hasSSL && !config.ALLOW_HTTP) {
     console.error('   ' + sslKeyPath);
     console.error('   ' + sslCertPath);
     console.error('\n Запуск по HTTP в проде небезопасен (сессионные куки передаются открыто).');
-    console.error(' Положите сертификаты в server side/ssl/ (privkey.pem, cert.pem)');
+    console.error(' Положите сертификаты в server side/ssl/ (privkey.pem и fullchain.pem из certbot)');
     console.error(' или установите ALLOW_HTTP=1 в .env ТОЛЬКО для локальной разработки.');
     console.error('========================================\n');
     process.exit(1);
@@ -2444,17 +2447,27 @@ function handleServerError(error) {
 }
 
 if (hasSSL) {
-    const sslOptions = {
-        key: fs.readFileSync(sslKeyPath),
-        cert: fs.readFileSync(sslCertPath)
-    };
+    let sslState;
+    try {
+        sslState = ssl.load(sslKeyPath, sslCertPath);
+    } catch (error) {
+        console.error(`
+✗ SSL: ${error.message}
+`);
+        process.exit(1);
+    }
 
-    const server = https.createServer(sslOptions, app);
+    const server = https.createServer({ key: sslState.key, cert: sslState.cert }, app);
     server.on('error', handleServerError);
     server.listen(config.PORT, () => {
         logServerStarted('https');
+        ssl.describe(sslState).forEach(line => console.log(line));
         Logger.info(`CORS origins: ${config.CORS_ORIGINS.join(', ')}`);
     });
+    ssl.watch(server, sslKeyPath, sslCertPath, (level, message) => {
+        if (level === 'warn') Logger.warn(message);
+        else Logger.info(message);
+    }, sslState);
 } else {
     const server = http.createServer(app);
     server.on('error', handleServerError);
