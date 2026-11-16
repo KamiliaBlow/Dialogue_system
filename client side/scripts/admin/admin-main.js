@@ -105,8 +105,19 @@ class AdminApp {
         document.getElementById('save-pilot')?.addEventListener('click', () => this.savePilot());
         this.initPilotForm();
 
-        window.addEventListener('click', e => {
-            modals.forEach(m => { if (e.target === m) m.style.display = 'none'; });
+        // Клик по затемнённому фону закрывает окно, только если и нажатие, и отпускание пришлись
+        // на фон (выделение текста в поле с отпусканием мыши за окном его закрывало).
+        // Правка пилота по фону не закрывается вовсе: в ней много полей.
+        const KEEP_ON_BACKDROP = new Set(['pilot-modal']);
+        modals.forEach(m => {
+            if (!m) return;
+            let pressedOnBackdrop = false;
+            m.addEventListener('pointerdown', e => { pressedOnBackdrop = e.target === m; });
+            m.addEventListener('click', e => {
+                const onBackdrop = e.target === m && pressedOnBackdrop;
+                pressedOnBackdrop = false;
+                if (onBackdrop && !KEEP_ON_BACKDROP.has(m.id)) m.style.display = 'none';
+            });
         });
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') modals.forEach(m => { m.style.display = 'none'; });

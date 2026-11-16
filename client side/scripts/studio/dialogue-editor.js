@@ -491,6 +491,8 @@ export default class DialogueEditor {
         this.lastTokenTarget = this.el('conversation-text');
         this.updateConversationHints();
         this.el('conversation-text').focus();
+        // Снимок полей сразу после заполнения: по нему видно, есть ли несохранённые правки.
+        this.conversationBaseline = this.conversationSnapshot();
     }
 
     // ===================== вариант для сословия и метки пилота =====================
@@ -668,7 +670,31 @@ export default class DialogueEditor {
 
     closeConversation() {
         this.stopTypingPreview();
+        this.conversationBaseline = null;
         this.el('conversation-modal').style.display = 'none';
+    }
+
+    isConversationOpen() {
+        return this.el('conversation-modal').style.display === 'flex';
+    }
+
+    // Все поля окна реплики (включая добавленные ответы и варианты для сословий) одной строкой.
+    conversationSnapshot() {
+        const fields = this.el('conversation-modal').querySelectorAll('input, select, textarea');
+        return JSON.stringify([...fields].map(el => (el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value)));
+    }
+
+    isConversationDirty() {
+        return this.isConversationOpen() && this.conversationBaseline != null
+            && this.conversationSnapshot() !== this.conversationBaseline;
+    }
+
+    // Закрыть окно реплики по желанию пользователя («Отмена», Escape): несохранённое не теряется молча.
+    requestCloseConversation() {
+        if (this.isConversationDirty()
+            && !confirm('В реплике есть несохранённые изменения. Закрыть окно и потерять их?')) return false;
+        this.closeConversation();
+        return true;
     }
 
     fillVoicelineSelect() {
@@ -1281,7 +1307,7 @@ export default class DialogueEditor {
         on('upload-voice', 'change', e => this.uploadFile(e, 'sound'));
 
         on('add-conversation-btn', 'click', () => this.openConversation());
-        on('cancel-conversation', 'click', () => this.closeConversation());
+        on('cancel-conversation', 'click', () => this.requestCloseConversation());
         on('save-conversation-btn', 'click', e => withBusy(e.currentTarget, () => this.saveConversation()));
         on('conversation-open-character', 'click', () => {
             const char = this.state.characters.find(c => String(c.id) === this.el('conversation-character').value);
@@ -1331,12 +1357,32 @@ export default class DialogueEditor {
             try { localStorage.setItem(INFO_OPEN_KEY, info.open ? '1' : '0'); } catch { /* хранилище недоступно */ }
         });
 
+        // Клик по затемнённому фону закрывает небольшие окна, но только если и нажатие, и отпускание
+        // пришлись на фон: иначе выделение текста в поле с отпусканием мыши за окном его закрывало.
+        // Окно реплики по фону не закрывается вовсе — в нём слишком много работы.
         document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+            let pressedOnBackdrop = false;
+            modal.addEventListener('pointerdown', e => { pressedOnBackdrop = e.target === modal; });
+            modal.addEventListener('click', e => {
+                const onBackdrop = e.target === modal && pressedOnBackdrop;
+                pressedOnBackdrop = false;
+                if (!onBackdrop || modal.id === 'conversation-modal') return;
+                modal.style.display = 'none';
+            });
         });
         document.addEventListener('keydown', e => {
-            if (e.key !== 'Escape') return;
+            if (e.key !== 'Escape' || e.defaultPrevented) return;
+            if (this.isConversationOpen()) {
+                this.requestCloseConversation();
+                return;
+            }
             document.querySelectorAll('.modal').forEach(m => { m.style.display = 'none'; });
+        });
+        // Перезагрузка или уход со страницы при несохранённой реплике — браузер переспросит.
+        window.addEventListener('beforeunload', e => {
+            if (!this.isConversationDirty()) return;
+            e.preventDefault();
+            e.returnValue = '';
         });
     }
 }

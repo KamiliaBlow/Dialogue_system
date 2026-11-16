@@ -1,10 +1,20 @@
 // Единый музыкальный плеер для всех страниц (кроме логина).
 // Воспроизведение продолжается между страницами за счёт сохранения состояния
 // (трек, позиция, громкость, повтор) в localStorage и его восстановления на новой странице.
+//
+// Без разрыва музыка идёт внутри оболочки app.html (scripts/app-shell.js): звук (<audio>) живёт
+// там, страница во фрейме меняется, а элемент со звуком остаётся. Плеер на странице подхватывает
+// уже играющий трек, ничего не перезапуская.
+// Если страница открыта сама по себе (без оболочки), переход только сглаживается: при уходе звук
+// коротко затухает, новая страница продолжает трек сразу, плавно нарастая, с поправкой на время
+// перехода — без повтора уже прозвучавшего куска.
 const SERVER_ORIGIN = `${window.location.protocol}//${window.location.hostname}:3000`;
 const API_URL = `${SERVER_ORIGIN}/api`;
 const STATE_KEY = 'musicPlayerStateV1';
 const VALID_THEMES = ['yellow', 'green', 'ktb', 'horus', 'ssc', 'ha'];
+const FADE_OUT_MS = 220;      // затухание при уходе со страницы (пока грузится следующая)
+const FADE_IN_MS = 450;       // нарастание на новой странице
+const MAX_GAP_S = 15;         // поправка на время перехода не больше этого (вкладку могли надолго свернуть)
 
 const PLAYER_CSS = `
 #music-float-btn {
@@ -72,6 +82,15 @@ const PLAYER_CSS = `
 }
 `;
 
+// Оболочка app.html со звуком, если страница открыта в ней.
+function findHost() {
+    try {
+        return window.parent !== window && window.parent.MusicHost?.audio ? window.parent.MusicHost : null;
+    } catch {
+        return null;
+    }
+}
+
 function loadState() {
     try { return JSON.parse(localStorage.getItem(STATE_KEY)) || null; }
     catch { return null; }
@@ -94,6 +113,13 @@ class MusicPlayer {
         this._lastSaveTs = 0;
         this._settingsLoaded = false;
         this._seekApplied = false;
+        this._continuing = false;   // трек продолжается с прошлой страницы
+        this.fadeLevel = 1;         // множитель громкости для затухания и нарастания
+        this._fadeRaf = 0;
+        this._fadeInPending = false;
+        this.host = findHost();
+        // Подписки на звук оболочки снимаются при уходе со страницы: звук остаётся, а страница — нет.
+        this._listeners = new AbortController();
     }
 
     init() {
@@ -104,15 +130,33 @@ class MusicPlayer {
             if (typeof saved.master === 'number') this.masterVolume = saved.master;
             this.repeatOne = !!saved.repeat;
             if (saved.src) {
-                this.tracks = [{ src: saved.src, name: saved.name || 'Трек', volume: 100, carryOver: !!saved.carryOver }];
+                this.tracks = [{ src: saved.src, name: saved.name || 'Трек', volume: saved.trackVolume ?? 100, carryOver: !!saved.carryOver }];
                 this.currentTrackIndex = 0;
-                this.pendingSeekTime = saved.time || 0;
                 this.desiredPlaying = !!saved.playing;
+                // Пока страница сменялась, музыка «шла дальше»: продолжаем с поправкой на паузу.
+                const gap = this.desiredPlaying && saved.at ? (Date.now() - saved.at) / 1000 : 0;
+                this.pendingSeekTime = (saved.time || 0) + (gap > 0 && gap < MAX_GAP_S ? gap : 0);
+                this._continuing = this.desiredPlaying;
             }
             if (VALID_THEMES.includes(saved.theme)) this.currentTheme = saved.theme;
         }
         if (!this.tracks.length) {
             this.tracks = [{ src: 'assets/sounds/terminal.mp3', name: 'Aliens Signal', volume: 100, isFallback: true }];
+        }
+
+        // В оболочке трек уже играет с прошлой страницы — подхватываем как есть:
+        // без перемотки, затухания и нарастания.
+        const shellAudio = this.host?.audio;
+        if (shellAudio && shellAudio.currentSrc && !shellAudio.paused) {
+            const current = this.tracks[0];
+            if (!current || new URL(current.src, location.href).href !== shellAudio.currentSrc) {
+                this.tracks = [{ src: shellAudio.currentSrc, name: saved?.name || 'Трек', volume: saved?.trackVolume ?? 100 }];
+            }
+            this.currentTrackIndex = 0;
+            this.desiredPlaying = true;
+            this.pendingSeekTime = 0;
+            this._seekApplied = true;
+            this._continuing = false;
         }
 
         this.bindEvents();
@@ -121,7 +165,14 @@ class MusicPlayer {
         this.volumeControl.value = this.masterVolume;
         this.loadTrack(this.currentTrackIndex);
 
-        // Настройки пользователя и плейлист темы — сразу, чтобы восстановить состояние быстрее
+        // Пока страница сменялась, трек в оболочке доиграл — следующий.
+        if (shellAudio && shellAudio.ended && this.desiredPlaying) this.nextTrack();
+
+        // Трек играл на прошлой странице — продолжаем сразу, не дожидаясь настроек и плейлиста:
+        // это два запроса к серверу, из-за них пауза при переходе была заметной.
+        if (this._continuing) this.startWithFadeIn();
+
+        // Настройки пользователя и плейлист темы — параллельно с воспроизведением
         this.ensureSettingsAndPlaylist();
 
         window.addEventListener('pilot-theme-change', event => this.switchTheme(event.detail?.theme));
@@ -140,7 +191,7 @@ class MusicPlayer {
         const popup = document.createElement('div');
         popup.id = 'music-popup';
         popup.innerHTML = `
-            <audio id="background-music"></audio>
+            ${this.host ? '' : '<audio id="background-music"></audio>'}
             <div class="controls">
                 <button id="play-pause-btn" aria-label="Воспроизвести">▶︎</button>
                 <button id="next-track-btn" title="Следующий трек" aria-label="Следующий трек">⏭︎</button>
@@ -154,7 +205,8 @@ class MusicPlayer {
 
         this.floatBtn = floatBtn;
         this.popup = popup;
-        this.music = popup.querySelector('#background-music');
+        this.music = this.host ? this.host.audio : popup.querySelector('#background-music');
+        this.music.preload = 'auto';
         this.playPauseBtn = popup.querySelector('#play-pause-btn');
         this.nextBtn = popup.querySelector('#next-track-btn');
         this.repeatBtn = popup.querySelector('#repeat-btn');
@@ -198,15 +250,21 @@ class MusicPlayer {
             this.persist();
         });
 
-        this.music.addEventListener('play', () => { this.updatePlayPauseButton(); this.persist(); });
-        this.music.addEventListener('pause', () => { this.updatePlayPauseButton(); this.persist(); });
+        const signal = this._listeners.signal;
+        this.music.addEventListener('play', () => { this.updatePlayPauseButton(); this.persist(); }, { signal });
+        this.music.addEventListener('playing', () => {
+            if (!this._fadeInPending) return;
+            this._fadeInPending = false;
+            this.fadeTo(1, FADE_IN_MS);
+        }, { signal });
+        this.music.addEventListener('pause', () => { this.updatePlayPauseButton(); this.persist(); }, { signal });
 
         this.music.addEventListener('loadedmetadata', () => {
             if (!this._seekApplied && this.pendingSeekTime > 0 && isFinite(this.music.duration)) {
                 this.music.currentTime = Math.min(this.pendingSeekTime, this.music.duration || this.pendingSeekTime);
                 this._seekApplied = true;
             }
-        });
+        }, { signal });
 
         this.music.addEventListener('timeupdate', () => {
             const now = Date.now();
@@ -214,7 +272,7 @@ class MusicPlayer {
                 this._lastSaveTs = now;
                 this.persist();
             }
-        });
+        }, { signal });
 
         this.music.addEventListener('ended', () => {
             if (!this.tracks.length) return;
@@ -225,19 +283,40 @@ class MusicPlayer {
                 return;
             }
             this.nextTrack();
-        });
+        }, { signal });
 
         // Если браузер заблокировал автовоспроизведение — продолжаем по первому действию пользователя.
         const resumeOnGesture = () => {
-            if (this.desiredPlaying && this.music.paused && this._settingsLoaded) {
+            if (this.desiredPlaying && this.music.paused && (this._settingsLoaded || this._continuing)) {
                 this.music.play().catch(() => {});
             }
         };
         ['pointerdown', 'keydown', 'touchstart'].forEach(type =>
             document.addEventListener(type, resumeOnGesture, { capture: true, passive: true }));
 
+        // Уход со страницы: звук коротко затухает, пока грузится следующая, а не обрывается.
+        // Если уход отменили (например, «есть несохранённые изменения» → остаться) — громкость возвращается.
+        window.addEventListener('beforeunload', () => {
+            // В оболочке звук не прерывается — затухать незачем.
+            if (this.host || this.music.paused) return;
+            this.persist();
+            this.fadeTo(0, FADE_OUT_MS);
+            clearTimeout(this._restoreTimer);
+            this._restoreTimer = setTimeout(() => this.fadeTo(1, FADE_IN_MS), 1500);
+        });
+        // Страницу вернули из кэша «назад/вперёд» — звук снова в полную громкость.
+        window.addEventListener('pageshow', e => { if (e.persisted) this.fadeTo(1, FADE_IN_MS); });
+
         // Точная позиция при уходе со страницы: следующая страница продолжит с этого места.
-        window.addEventListener('pagehide', () => this.persist());
+        // В оболочке страница отпускает звук: её обработчики снимаются, следующая подпишется своими.
+        window.addEventListener('pagehide', () => {
+            this.persist();
+            if (this.host) {
+                cancelAnimationFrame(this._fadeRaf);
+                clearTimeout(this._fadeTimer);
+                this._listeners.abort();
+            }
+        });
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') this.persist();
         });
@@ -245,7 +324,38 @@ class MusicPlayer {
 
     applyVolume() {
         const trackVol = this.tracks[this.currentTrackIndex]?.volume ?? 100;
-        this.music.volume = Math.min(1, this.masterVolume * trackVol / 100);
+        this.music.volume = Math.max(0, Math.min(1, this.masterVolume * trackVol / 100 * this.fadeLevel));
+    }
+
+    // Плавно меняет множитель громкости (0 — тишина, 1 — обычная громкость).
+    fadeTo(target, ms) {
+        cancelAnimationFrame(this._fadeRaf);
+        clearTimeout(this._fadeTimer);
+        const from = this.fadeLevel;
+        const start = performance.now();
+        const step = () => {
+            const t = Math.min(1, (performance.now() - start) / ms);
+            this.fadeLevel = from + (target - from) * t;
+            this.applyVolume();
+            if (t < 1) this.schedule(step);
+        };
+        step();
+    }
+
+    // Кадр анимации, а в фоновой вкладке (там кадры не идут) — таймер.
+    schedule(fn) {
+        if (document.visibilityState === 'visible') this._fadeRaf = requestAnimationFrame(fn);
+        else this._fadeTimer = setTimeout(fn, 16);
+    }
+
+    // Продолжение с прошлой страницы: с тишины, нарастая, как только звук реально пошёл.
+    startWithFadeIn() {
+        this.fadeLevel = 0;
+        this.applyVolume();
+        this._fadeInPending = true;
+        this.music.play().catch(() => {
+            // Автозапуск запрещён — продолжится по первому действию пользователя (resumeOnGesture).
+        });
     }
 
     updatePlayPauseButton() {
@@ -310,7 +420,9 @@ class MusicPlayer {
             name: t ? t.name : '',
             idx: this.currentTrackIndex,
             time: this.currentPosition(),
+            at: Date.now(),
             playing: this.desiredPlaying,
+            trackVolume: t ? t.volume ?? 100 : 100,
             master: this.masterVolume,
             repeat: this.repeatOne,
             theme: this.currentTheme,
@@ -322,8 +434,9 @@ class MusicPlayer {
         await this.loadMusicSettings();
         await this.loadPlaylist();
         this._settingsLoaded = true;
-        // Трек, который играл на прошлой странице, продолжается с того же места.
-        if (this.desiredPlaying) {
+        // Трек, который играл на прошлой странице, продолжается с того же места
+        // (обычно он уже играет — startWithFadeIn; тут — если запуск тогда не удался).
+        if (this.desiredPlaying && this.music.paused) {
             this.music.play().catch(() => {});
         }
         this.updatePlayPauseButton();

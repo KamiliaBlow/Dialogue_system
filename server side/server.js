@@ -299,6 +299,12 @@ const assetsCorsMiddleware = (req, res, next) => {
     next();
 };
 
+// Музыка: у загруженных треков уникальные имена (music_<время>-<случайное>), файл под именем
+// не меняется — браузер держит его в кэше и при переходе между страницами не перепроверяет
+// на сервере, музыка продолжается быстрее.
+const MUSIC_CACHE = { maxAge: '30d', immutable: true };
+app.use('/DIALOGUE_rework/assets/sounds/music', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets/sounds/music'), MUSIC_CACHE));
+app.use('/assets/sounds/music', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets/sounds/music'), MUSIC_CACHE));
 app.use('/DIALOGUE_rework/assets', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets')));
 app.use('/assets', assetsCorsMiddleware, express.static(path.join(__dirname, 'assets')));
 app.use(express.static(path.join(__dirname, 'public')));

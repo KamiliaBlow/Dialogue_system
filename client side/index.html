@@ -2,6 +2,7 @@
 <html lang="ru" >
 <head>
   <meta charset="UTF-8">
+  <script>/* Страница работает внутри оболочки app.html: там играет музыка, и при переходах она не прерывается. */(function(){try{if(window.top===window&&!sessionStorage.getItem('noShell')){var p=location.pathname.split('/').pop()||'index.html';location.replace('app.html#'+p+location.search+location.hash);}}catch(e){}})();</script>
   <title>Терминал GMS-4521</title>
   <link rel="stylesheet" href="./styles/index_styles.css">
   <link rel="stylesheet" href="./styles/themes.css">
