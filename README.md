@@ -35,17 +35,21 @@
 
 ## Как это выглядит
 
-Скриншоты пока от прошлой версии, до появления новых тем.
-
 **Игрок:**
 
-![Терминал игрока](https://github.com/user-attachments/assets/965e0fd3-0871-49ff-9700-11ed11ceb19b)
+<img width="1904" height="895" alt="Панель игрока" src="https://github.com/user-attachments/assets/518e30ff-b2cc-4ced-b1a5-127be7135539" />
+<img width="304" height="177" alt="Снимок экрана 2026-11-17 123208" src="https://github.com/user-attachments/assets/26a1aaf7-ad1a-4b37-aa9e-d35b288097cd" />
+<img width="640" height="287" alt="Снимок экрана 2026-11-17 123600" src="https://github.com/user-attachments/assets/c132628e-303e-43e5-959f-40c6c30cc416" />
 
 **Мастер:**
 
-<img width="2468" height="1268" alt="Панель администратора" src="https://github.com/user-attachments/assets/d72aac5d-627e-4f40-9fe0-f28b1ce111f2" />
-<img width="1216" height="873" alt="Редактор диалогов" src="https://github.com/user-attachments/assets/e868ea25-8b52-4bb0-b58c-02edab7b6497" />
-<img width="1204" height="866" alt="Дерево диалога" src="https://github.com/user-attachments/assets/e191d0a6-61dd-4fda-846b-fb0607ccf3e6" />
+<img width="1904" height="881" alt="Снимок экрана 2026-11-17 124308" src="https://github.com/user-attachments/assets/6c58a788-0ca5-4972-9337-aafd1db5a7e5" />
+<img width="773" height="691" alt="Снимок экрана 2026-11-17 124252" src="https://github.com/user-attachments/assets/980b3711-c8dd-4223-bbd2-3a9f6fb1633b" />
+<img width="774" height="865" alt="Снимок экрана 2026-11-17 124240" src="https://github.com/user-attachments/assets/63c9020a-74af-405a-99e1-f3c0d140b797" />
+<img width="1903" height="886" alt="Снимок экрана 2026-11-17 124231" src="https://github.com/user-attachments/assets/41b7b843-47fb-41db-82f5-9d64535fb003" />
+<img width="1395" height="546" alt="Снимок экрана 2026-11-17 124128" src="https://github.com/user-attachments/assets/13290dce-e31c-42d1-81b7-75da36ff9b84" />
+<img width="935" height="762" alt="Снимок экрана 2026-11-17 123836" src="https://github.com/user-attachments/assets/4532a4a0-8b9f-48ae-981d-0432b04267df" />
+<img width="933" height="909" alt="Снимок экрана 2026-11-17 123817" src="https://github.com/user-attachments/assets/5d12e49c-1f4d-47c0-8072-b1fe22660fe6" />
 
 ---
 
