@@ -79,6 +79,9 @@ export default class DialogueEditor {
     async init() {
         this.initTreeVisualizer();
         this.initEventListeners();
+        // Пока диалог не открыт — поиск по дереву недоступен (включается в renderDialogueTree).
+        const searchInput = this.el('tree-search-input');
+        if (searchInput) searchInput.disabled = true;
         await this.loadDialogues();
         store.on('characters', () => {
             if (this.state.currentDialogueId) this.renderCharacters();
@@ -372,6 +375,9 @@ export default class DialogueEditor {
         const hasConversations = this.state.conversations.length > 0;
         addBtn.disabled = hasConversations;
         addBtn.title = hasConversations ? 'Новые реплики добавляются через контекстное меню реплики в дереве' : '';
+        // Поиск по нодам имеет смысл, только когда диалог открыт.
+        const searchInput = this.el('tree-search-input');
+        if (searchInput) searchInput.disabled = !hasConversations;
         this.treeVisualizer.setData({
             // Узлы с вариантом для сословия помечаются значком «⇄ Л» / «⇄ К».
             conversations: this.state.conversations.map(c => ({
@@ -381,6 +387,7 @@ export default class DialogueEditor {
             branches: this.state.branches,
             choices: this.state.choices,
             characters: this.state.characters,
+            variants: this.state.variants,
             edgePoints: this.state.edgePoints
         });
         this.treeVisualizer.autoLayout();

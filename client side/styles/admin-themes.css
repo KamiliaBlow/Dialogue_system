@@ -357,13 +357,16 @@ body.theme-ktb :is(.admin-card, .modal-content)::before {
 .tree-node-visual.has-choice { border-left: 2px solid var(--t-accent) !important; }
 .tree-node-visual.branch-start { box-shadow: inset 0 2px 0 var(--t-accent) !important; }
 .tree-node-visual.connecting-mode { animation: none !important; box-shadow: 0 0 0 1px var(--t-accent) !important; }
+/* Совпадения поиска: обычное — акцентный контур, текущее — двойной контур поверх выделения. */
+.tree-node-visual.search-match { box-shadow: 0 0 0 1px var(--t-accent) !important; }
+.tree-node-visual.search-match-current { border-color: var(--t-accent) !important; box-shadow: 0 0 0 2px var(--t-accent) !important; }
 .dialogue-tree-container { border: 1px solid var(--t-line-soft) !important; border-radius: 0 !important; background-color: rgba(0, 0, 0, 0.25) !important; }
 .dialogue-tree-svg path, .tree-edge { stroke: var(--t-line) !important; }
 .tree-edge.choice-edge { stroke: var(--t-accent) !important; }
 
 .statistic-icon { color: var(--t-accent) !important; }
 .statistic-value { color: var(--t-text) !important; }
-.statistic-label, .dialogue-item-frequency { color: var(--t-dim) !important; }
+.statistic-label, .dialogue-item-frequency, .tree-search-count { color: var(--t-dim) !important; }
 
 /* ---------- Кнопки, вкладки, поля ---------- */
 :is(.btn, .btn-small, .btn-secondary, .admin-logout, .pagination-button, .tree-node-action-btn, .preview-btn) {

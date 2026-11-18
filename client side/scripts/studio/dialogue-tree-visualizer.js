@@ -15,7 +15,8 @@ class DialogueTreeVisualizer {
             conversations: [],
             branches: [],
             choices: [],
-            characters: []
+            characters: [],
+            variants: []
         };
         
         this.options = {
@@ -58,6 +59,14 @@ class DialogueTreeVisualizer {
         };
         // Перемычки связей: edgeKey → [{ dx, dy }] от нижней середины исходной реплики.
         this.edgePoints = {};
+        
+        // Поиск по нодам: совпадения — массив id вида conv_<id>, currentIndex — текущий результат.
+        this.searchState = {
+            query: '',
+            matches: [],
+            matchSet: new Set(),
+            currentIndex: -1
+        };
         
         this.contextMenu = null;
         
@@ -121,6 +130,35 @@ class DialogueTreeVisualizer {
         document.getElementById('zoom-out-btn')?.addEventListener('click', () => this.zoomOut());
         document.getElementById('zoom-fit-btn')?.addEventListener('click', () => this.zoomToFit());
         document.getElementById('auto-layout-btn')?.addEventListener('click', () => this.autoLayout());
+
+        // Поиск по дереву: ввод — живая подсветка, Enter — следующее совпадение, Shift+Enter — предыдущее.
+        const searchInput = document.getElementById('tree-search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => this.searchNodes(searchInput.value));
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.shiftKey ? this.prevSearchMatch() : this.nextSearchMatch();
+                } else if (e.key === 'Escape') {
+                    searchInput.value = '';
+                    this.clearSearch();
+                    searchInput.blur();
+                }
+            });
+            // Ctrl+F / Cmd+F — фокус в поиск, пока не открыта модалка.
+            document.addEventListener('keydown', (e) => {
+                if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'f') return;
+                if (e.defaultPrevented) return;
+                const modalOpen = Array.from(document.querySelectorAll('.modal'))
+                    .some(m => getComputedStyle(m).display !== 'none');
+                if (modalOpen) return;
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            });
+        }
+        document.getElementById('tree-search-next')?.addEventListener('click', () => this.nextSearchMatch());
+        document.getElementById('tree-search-prev')?.addEventListener('click', () => this.prevSearchMatch());
     }
     
     setData(data) {
@@ -129,11 +167,14 @@ class DialogueTreeVisualizer {
             conversations: data.conversations || [],
             branches: data.branches || [],
             choices: data.choices || [],
-            characters: data.characters || []
+            characters: data.characters || [],
+            variants: data.variants || []
         };
         
         this.buildGraph();
         this.render();
+        // Данные обновились (новый диалог, сохранение) — тихо пересчитать совпадения под новые ноды.
+        this.refreshSearch();
     }
     
     buildGraph() {
@@ -161,6 +202,7 @@ class DialogueTreeVisualizer {
         this.data.conversations.forEach(conv => {
             const char = this.data.characters.find(c => c.id === conv.character_id);
             const choices = this.data.choices.filter(ch => ch.conversation_id === conv.id);
+            const variants = this.data.variants.filter(v => String(v.conversation_id) === String(conv.id));
             
             const nodeData = {
                 id: `conv_${conv.id}`,
@@ -172,6 +214,13 @@ class DialogueTreeVisualizer {
                 hasChoice: choices.length > 0,
                 choices: choices,
                 variantAudiences: conv.variant_audiences || [],
+                // Тексты для поиска: реплика, варианты ответов и реплики для сословий.
+                searchText: [
+                    char ? char.name : 'Система',
+                    conv.text,
+                    ...choices.flatMap(ch => [ch.option_text, ch.option_text_cavalier, ch.option_text_exile]),
+                    ...variants.flatMap(v => [v.fake_name, v.text])
+                ].filter(Boolean).join('\n'),
                 x: 0,
                 y: 0
             };
@@ -586,6 +635,14 @@ class DialogueTreeVisualizer {
         
         if (this.state.connectingFrom === nodeData.id) {
             node.classList.add('connecting-mode');
+        }
+        
+        // Классы поиска восстанавливаются при каждой перерисовке нод (selectNode и т.д.).
+        if (this.searchState.matchSet.has(nodeData.id)) {
+            node.classList.add('search-match');
+        }
+        if (this.searchState.matches[this.searchState.currentIndex] === nodeData.id) {
+            node.classList.add('search-match-current');
         }
         
         node.style.left = `${nodeData.x}px`;
@@ -1155,6 +1212,100 @@ class DialogueTreeVisualizer {
         if (this.callbacks.hasOwnProperty(`on${event.charAt(0).toUpperCase() + event.slice(1)}`)) {
             this.callbacks[`on${event.charAt(0).toUpperCase() + event.slice(1)}`] = callback;
         }
+    }
+    
+    // ===================== поиск по нодам =====================
+
+    computeMatches(term) {
+        const matches = [];
+        this.nodes.forEach(nodeData => {
+            if (nodeData.searchText && nodeData.searchText.toLowerCase().includes(term)) {
+                matches.push(nodeData.id);
+            }
+        });
+        return matches;
+    }
+    
+    searchNodes(query) {
+        const term = (query || '').trim().toLowerCase();
+        if (!term) {
+            this.clearSearch();
+            return;
+        }
+        
+        this.searchState.query = query;
+        this.searchState.matches = this.computeMatches(term);
+        this.searchState.matchSet = new Set(this.searchState.matches);
+        this.searchState.currentIndex = this.searchState.matches.length > 0 ? 0 : -1;
+        this.updateSearchCounter();
+        
+        // Ноды пересобираются, чтобы классы совпадений появились сразу у всех.
+        this.renderNodes();
+        if (this.searchState.matches.length > 0) {
+            this.focusOnNode(this.searchState.matches[0]);
+        }
+    }
+    
+    // Пересчёт совпадений без перемещения камеры — при обновлении данных дерева.
+    refreshSearch() {
+        if (!this.searchState.query) return;
+        const term = this.searchState.query.trim().toLowerCase();
+        if (!term) return;
+        
+        this.searchState.matches = this.computeMatches(term);
+        this.searchState.matchSet = new Set(this.searchState.matches);
+        const total = this.searchState.matches.length;
+        if (total === 0) {
+            this.searchState.currentIndex = -1;
+        } else if (this.searchState.currentIndex < 0 || this.searchState.currentIndex >= total) {
+            this.searchState.currentIndex = 0;
+        }
+        this.updateSearchCounter();
+        this.renderNodes();
+    }
+    
+    gotoSearchMatch(index) {
+        const total = this.searchState.matches.length;
+        if (total === 0) return;
+        // Заворот по кругу: после последнего совпадения — первое и наоборот.
+        const nextIndex = ((index % total) + total) % total;
+        this.searchState.currentIndex = nextIndex;
+        this.renderNodes();
+        this.focusOnNode(this.searchState.matches[nextIndex]);
+        this.updateSearchCounter();
+    }
+    
+    nextSearchMatch() {
+        if (this.searchState.matches.length === 0) return;
+        this.gotoSearchMatch(this.searchState.currentIndex + 1);
+    }
+    
+    prevSearchMatch() {
+        if (this.searchState.matches.length === 0) return;
+        this.gotoSearchMatch(this.searchState.currentIndex - 1);
+    }
+    
+    clearSearch() {
+        this.searchState.query = '';
+        this.searchState.matches = [];
+        this.searchState.matchSet = new Set();
+        this.searchState.currentIndex = -1;
+        this.updateSearchCounter();
+        this.renderNodes();
+    }
+    
+    updateSearchCounter() {
+        const counterEl = document.getElementById('tree-search-count');
+        if (!counterEl) return;
+        if (!this.searchState.query) {
+            counterEl.hidden = true;
+            return;
+        }
+        counterEl.hidden = false;
+        const total = this.searchState.matches.length;
+        counterEl.textContent = total > 0 && this.searchState.currentIndex >= 0
+            ? `${this.searchState.currentIndex + 1}/${total}`
+            : '0/0';
     }
     
     escapeHtml(text) {

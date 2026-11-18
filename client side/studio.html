@@ -128,6 +128,12 @@
                                     <span id="zoom-level">100%</span>
                                     <button id="zoom-out-btn" class="btn btn-small" aria-label="Отдалить">−</button>
                                 </div>
+                                <div class="tree-search">
+                                    <input type="search" id="tree-search-input" class="search-input" placeholder="Поиск по репликам..." aria-label="Поиск по дереву диалога" autocomplete="off">
+                                    <span id="tree-search-count" class="tree-search-count" hidden>0/0</span>
+                                    <button id="tree-search-prev" class="btn btn-small" title="Предыдущее совпадение (Shift+Enter)" aria-label="Предыдущее совпадение">▲</button>
+                                    <button id="tree-search-next" class="btn btn-small" title="Следующее совпадение (Enter)" aria-label="Следующее совпадение">▼</button>
+                                </div>
                             </div>
                             <div class="dialogue-tree-container" id="dialogue-tree-container">
                                 <svg id="dialogue-tree-svg" class="dialogue-tree-svg">
