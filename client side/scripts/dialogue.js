@@ -276,6 +276,9 @@ async function initializePage() {
 		
         // Установка начальной частоты
         updateFrequencyDisplay();
+
+        // Метки непрослушанных передач у частоты
+        await refreshUnread();
         
         // Загрузка выборов пользователя
         await loadUserChoices();
@@ -511,6 +514,53 @@ function getCurrentFrequency() {
  */
 function updateFrequencyDisplay() {
     $('.freq').text(getCurrentFrequency());
+    renderUnreadMarks();
+}
+
+/**
+ * Метки непрослушанных передач. Передача новая, пока частота доступна игроку, а диалог на ней
+ * не дослушан до конца (нет completed в dialogue_progress). Если мастер сбросит прогресс игрока,
+ * передача снова станет новой. Рядом с частотой мерцает метка, а на стрелке в сторону ближайшей
+ * новой частоты — тусклая точка, чтобы её было легко найти.
+ */
+async function refreshUnread() {
+    try {
+        const response = await fetch(`${API_URL}/dialogue-progress`, { credentials: 'include' });
+        if (!response.ok) return;
+        const done = new Set(((await response.json()).progress || []).filter(p => p.completed).map(p => p.frequency));
+        const all = (games && games[state.currentGame] && games[state.currentGame].frequencies) || [];
+        state.unread = new Set(all.filter(f => hasAccessToFrequency(f) && !done.has(f)));
+    } catch (error) {
+        debug('Метки непрослушанных частот не загрузились:', error);
+    }
+    renderUnreadMarks();
+}
+
+function renderUnreadMarks() {
+    const all = (games && games[state.currentGame] && games[state.currentGame].frequencies) || [];
+    const unread = state.unread || new Set();
+    const current = getCurrentFrequency();
+    $('#freq-con').each(function () {
+        let mark = this.querySelector('.unread-mark');
+        if (!mark) {
+            mark = document.createElement('i');
+            mark.className = 'unread-mark freq-mark';
+            mark.title = 'Новая передача — ещё не прослушана';
+            this.appendChild(mark);
+        }
+        mark.hidden = !unread.has(current);
+    });
+    // Ближайшая новая частота (список частот закольцован): в какую сторону до неё короче.
+    let side = null;
+    const n = all.length, i0 = all.indexOf(current);
+    if (n > 1 && i0 >= 0) {
+        for (let d = 1; d <= Math.floor(n / 2) && !side; d++) {
+            if (unread.has(all[(i0 + d) % n])) side = 'right';
+            else if (unread.has(all[(i0 - d + n) % n])) side = 'left';
+        }
+    }
+    $('#left, #left_2').toggleClass('has-new', side === 'left');
+    $('#right, #right_2').toggleClass('has-new', side === 'right');
 }
 
 /**
@@ -532,7 +582,7 @@ async function initializeTransmission() {
         $('#text').text('*НЕТ СВЯЗИ*');
         $('#c-char').text('');
         $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
-        $('.overlay').css('opacity', '0.3');
+        $('.overlay').css('opacity', '0.3'); setSpeaking(0);
         $('#start-transmission, #repeat-transmission').addClass('hidden');
         return;
     }
@@ -545,7 +595,7 @@ async function initializeTransmission() {
         $('#text').text('*ДОСТУП ЗАПРЕЩЕН*');
         $('#c-char').text('СИСТЕМА:');
         $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
-        $('.overlay').css('opacity', '0.3');
+        $('.overlay').css('opacity', '0.3'); setSpeaking(0);
         $('#start-transmission, #repeat-transmission').addClass('hidden');
         return;
     }
@@ -712,7 +762,7 @@ function showCompletedDialogueState() {
     $('#text').text('*ДИАЛОГ ЗАВЕРШЕН*');
     $('#c-char').text('');
     $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
-    $('.overlay').css('opacity', '0.3');
+    $('.overlay').css('opacity', '0.3'); setSpeaking(0);
     $('#start-transmission').addClass('hidden');
     $('#repeat-transmission').addClass('hidden');
     
@@ -1466,8 +1516,19 @@ document.addEventListener('DOMContentLoaded', () => {
     ['char-1', 'char-2'].forEach(id => watchFrame(document.getElementById(id)));
 });
 
+/**
+ * Окно говорящего персонажа: класс .speaking на рамке (#char-1 / #char-2).
+ * В темах (styles/themes.css) рамка говорящего подсвечивается снизу вверх в цвете темы;
+ * window = 0 — никто не говорит.
+ */
+function setSpeaking(window) {
+    $('#char-1').toggleClass('speaking', window === 1);
+    $('#char-2').toggleClass('speaking', window === 2);
+}
+
 function updateCharacterDisplay(speakerIndex, image) {
     const speakerWindow = getCharacterWindow(speakerIndex);
+    setSpeaking(speakerWindow === 1 ? 1 : 2);
     
     if (speakerWindow === 1) {
         // Говорящий в окне 1 (слева) - активно
@@ -1510,7 +1571,7 @@ function initializeCharacterPortraits() {
         'background-position': '',
         'transform': ''
     });
-    $('.overlay').css('opacity', '0.3');
+    $('.overlay').css('opacity', '0.3'); setSpeaking(0);
 }
 
 /**
@@ -1541,6 +1602,10 @@ function endTransmission() {
     
     // Сохраняем прогресс как завершенный
     saveDialogueProgress(currentFrequency, true);
+
+    // Передача дослушана — метка «новая» гаснет сразу
+    if (state.unread) state.unread.delete(currentFrequency);
+    renderUnreadMarks();
     
     // Показываем состояние завершенного диалога (включая кнопку повтора)
     showCompletedDialogueState();
@@ -2346,7 +2411,7 @@ function stopActiveDialogue() {
     $('#start-transmission').addClass('hidden');
     $('#repeat-transmission').addClass('hidden');
     $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
-    $('.overlay').css('opacity', '0.3');
+    $('.overlay').css('opacity', '0.3'); setSpeaking(0);
     
     debug('Активный диалог остановлен');
 }
@@ -2434,7 +2499,7 @@ function changeFreq() {
     
     // Сбрасываем изображения персонажей
     $('#char-1, #char-2').css('background-image', `url(${getAssetUrl('assets/images/portraits/static.gif')})`);
-    $('.overlay').css('opacity', '0.3');
+    $('.overlay').css('opacity', '0.3'); setSpeaking(0);
     
     // Скрываем кнопки
     $('#repeat-transmission').addClass('hidden');

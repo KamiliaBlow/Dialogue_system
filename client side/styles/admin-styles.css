@@ -2128,6 +2128,13 @@ body.theme-ktb .admin-card {
 /* Диалоги: две колонки, правая (портрет) нужна только персонажам. */
 .studio[data-mode="dialogues"] { grid-template-columns: 280px minmax(0, 1fr); }
 .studio[data-mode="dialogues"] .studio-props { display: none; }
+.studio[data-mode="briefings"] { grid-template-columns: 280px minmax(0, 1fr); }
+.studio[data-mode="briefings"] .studio-props { display: none; }
+/* Брифинги: меню «+ Новый» и кнопки карточки */
+.bf-new-menu { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.bf-new-menu.hidden { display: none; }
+.bf-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 8px; }
+#bf-listeners-tbody .muted { opacity: .65; }
 
 .studio-col {
     min-height: 0;
@@ -2141,12 +2148,12 @@ body.theme-ktb .admin-card {
 
 .studio-modes {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
     padding: 10px 10px 0;
 }
 
-.studio-modes .sub-tab { width: 100%; margin: 0; }
+.studio-modes .sub-tab { width: 100%; margin: 0; padding-left: 4px; padding-right: 4px; overflow: hidden; text-overflow: ellipsis; }
 .studio-search { padding: 10px 10px 0; }
 .studio-search .search-input { width: 100%; box-sizing: border-box; }
 .sidebar-footer { padding: 10px; border-top: 1px solid var(--primary-border); }
@@ -2434,6 +2441,7 @@ details.dialogue-info > summary:hover .dialogue-info-toggle { border-color: var(
 @media (max-width: 1500px) {
     .studio { grid-template-columns: 240px minmax(0, 1fr) 360px; }
     .studio[data-mode="dialogues"] { grid-template-columns: 240px minmax(0, 1fr); }
+    .studio[data-mode="briefings"] { grid-template-columns: 240px minmax(0, 1fr); }
     .pf-frame { zoom: 0.9; }
 }
 

@@ -1,0 +1,49 @@
+/* Общие токены и маркеры — используются плеером (index.html) и редактором (editor.html) */
+:root{
+  --bg:#090a0b;
+  --ink:#dfe2d8;
+  --ink2:rgba(223,226,216,.64);
+  --ink3:rgba(223,226,216,.30);
+  --ink4:rgba(223,226,216,.12);
+  --hot:#ff5a2c;
+  --hot2:rgba(255,90,44,.62);
+  --ally:#7cc8ff;
+  --dim:#8a8d86;
+  --sans:'IBM Plex Sans Condensed',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+.k{font:500 10px/1.3 var(--mono);letter-spacing:.16em;color:var(--ink2);text-transform:uppercase}
+
+/* ---------- маркеры над объектами ---------- */
+.mk-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.mk{position:absolute;left:0;top:0;opacity:0;transition:opacity .35s;will-change:transform;color:var(--ink)}
+.mk.on{opacity:1}
+.mk.hot,.mk.target{color:var(--hot)}
+.mk.ally{color:var(--ally)}
+.mk.neutral,.mk.area{color:var(--ink2)}
+.mk .pip{position:absolute;left:-5px;top:-5px;width:10px;height:10px}
+.mk.target .pip{border:1.5px solid currentColor;transform:rotate(45deg)}
+.mk.target .pip::before{content:"";position:absolute;inset:2px;background:currentColor}
+.mk.target .pip::after{content:"";position:absolute;inset:-6px;border:1px solid currentColor;animation:mkpulse 1.6s ease-out infinite}
+.mk.hot .pip{background:currentColor;transform:rotate(45deg) scale(.8)}
+.mk.ally .pip{border:1.5px solid currentColor;border-radius:50%}
+.mk.nav .pip{background:currentColor;clip-path:polygon(0 0,100% 0,50% 100%);top:-9px}
+.mk.neutral .pip{border:1px solid currentColor}
+.mk.area .pip{width:9px;height:9px;left:-4px;top:-4px;background:linear-gradient(currentColor,currentColor) center/100% 1px no-repeat,linear-gradient(currentColor,currentColor) center/1px 100% no-repeat}
+@keyframes mkpulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.8);opacity:0}}
+.mk svg.ld{position:absolute;left:0;top:0;overflow:visible}
+.mk svg.ld polyline{fill:none;stroke:currentColor;stroke-width:1;stroke-dasharray:44;stroke-dashoffset:44;transition:stroke-dashoffset .3s .05s}
+.mk.on svg.ld polyline{stroke-dashoffset:0}
+.mk .lbl{position:absolute;left:28px;top:-28px;transform:translateY(-100%);white-space:nowrap;padding:0 10px 4px 2px;border-bottom:1px solid currentColor;
+  clip-path:inset(0 100% 0 0);transition:clip-path .45s cubic-bezier(.2,.7,.2,1) .25s}
+.mk.on .lbl{clip-path:inset(-4px -4px -4px -4px)}
+.mk.flip svg.ld{transform:scaleX(-1)}
+.mk.flip .lbl{left:auto;right:28px;text-align:right;padding:0 2px 4px 10px;clip-path:inset(0 0 0 100%)}
+.mk.flip.on .lbl{clip-path:inset(-4px -4px -4px -4px)}
+.mk .lbl small{display:block;font:500 9.5px/1.3 var(--mono);letter-spacing:.16em;opacity:.7;text-transform:uppercase}
+.mk .lbl b{display:block;font:500 15px/1.15 var(--sans);letter-spacing:.07em;text-transform:uppercase;color:var(--ink)}
+.mk.hot .lbl b,.mk.target .lbl b{color:var(--hot)}
+.mk.ally .lbl b{color:var(--ally)}
+.mk.on .lbl b{animation:mkflick .5s steps(5) .3s both}
+.mk .lbl .meta{display:block;font:400 10px/1.4 var(--mono);opacity:.75;margin-top:2px;letter-spacing:.06em}
+@keyframes mkflick{0%{opacity:0}20%{opacity:1}40%{opacity:.2}60%{opacity:1}80%{opacity:.5}100%{opacity:1}}

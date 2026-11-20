@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сценарист брифингов</title>
+<!--
+  Режим сценариста: рельеф (генерация + кисти), объекты из каталога, патрули по вейпоинтам,
+  шаги диалога с привязкой камеры, условия контракта. Сценарий автоматически сохраняется
+  в localStorage браузера; экспорт/импорт — JSON-файлом. Просмотр — тем же плеером (player.html).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="briefing.css">
+<style>
+:root{--panel:#0c0d0e;--panel2:#111214;--line:rgba(223,226,216,.1)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+#app{display:grid;height:100vh;grid-template-columns:290px minmax(0,1fr) 340px;grid-template-rows:46px minmax(0,1fr) 182px}
+.scroll{overflow:auto;min-height:0;scrollbar-width:thin;scrollbar-color:var(--ink4) transparent}
+
+/* ---------- верхняя панель ---------- */
+#top{grid-column:1/-1;display:flex;align-items:center;gap:6px;padding:0 10px 0 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+#top .brand{display:flex;align-items:center;gap:10px;margin-right:10px}
+#top .brand svg{width:22px;height:22px}
+#top .brand b{font:600 13px var(--sans);letter-spacing:.22em}
+#docTitle{font:300 15px var(--sans);color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32vw}
+#top .sp{flex:1}
+#saveState{margin-right:8px;white-space:nowrap}
+.btn{background:none;border:1px solid var(--ink4);padding:6px 11px;cursor:pointer;font:500 12px var(--sans);letter-spacing:.08em;color:var(--ink);transition:border-color .15s,background .15s;white-space:nowrap}
+.btn:hover{border-color:var(--ink3);background:rgba(223,226,216,.04)}
+.btn.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.pri:hover{background:#fff}
+.btn.on{border-color:var(--ink);background:rgba(223,226,216,.1)}
+.btn.hot{color:var(--hot);border-color:rgba(255,90,44,.35)}
+.btn.hot:hover{border-color:var(--hot)}
+.btn.ic{padding:6px 9px}
+.btn:disabled{opacity:.35;cursor:default}
+
+/* ---------- левая панель ---------- */
+#left{grid-row:2/4;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--panel)}
+#tabs{display:flex;border-bottom:1px solid var(--line)}
+#tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:11px 4px 9px;cursor:pointer;font:500 10.5px var(--mono);letter-spacing:.1em;color:var(--ink2);text-transform:uppercase}
+#tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+#leftBody{flex:1;padding:4px 14px 20px}
+.sec{padding:14px 0 6px;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.sh{font:500 10px/1.3 var(--mono);letter-spacing:.16em;color:var(--ink2);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sh .sp{flex:1}
+.hint{font:400 12px/1.45 var(--sans);color:var(--ink2);margin:6px 0 10px}
+.f{display:block;margin-bottom:10px}
+.fl{display:block;font:400 10.5px var(--mono);letter-spacing:.06em;color:var(--ink2);margin-bottom:4px}
+.in{width:100%;background:var(--panel2);border:1px solid var(--ink4);padding:6px 8px;font:400 13.5px var(--sans);color:var(--ink);outline:none;border-radius:0}
+.in:focus{border-color:var(--ink3)}
+textarea.in{resize:vertical;min-height:84px;line-height:1.45}
+select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink2) 50%),linear-gradient(135deg,var(--ink2) 50%,transparent 50%);background-position:calc(100% - 13px) 50%,calc(100% - 8px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:24px}
+select.in option{background:#15171a}
+.in.num{font-family:var(--mono);font-size:12.5px}
+.rg{display:flex;align-items:center;gap:10px}
+.rg input{flex:1;accent-color:var(--ink)}
+.rv{font:400 11px var(--mono);color:var(--ink2);flex:none;width:104px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* фиксированная ширина: иначе ползунок меняет длину вместе с текстом и «прыгает» под курсором */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chk{display:flex;align-items:center;gap:8px;font:400 13px var(--sans);margin:2px 0 10px;cursor:pointer}
+.chk input{accent-color:var(--ink)}
+.bar{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.snd{border-top:1px solid var(--line);padding:10px 0 4px}
+.snd.first{border-top:0;padding-top:2px}
+.snd-h{display:flex;align-items:center;gap:8px}
+.snd-h b{font:500 13px var(--sans);letter-spacing:.02em}
+.snd-h .sp{flex:1}
+.snd-h .btn{padding:3px 10px}
+.snd .hint{margin:3px 0 7px}
+.snd .two{align-items:center;margin-bottom:4px}
+.snd .chk{margin:0}
+.snd-f{display:flex;align-items:center;gap:8px;font:400 11px var(--mono);color:var(--ink2);margin:2px 0 6px;min-width:0}
+.snd-f span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1}
+.lnk{background:none;border:0;padding:0;color:var(--ink2);font:inherit;text-decoration:underline;cursor:pointer}
+.lnk:hover{color:var(--ink)}
+
+.biomes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+.bio{background:none;border:1px solid var(--ink4);padding:4px 4px 6px;cursor:pointer;text-align:center}
+.bio canvas{display:block;width:100%;aspect-ratio:1;image-rendering:pixelated;margin-bottom:4px}
+.bio span{font:400 11px/1.2 var(--sans);color:var(--ink2)}
+.bio.on{border-color:var(--ink)}
+.bio.on span{color:var(--ink)}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+.tools .btn{padding:8px 4px;font-size:11.5px;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis}
+#leftBody .btn,#insp .btn{white-space:normal}
+
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}
+.chips button{background:none;border:1px solid var(--ink4);padding:3px 8px;font:400 11px var(--mono);color:var(--ink2);cursor:pointer;letter-spacing:.04em}
+.chips button.on{border-color:var(--ink);color:var(--ink)}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cc{display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:var(--panel2);border:1px solid var(--ink4);padding:9px 9px 8px;cursor:pointer;text-align:left;min-height:96px}
+.cc:hover{border-color:var(--ink3)}
+.cc.on{border-color:var(--ink);background:rgba(223,226,216,.08)}
+.cc svg{width:30px;height:30px;color:var(--ink);margin-bottom:3px}
+.cc b{font:500 13px/1.15 var(--sans)}
+.cc small{font:400 10.5px/1.3 var(--sans);color:var(--ink2)}
+.cc.hostile svg,.cc.target svg{color:var(--hot)}
+.cc.ally svg{color:var(--ally)}
+.cc.neutral svg{color:var(--dim)}
+.cgh{grid-column:1/-1;font:500 10px var(--mono);letter-spacing:.16em;color:var(--ink2);text-transform:uppercase;margin:10px 0 2px}
+
+.ol{display:flex;align-items:center;gap:8px;padding:5px 6px;cursor:pointer;border:1px solid transparent}
+.ol:hover{background:rgba(223,226,216,.04)}
+.ol.sel{border-color:var(--ink3);background:rgba(223,226,216,.07)}
+.ol svg{width:18px;height:18px;flex:none}
+.ol .nm{flex:1;font:400 13px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ol .st{font:400 10px var(--mono);color:var(--ink2);white-space:nowrap}
+.ol .x{background:none;border:0;color:var(--ink2);cursor:pointer;padding:0 3px;font-size:14px;opacity:0}
+.ol:hover .x{opacity:1}
+.dot{width:7px;height:7px;flex:none;transform:rotate(45deg);background:var(--ink)}
+.dot.hostile,.dot.target{background:var(--hot)} .dot.ally{background:var(--ally)} .dot.neutral{background:var(--dim)} .dot.nav{background:var(--ink)}
+.empty{font:400 12.5px/1.5 var(--sans);color:var(--ink2);padding:10px 0}
+
+.lst{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.li{display:flex;gap:4px;align-items:center}
+.li .in{padding:4px 6px;font-size:12.5px}
+.li .x{background:none;border:1px solid var(--ink4);color:var(--ink2);cursor:pointer;width:26px;height:27px;flex:none}
+.li .x:hover{color:var(--hot);border-color:var(--hot2)}
+.li input[type=checkbox]{accent-color:var(--hot)}
+.ptrow{display:flex;align-items:center;gap:8px;font:400 11.5px var(--mono);color:var(--ink2);padding:3px 0}
+.ptrow b{color:var(--ink);font-weight:500;min-width:34px}
+.ptrow .sp{flex:1}
+.ptrow .x{background:none;border:0;color:var(--ink2);cursor:pointer;font-size:14px}
+.ptrow .x:hover{color:var(--hot)}
+.embl{display:flex;gap:6px;margin-bottom:10px}
+.embl button{background:none;border:1px solid var(--ink4);padding:6px;cursor:pointer;color:var(--ink2)}
+.embl button.on{border-color:var(--ink);color:var(--ink)}
+.embl svg{width:30px;height:30px;display:block}
+
+/* ---------- вьюпорт ---------- */
+#vp{position:relative;overflow:hidden;min-height:0;cursor:default}
+#vp.m-brush,#vp.m-place,#vp.m-path{cursor:crosshair}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#handles{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#vp.m-select .hdl,#vp.m-select .wph,#vp.m-path .wph{pointer-events:auto}
+.hdl{position:absolute;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border:1.5px solid var(--ink);background:rgba(9,10,11,.65);cursor:grab}
+.hdl.hostile,.hdl.target{border-color:var(--hot)} .hdl.ally{border-color:var(--ally)} .hdl.neutral{border-color:var(--dim)}
+.hdl.sel{width:16px;height:16px;margin:-8px 0 0 -8px;background:var(--ink);box-shadow:0 0 0 4px rgba(223,226,216,.16)}
+.hdl.sel.hostile,.hdl.sel.target{background:var(--hot)}
+.hdl.dim{opacity:.35}
+.wph{position:absolute;left:0;top:0;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:1px solid var(--ink);background:rgba(9,10,11,.8);
+  font:500 9.5px/16px var(--mono);text-align:center;cursor:grab}
+#vpTop{position:absolute;left:12px;top:10px;right:12px;display:flex;gap:8px;align-items:center;pointer-events:none;flex-wrap:wrap}
+.chip{pointer-events:auto;font:500 10.5px var(--mono);letter-spacing:.08em;padding:5px 9px;border:1px solid var(--ink4);background:rgba(9,10,11,.75);color:var(--ink2);text-transform:uppercase;display:flex;gap:8px;align-items:center}
+.chip b{color:var(--ink);font-weight:500}
+.chip button{background:none;border:0;border-left:1px solid var(--ink4);padding-left:8px;color:var(--ink);cursor:pointer;font:inherit;letter-spacing:inherit;text-transform:inherit}
+#vpHint{position:absolute;left:12px;bottom:10px;right:180px;font:400 11px/1.5 var(--mono);color:var(--ink2);pointer-events:none;text-shadow:0 0 6px #000}
+#vpXY{position:absolute;right:12px;bottom:10px;font:400 11px var(--mono);color:var(--ink2);pointer-events:none;text-align:right}
+:root{--acc:#ffcf4a}
+.gz{position:absolute;left:0;top:0;pointer-events:none;display:none}
+#vp.m-select .gz,#vp.m-path .gz{pointer-events:auto}
+.gz.t{width:22px;height:22px;margin:-11px 0 0 -11px;border:1.5px solid var(--acc);border-radius:50%;cursor:move;background:radial-gradient(circle,var(--acc) 0 2px,transparent 3px)}
+.gz.t.lock{cursor:not-allowed;border-style:dashed}
+.gz.c{width:26px;height:18px;margin:-9px 0 0 -13px;border:1.5px solid var(--acc);background:rgba(9,10,11,.85);cursor:grab;border-radius:2px}
+.gz.c::after{content:"";position:absolute;right:-7px;top:3px;border:5px solid transparent;border-left:6px solid var(--acc)}
+.gz.c::before{content:"";position:absolute;left:7px;top:4px;width:7px;height:7px;border:1.5px solid var(--acc);border-radius:50%}
+.gz b{position:absolute;left:50%;top:calc(100% + 4px);transform:translateX(-50%);white-space:nowrap;font:500 9.5px var(--mono);letter-spacing:.1em;color:var(--acc);text-shadow:0 0 4px #000}
+#pip{position:absolute;right:12px;top:44px;width:340px;border:1px solid var(--acc);background:var(--bg);display:none;pointer-events:none;z-index:5}
+#pipCv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#pip.on{display:block}
+#pip .pip-h{display:flex;align-items:center;gap:8px;padding:4px 8px;background:rgba(9,10,11,.9);pointer-events:auto}
+#pip .pip-h .k:first-child{flex:1;color:var(--acc)} #pip .pip-h b{color:var(--ink);font-weight:500}
+#pip button{background:none;border:1px solid var(--ink4);color:var(--ink);width:22px;height:20px;cursor:pointer;line-height:1}
+#pip .pip-v{position:relative;height:191px}
+#pip.min .pip-v{display:none}
+#pip .pip-sub{position:absolute;left:8px;right:8px;bottom:6px;font:400 11.5px/1.35 var(--sans);text-shadow:0 0 6px #000,0 0 2px #000;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+#pip .pip-sub .k{display:block;margin-bottom:2px;font-size:9px}
+.wave{display:block;width:100%;height:56px;background:var(--panel2);border:1px solid var(--ink4);margin-bottom:6px;cursor:pointer}
+.vinfo{font:400 11px/1.5 var(--mono);color:var(--ink2);margin-bottom:6px}
+.vwarn{font:400 12px/1.4 var(--sans);color:var(--hot);margin-bottom:6px}
+.vprev{font:400 13px/1.45 var(--sans);min-height:2.9em;border-left:2px solid var(--acc);padding:4px 8px;margin:6px 0;background:var(--panel2);display:none}
+.vprev.on{display:block}
+.cast{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px}
+.cast .pt{overflow:hidden}
+.cast .pt i{position:absolute;inset:0}
+.cast .pt.cat::after{content:"⌖"}
+/* окна поверх редактора: каталог персонажей, кадр портрета */
+#dlg{position:fixed;inset:0;z-index:60;background:rgba(5,6,7,.72);display:none;place-items:center}
+#dlg.on{display:grid}
+#dlg .box{background:var(--panel);border:1px solid var(--ink4);width:min(620px,94vw);max-height:88vh;display:flex;flex-direction:column}
+#dlg .bh{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}
+#dlg .bh .sp{flex:1}
+#dlg .bb{padding:14px;overflow:auto;min-height:0}
+#dlg .bf{padding:10px 14px;border-top:1px solid var(--line)}
+.gcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;margin-top:10px}
+.gc{background:var(--panel2);border:1px solid var(--ink4);color:var(--ink);padding:6px;cursor:pointer;text-align:left;font:500 12px var(--sans)}
+.gc:hover,.gc.on{border-color:var(--ink2)}
+.gc .th{width:100%;aspect-ratio:258/319;background:#0d0f10;overflow:hidden;position:relative;margin-bottom:5px;filter:grayscale(1)}
+.gc .th i{position:absolute;inset:0}
+.fr-wrap{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.fr{width:200px;height:249px;border:1px solid var(--ink3);background:#0d0f10;position:relative;overflow:hidden;cursor:grab;flex:none;touch-action:none}
+.fr.drag{cursor:grabbing}
+.fr i{position:absolute;inset:0;filter:grayscale(1) contrast(1.15) brightness(.92)}
+.fr .cross{position:absolute;inset:0;pointer-events:none;background:linear-gradient(var(--line),var(--line)) 50% 0/1px 100% no-repeat,linear-gradient(var(--line),var(--line)) 0 50%/100% 1px no-repeat}
+/* сервер недоступен или нет прав — редактор не открывается */
+#block{position:fixed;inset:0;z-index:80;background:var(--bg);display:none;place-items:center;text-align:center;padding:24px}
+#block.on{display:grid}
+#block .v{font:300 26px var(--sans);letter-spacing:.06em;margin:8px 0 18px}
+#saveState.bad{color:var(--hot)}
+.cast .pt{width:48px;height:60px;flex:none;border:1px solid var(--ink4);background:#0d0f10 center/cover;cursor:pointer;position:relative;filter:grayscale(1)}
+.cast .pt:hover{border-color:var(--ink3)}
+.cast .pt::after{content:"⤒";position:absolute;right:2px;bottom:0;font-size:11px;color:var(--ink2)}
+.cast .flds{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.cast .flds .in{padding:4px 6px;font-size:12.5px}
+.cast .x{background:none;border:1px solid var(--ink4);color:var(--ink2);cursor:pointer;width:24px;height:24px;flex:none}
+.plprev{display:block;width:100%;height:210px;background:#090a0b;border:1px solid var(--ink4);margin-bottom:10px;cursor:grab}
+
+/* ---------- инспектор ---------- */
+#right{grid-row:2/4;grid-column:3;border-left:1px solid var(--line);min-height:0;display:flex;flex-direction:column;background:var(--panel)}
+#insp{flex:1;padding:0 16px 24px}
+.ihead{display:flex;gap:12px;align-items:center;padding:16px 0 12px;border-bottom:1px solid var(--line)}
+.ihead svg{width:36px;height:36px;flex:none}
+.ihead b{display:block;font:500 17px/1.15 var(--sans)}
+.ihead small{font:400 10.5px var(--mono);letter-spacing:.1em;color:var(--ink2);text-transform:uppercase}
+.ihead.hostile svg,.ihead.target svg{color:var(--hot)} .ihead.ally svg{color:var(--ally)} .ihead.neutral svg{color:var(--dim)}
+.tagl{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.tagl span{font:400 11.5px var(--sans);border:1px solid var(--ink4);padding:2px 7px;cursor:pointer}
+.tagl span:hover{border-color:var(--ink3)}
+
+/* ---------- шкала шагов ---------- */
+#tl{grid-column:2;grid-row:3;border-top:1px solid var(--line);display:flex;flex-direction:column;min-width:0;background:var(--panel)}
+.tlh{display:flex;align-items:center;gap:10px;padding:8px 12px 0}
+#steps{display:flex;gap:8px;padding:8px 12px 12px;overflow-x:auto;overflow-y:hidden;flex:1;align-items:stretch;scrollbar-width:thin;scrollbar-color:var(--ink4) transparent}
+.stp{flex:none;width:200px;border:1px solid var(--ink4);background:var(--panel2);padding:8px 10px;cursor:pointer;display:flex;flex-direction:column;gap:5px;position:relative}
+.stp:hover{border-color:var(--ink3)}
+.stp.sel{border-color:var(--ink);background:rgba(223,226,216,.07)}
+.stp.drop{border-left:3px solid var(--ink)}
+.stp .h1{display:flex;gap:8px;align-items:baseline;font:500 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+.stp .h1 b{color:var(--ink);font-weight:500}
+.stp .tx{font:400 12.5px/1.35 var(--sans);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+.stp .tx.emp{color:var(--ink3);font-style:italic}
+.stp .cm{font:400 10px var(--mono);color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stp.add{align-items:center;justify-content:center;width:110px;color:var(--ink2);font:500 12px var(--sans);letter-spacing:.08em;border-style:dashed}
+
+/* ---------- просмотр / тост ---------- */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;z-index:20}
+#modal.on{display:flex}
+#modal .mbar{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+#modal .mbar .sp{flex:1}
+#frame{flex:1;border:0;width:100%;background:var(--bg)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;background:var(--ink);color:var(--bg);font:500 12.5px var(--sans);padding:8px 14px;transition:.25s;pointer-events:none;z-index:30}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:1180px){ #app{grid-template-columns:250px minmax(0,1fr) 300px} #docTitle{display:none} }
+</style>
+<script src="core.js"></script>
+<script src="voice.js"></script>
+<script src="planet.js"></script>
+<script type="importmap">
+{"imports":{
+  "three":"./vendor/three/build/three.module.js",
+  "three/addons/":"./vendor/three/addons/"
+}}
+</script>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <a class="btn" id="bStudio" href="../studio.html#briefings" title="Вернуться в студию" hidden>← Студия</a>
+    <div class="brand"><svg viewBox="0 0 64 64" id="brandEmb"></svg><b>СЦЕНАРИСТ</b></div>
+    <span id="docTitle"></span>
+    <span class="sp"></span>
+    <span class="k" id="saveState">сохранено</span>
+    <button class="btn ic" id="bUndo" title="Отменить (Ctrl+Z)">↶</button>
+    <button class="btn ic" id="bRedo" title="Повторить (Ctrl+Shift+Z)">↷</button>
+    <button class="btn" id="bImport" title="Загрузить сценарий из JSON-файла">Импорт</button>
+    <button class="btn" id="bExport" title="Скачать сценарий как JSON-файл">Экспорт</button>
+    <button class="btn" id="bPlayer" title="Открыть плеер с этим сценарием в новой вкладке">Плеер ↗</button>
+    <button class="btn pri" id="bPreview">▶ Просмотр</button>
+  </header>
+
+  <aside id="left">
+    <nav id="tabs"></nav>
+    <div id="leftBody" class="scroll"></div>
+  </aside>
+
+  <main id="vp" class="m-select">
+    <canvas id="gl"></canvas>
+    <div id="markers" class="mk-layer"></div>
+    <div id="handles"></div>
+    <div id="vpTop"></div>
+    <div id="vpHint"></div>
+    <div id="vpXY"></div>
+    <div id="pip"><div class="pip-h"><span class="k">Кадр шага <b id="pipN"></b></span><span class="k" id="pipMode"></span><button id="pipX" title="Свернуть превью">–</button></div>
+      <div class="pip-v" id="pipView"><canvas id="pipCv"></canvas><div class="pip-sub"><span class="k" id="pipSpk"></span><span id="pipTxt"></span></div></div></div>
+  </main>
+
+  <aside id="right"><div id="insp" class="scroll"></div></aside>
+
+  <section id="tl">
+    <div class="tlh"><span class="k">Шаги брифинга · реплики и камера</span><span class="k" style="opacity:.6">— перетаскивайте карточки, чтобы менять порядок</span></div>
+    <div id="steps"></div>
+  </section>
+</div>
+
+<div id="modal">
+  <div class="mbar"><span class="k">Просмотр брифинга</span><span class="sp"></span><span class="k" style="opacity:.6">звук и пробел работают после клика внутри</span><button class="btn" id="mClose">Закрыть ✕</button></div>
+  <iframe id="frame" title="Просмотр брифинга"></iframe>
+</div>
+<div id="dlg"></div>
+<div id="block"></div>
+<input type="file" id="file" accept=".json,application/json" hidden>
+<div id="toast"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+import * as Remote from './remote.js';
+
+const Core = window.BriefingCore(THREE);
+Core.setAssetResolver(Remote.assetUrl);
+const qs = new URLSearchParams(location.search);
+const BID = Number(qs.get('id')) || null;     // брифинг с сервера системы; без id — офлайн-режим (localStorage + IndexedDB)
+const SERVER = !!BID;
+const { CATALOG, CATS, SIDES, BIOMES, P, EMBLEMS, DEG, UNIT_M, RMAX } = Core;
+const $ = id => document.getElementById(id);
+const V3 = THREE.Vector3;
+const r1 = v => Math.round(v * 10) / 10;
+
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === false || v == null) continue;
+    if (k === 'class') el.className = v; else if (k === 'style') el.style.cssText = v; else if (k === 'html') el.innerHTML = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v); else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat(Infinity)) { if (c == null || c === false) continue; el.append(c.nodeType ? c : document.createTextNode(c)); }
+  return el;
+}
+const svgIcon = (inner, cls = '') => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 32 32');
+  s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.6'); s.setAttribute('stroke-linejoin', 'round'); if (cls) s.setAttribute('class', cls); s.innerHTML = inner; return s; };
+const embIcon = id => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 64 64'); s.innerHTML = (EMBLEMS[id] || EMBLEMS.hex).svg; return s; };
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1600); }
+
+/* ============================ состояние ============================ */
+function loadLocal() { try { const s = localStorage.getItem(Core.STORAGE_KEY); return s ? Core.normalize(JSON.parse(s)) : null; } catch (e) { console.warn(e); return null; } }
+/* Серверный режим: сценарий с сервера, автосохранение туда же. Черновик в браузере страхует, пока
+   сохранение не дошло (нет связи, закрыли вкладку): при следующем открытии его предложат восстановить. */
+const DRAFT_KEY = `briefing.draft.${BID}`;
+const srv = { version:0, briefing:null };
+function blockPage(title, text, link) {
+  $('block').replaceChildren(h('div', null, h('div', { class:'k' }, 'Сценарист брифингов'), h('div', { class:'v' }, title), h('div', { class:'hint' }, text),
+    link ? h('a', { class:'btn', href:link[0], style:'display:inline-block;margin-top:14px' }, link[1]) : null));
+  $('block').classList.add('on'); throw new Error(title);
+}
+async function loadInitial() {
+  if (!SERVER) return loadLocal() || Core.defaultScenario();
+  let r;
+  try { r = await Remote.api(`/editor/briefings/${BID}`); }
+  catch (e) {
+    if (e.status === 401) blockPage('Нужно войти', 'Редактор брифингов доступен мастеру после входа в систему.', ['../login.html', 'Войти']);
+    if (e.status === 403) blockPage('Недостаточно прав', 'Редактор брифингов доступен только мастеру.', ['../index.html', 'На терминал']);
+    if (e.status === 404) blockPage('Брифинг не найден', 'Возможно, его удалили в студии.', ['../studio.html#briefings', 'В студию']);
+    blockPage('Нет связи с сервером', e.message, null);
+  }
+  srv.version = r.briefing.version; srv.briefing = r.briefing;
+  let draft = null; try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch {}
+  if (draft && draft.base === r.briefing.version && draft.scenario &&
+      confirm('В браузере остался несохранённый черновик этого брифинга (сохранение на сервер не дошло). Восстановить его?')) return Core.normalize(draft.scenario);
+  localStorage.removeItem(DRAFT_KEY);
+  return Core.normalize(r.scenario);
+}
+let sc = await loadInitial();
+if (SERVER) { $('bStudio').hidden = false; $('bStudio').href = `../studio.html#briefings/${BID}`; }
+const hf = new Core.Heightfield(); Core.terrainFrom(sc, hf);
+let sel = null;                      // {k:'obj'|'step', id}
+let mode = 'select';                 // select | brush | place | path
+let placeType = null, ghostObj = null, ghostDirty = false, pathFor = null;
+let viewAll = false;
+let leftTab = 'terrain', catFilter = 'all', search = '';
+const brush = { tool:'raise', radius:18, strength:.5 };
+const BRUSHES = [['raise', 'Поднять'], ['lower', 'Опустить'], ['smooth', 'Сгладить'], ['flatten', 'Выровнять'], ['rough', 'Шероховатость']];
+const roughN = Core.makeNoise(4242);
+
+const findObj = id => sc.objects.find(o => o.id === id);
+const selObj = () => sel && sel.k === 'obj' ? findObj(sel.id) : null;
+const selStep = () => sel && sel.k === 'step' ? sc.steps.find(s => s.id === sel.id) : null;
+const stepIndex = id => sc.steps.findIndex(s => s.id === id);
+const isSquad = o => CATALOG[o.type].kind === 'squad';
+const isPath = o => !!CATALOG[o.type].path;
+const pathPoints = o => isSquad(o) ? [[o.x, o.z], ...o.wp] : isPath(o) ? o.pts : null;
+
+/* ============================ сохранение и история ============================ */
+let saveT = 0;
+let dirty = false;
+function setState(text, bad) { $('saveState').textContent = text; $('saveState').classList.toggle('bad', !!bad); }
+function markDirty() { dirty = true; setState('изменено…'); clearTimeout(saveT); saveT = setTimeout(save, SERVER ? 2000 : 700); $('docTitle').textContent = sc.meta.title; }
+function serialize() { sc.terrain.data = hf.encode(); return JSON.parse(JSON.stringify(sc)); }
+function save() {
+  clearTimeout(saveT);
+  if (SERVER) { const data = serialize(); try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ base:srv.version, scenario:data })); } catch {} pushServer(data); return; }
+  try { localStorage.setItem(Core.STORAGE_KEY, JSON.stringify(serialize())); dirty = false; setState('сохранено ✓'); }
+  catch (e) { setState('не сохранено — используйте экспорт', true); console.warn(e); }
+}
+/* Сохранение на сервер: по одному запросу за раз; правки, пришедшие во время запроса, уйдут следом.
+   Версия защищает от перезаписи из другого окна: на 409 мастер выбирает, чья версия остаётся. */
+let inflight = false, again = false;
+async function pushServer(data, force = false) {
+  if (inflight) { again = true; return; }
+  inflight = true; dirty = false; setState('сохраняется…');
+  try {
+    const r = await Remote.api(`/editor/briefings/${BID}`, { method:'PUT', body:{ scenario:data, version:srv.version, force } });
+    srv.version = r.briefing.version; srv.briefing = r.briefing;
+    if (!dirty && !again) { localStorage.removeItem(DRAFT_KEY); setState('сохранено на сервере ✓'); }
+  } catch (e) {
+    dirty = true;
+    if (e.status === 409) {
+      inflight = false;
+      if (confirm('Этот брифинг сохранили из другого окна или другим мастером.\n\nОК — перезаписать своей версией.\nОтмена — загрузить версию с сервера (ваши последние правки пропадут).')) return pushServer(data, true);
+      localStorage.removeItem(DRAFT_KEY); dirty = false; location.reload(); return;
+    }
+    setState(e.status === 0 ? 'нет связи — черновик в браузере' : 'не сохранено: ' + e.message, true);
+  } finally {
+    inflight = false;
+    if (again) { again = false; save(); }
+  }
+}
+addEventListener('beforeunload', e => { if (SERVER && (dirty || inflight)) { save(); e.preventDefault(); e.returnValue = ''; } });
+const undoS = [], redoS = [];
+function snap() { const { data, ...terrain } = sc.terrain; return { json:JSON.stringify({ meta:sc.meta, terrain, objects:sc.objects, steps:sc.steps, contract:sc.contract, cast:sc.cast, planet:sc.planet, sound:sc.sound }), h:hf.base.slice(), sel }; }
+function pushUndo() { undoS.push(snap()); if (undoS.length > 80) undoS.shift(); redoS.length = 0; updUndo(); }
+function restore(s) {
+  sc = Core.normalize(JSON.parse(s.json)); hf.base.set(s.h); hf.compose(sc.objects);
+  sel = s.sel && (s.sel.k === 'obj' ? findObj(s.sel.id) : sc.steps.find(x => x.id === s.sel.id)) ? s.sel : null;
+  rebuildWorld(true); renderAll(); markDirty();
+}
+function undo() { if (!undoS.length) return; redoS.push(snap()); restore(undoS.pop()); updUndo(); toast('Отменено'); }
+function redo() { if (!redoS.length) return; undoS.push(snap()); restore(redoS.pop()); updUndo(); toast('Повторено'); }
+function updUndo() { $('bUndo').disabled = !undoS.length; $('bRedo').disabled = !redoS.length; }
+['insp', 'leftBody', 'steps'].forEach(id => $(id).addEventListener('focusin', e => { if (e.target.matches('input,select,textarea') && !e.target.classList.contains('nohist')) pushUndo(); }));
+
+/* ============================ рендер ============================ */
+const vp = $('vp'), canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+const DPR = Math.min(devicePixelRatio, 1.75); renderer.setPixelRatio(DPR);
+const scene = new THREE.Scene(); scene.background = Core.C.bg.clone();
+const camera = new THREE.PerspectiveCamera(38, 1, 1, 3000);
+camera.position.set(40, 230, 250);
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type:THREE.HalfFloatType, samples:4 }));
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), .28, .25, .2); composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const world = new Core.World(scene, hf, { editor:true, minOpacity:.14, animateDraw:false, terrain:{ mask:[146, 160], gain:1.1 } });
+world.setSteps(sc.steps); world.load(sc.objects);
+const markers = new Core.MarkerLayer($('markers'));
+markers.sync(world);
+
+let boundary = null;
+function buildBoundary() {
+  if (boundary) { scene.remove(boundary); boundary.geometry.dispose(); }
+  const m = Core.dashMat(Core.C.ink, world.time, { dash:4, gap:.6 }); m.uniforms.uOp.value = .22;
+  boundary = new THREE.Line(Core.lineGeo(world.loopPts(0, 0, RMAX, 360, 1)), m); scene.add(boundary);
+}
+buildBoundary();
+const ringGeo = new THREE.BufferGeometry(); ringGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(65 * 3), 3));
+const brushRing = new THREE.Line(ringGeo, new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:.9, depthTest:false }));
+brushRing.renderOrder = 10; brushRing.visible = false; scene.add(brushRing);
+
+/* ============================ ракурс шага: 3D-гизмо и превью кадра ============================ */
+const ACC = new THREE.Color('#ffcf4a');
+const gizmo = new THREE.Group(); gizmo.visible = false; scene.add(gizmo);
+const gzMat = new THREE.LineBasicMaterial({ color:ACC, transparent:true, opacity:.95, depthTest:false });
+{ const L = 16, hh = Math.tan(19 * DEG) * L, hw = hh * 16 / 9, c = [[-hw, hh], [hw, hh], [hw, -hh], [-hw, -hh]], v = [];
+  c.forEach(([x, y]) => v.push(0, 0, 0, x, y, L)); c.forEach(([x, y], i) => { const [x2, y2] = c[(i + 1) % 4]; v.push(x, y, L, x2, y2, L); });
+  v.push(-hw * .4, hh, L, 0, hh * 1.4, L, 0, hh * 1.4, L, hw * .4, hh, L);           // «верх» кадра
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  const fr = new THREE.LineSegments(g, gzMat); fr.renderOrder = 11; gizmo.add(fr); gizmo.userData.frustum = fr; }
+const gzLineGeo = new THREE.BufferGeometry(); gzLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+const gzLine = new THREE.Line(gzLineGeo, new THREE.LineBasicMaterial({ color:ACC, transparent:true, opacity:.45, depthTest:false })); gzLine.renderOrder = 11; gizmo.add(gzLine);
+const gzRingGeo = new THREE.BufferGeometry(); gzRingGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(49 * 3), 3));
+const gzRing = new THREE.Line(gzRingGeo, gzMat); gzRing.renderOrder = 11; gizmo.add(gzRing);
+const pipCam = new THREE.PerspectiveCamera(38, 16 / 9, 1, 3000);
+const pipComposer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type:THREE.HalfFloatType, samples:4 }));
+pipComposer.renderToScreen = true; pipComposer.addPass(new RenderPass(scene, pipCam)); pipComposer.addPass(new OutputPass());
+let pipSize = '';
+const gzT = h('div', { class:'gz t', title:'Центр кадра — тащите (для режима «Точка»)' }, h('b', null, 'ЦЕНТР'));
+const gzC = h('div', { class:'gz c', title:'Камера шага: тащите — азимут и дистанция, Shift+тащите — наклон' }, h('b', null, 'КАМЕРА'));
+$('handles').append(gzT, gzC);
+let gzDrag = null;
+function stepPose(st) { const center = Core.stepCenter(world, st, 0); return { center, pos:Core.camPos(center, st.cam) }; }
+function updateGizmo() {
+  const st = selStep(); const on = !!st && mode !== 'brush';
+  gizmo.visible = on; gzT.style.display = gzC.style.display = on ? 'block' : 'none'; $('pip').classList.toggle('on', !!st);
+  if (!on) return;
+  const { center, pos } = stepPose(st);
+  gizmo.userData.frustum.position.copy(pos); gizmo.userData.frustum.lookAt(center);
+  const a = gzLineGeo.attributes.position.array; a.set([pos.x, pos.y, pos.z, center.x, center.y + .5, center.z]); gzLineGeo.attributes.position.needsUpdate = true; gzLineGeo.computeBoundingSphere();
+  const r = gzRingGeo.attributes.position.array; for (let i = 0; i <= 48; i++) { const q = i / 48 * 6.283, x = center.x + Math.cos(q) * 6, z = center.z + Math.sin(q) * 6; r[i * 3] = x; r[i * 3 + 1] = hf.sample(x, z) + 1.2; r[i * 3 + 2] = z; }
+  gzRingGeo.attributes.position.needsUpdate = true; gzRingGeo.computeBoundingSphere();
+  const W = vp.clientWidth, H = vp.clientHeight, put = (el, p) => { const v = p.clone().project(camera); el.style.visibility = v.z > 1 ? 'hidden' : '';
+    el.style.transform = `translate(${((v.x * .5 + .5) * W).toFixed(1)}px,${((-v.y * .5 + .5) * H).toFixed(1)}px)`; };
+  put(gzT, center); put(gzC, pos); gzT.classList.toggle('lock', st.cam.mode !== 'point');
+}
+function renderPip() {
+  const st = selStep(); if (!st || $('pip').classList.contains('min')) return;
+  const cr = canvas.getBoundingClientRect(), r = $('pipView').getBoundingClientRect(); if (!r.width) return;
+  const x = r.left - cr.left, y = cr.bottom - r.bottom, w = r.width, hh = r.height, key = w + 'x' + hh;
+  if (key !== pipSize) { pipSize = key; pipComposer.setSize(w, hh); pipCam.aspect = w / hh; pipCam.updateProjectionMatrix(); }
+  const { center, pos } = stepPose(st); pipCam.position.copy(pos); pipCam.lookAt(center);
+  const vis = [gizmo.visible, brushRing.visible, boundary.visible]; gizmo.visible = brushRing.visible = boundary.visible = false;
+  renderer.setScissorTest(true); renderer.setScissor(x, y, w, hh); renderer.setViewport(x, y, w, hh);
+  pipComposer.render();
+  renderer.setScissorTest(false); renderer.setViewport(0, 0, cr.width, cr.height);
+  // копия кадра в собственный холст превью — чтобы метки основного вида не наезжали на него
+  const pc = $('pipCv'), k = canvas.width / cr.width; if (pc.width !== Math.round(w * k)) { pc.width = Math.round(w * k); pc.height = Math.round(hh * k); }
+  pc.getContext('2d').drawImage(canvas, x * k, (r.top - cr.top) * k, w * k, hh * k, 0, 0, pc.width, pc.height);
+  [gizmo.visible, brushRing.visible, boundary.visible] = vis;
+}
+function fillPip() {
+  const st = selStep(); if (!st) return; const i = stepIndex(st.id);
+  $('pipN').textContent = String(i + 1).padStart(2, '0') + ' · ' + (st.ch || '—'); $('pipMode').textContent = { point:'точка', object:'объект', follow:'следом' }[st.cam.mode] || '';
+  $('pipSpk').textContent = Core.speakerOf(sc, st).name; $('pipTxt').textContent = (window.BriefingVoice.parse(st.text).plain || '').slice(0, 160);
+}
+$('pipX').onclick = () => { $('pip').classList.toggle('min'); $('pipX').textContent = $('pip').classList.contains('min') ? '+' : '–'; };
+function gzDown(ev, which) {
+  if (mode !== 'select' && mode !== 'path') return; const st = selStep(); if (!st) return;
+  ev.stopPropagation(); ev.preventDefault();
+  if (which === 't' && st.cam.mode !== 'point') { toast('Центр привязан к объекту — смените режим камеры на «Точку»'); return; }
+  pushUndo(); gzDrag = { which, sy:ev.clientY, pitch:st.cam.pitch };
+}
+gzT.addEventListener('pointerdown', e => gzDown(e, 't')); gzC.addEventListener('pointerdown', e => gzDown(e, 'c'));
+addEventListener('pointermove', ev => {
+  if (!gzDrag) return; const st = selStep(); if (!st) return; const c = st.cam;
+  if (gzDrag.which === 't') { const p = pick(ev); if (p) { c.x = r1(p.x); c.z = r1(p.z); } }
+  else if (ev.shiftKey) c.pitch = Math.max(5, Math.min(85, Math.round(gzDrag.pitch + (ev.clientY - gzDrag.sy) * .25)));
+  else { const { center, pos } = stepPose(st), rr = canvas.getBoundingClientRect();
+    ndc.set(((ev.clientX - rr.left) / rr.width) * 2 - 1, -((ev.clientY - rr.top) / rr.height) * 2 + 1); ray.setFromCamera(ndc, camera);
+    const o = ray.ray.origin, d = ray.ray.direction; if (Math.abs(d.y) < 1e-4) return; const t = (pos.y - o.y) / d.y; if (t <= 0) return;
+    const dx = o.x + d.x * t - center.x, dz = o.z + d.z * t - center.z, hd = Math.hypot(dx, dz);
+    c.yaw = Math.round(Math.atan2(dx, dz) / DEG); c.dist = Math.round(Math.max(30, Math.min(450, hd / Math.max(.05, Math.sin(c.pitch * DEG))))); }
+  markDirty(); renderSteps();
+});
+addEventListener('pointerup', () => { if (gzDrag) { gzDrag = null; renderInspector(); } });
+
+function rebuildWorld(terrainToo) {
+  if (terrainToo) { world.terrain.sync(); buildBoundary(); }
+  world.setSteps(sc.steps); world.rebuildAll(sc.objects); markers.sync(world); syncHandles();
+}
+
+/* ============================ ввод во вьюпорте ============================ */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(ev) {
+  const r = canvas.getBoundingClientRect(); ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); const o = ray.ray.origin, d = ray.ray.direction, step = 1.2;
+  for (let t = 0; t < 2400; t += step) {
+    const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
+    if (Math.abs(x) > 175 || Math.abs(z) > 175) { if (y < -80) break; continue; }
+    if (y < hf.sample(x, z)) { let a = t - step, b = t;
+      for (let k = 0; k < 14; k++) { const m = (a + b) / 2; if (o.y + d.y * m < hf.sample(o.x + d.x * m, o.z + d.z * m)) b = m; else a = m; }
+      const p = new V3(o.x + d.x * b, 0, o.z + d.z * b); const rr = Math.hypot(p.x, p.z); if (rr > RMAX) p.multiplyScalar(RMAX / rr);
+      p.y = hf.sample(p.x, p.z); return p; }
+  }
+  return null;
+}
+let painting = false, brushTarget = 0, cursorPt = null, downAt = null;
+// слушатели вешаются ДО OrbitControls, чтобы успеть переключить левую кнопку (Alt+ЛКМ = вращение)
+canvas.addEventListener('pointerdown', ev => {
+  controls.mouseButtons.LEFT = ev.altKey ? THREE.MOUSE.ROTATE : null;
+  if (ev.button !== 0 || ev.altKey) return;
+  const p = pick(ev); cursorPt = p;
+  if (mode === 'brush') { if (p) { pushUndo(); painting = true; brushTarget = hf.sample(p.x, p.z); } }
+  else if (mode === 'place') { if (p) placeAt(p, ev.shiftKey); }
+  else if (mode === 'path') { if (p) addPathPoint(p); }
+  else downAt = { x:ev.clientX, y:ev.clientY };
+});
+canvas.addEventListener('pointermove', ev => { cursorPt = pick(ev); if (mode === 'place') ghostDirty = true;
+  $('vpXY').textContent = cursorPt ? `X ${r1(cursorPt.x)}  Z ${r1(cursorPt.z)}  ELV ${Core.elv(cursorPt.y)} M` : ''; });
+addEventListener('pointerup', ev => {
+  if (painting) { painting = false; rebuildWorld(true); markDirty(); }
+  if (mode === 'select' && downAt && ev.target === canvas && Math.hypot(ev.clientX - downAt.x, ev.clientY - downAt.y) < 4) select(null);
+  downAt = null;
+});
+canvas.addEventListener('pointerleave', () => { if (!painting) cursorPt = null; if (mode === 'place') world.setGhost(null); });
+
+const controls = new OrbitControls(camera, canvas);
+controls.mouseButtons = { LEFT:null, MIDDLE:THREE.MOUSE.PAN, RIGHT:THREE.MOUSE.ROTATE };
+controls.enableDamping = true; controls.dampingFactor = .12; controls.zoomToCursor = true;
+controls.maxPolarAngle = 1.48; controls.minDistance = 15; controls.maxDistance = 700; controls.screenSpacePanning = false;
+controls.target.set(0, 0, 0);
+
+let tween = null;
+function tweenCam(pos, target) { tween = { t:0, p0:camera.position.clone(), p1:pos, t0:controls.target.clone(), t1:target.clone() }; }
+function focusObj(o) { const e = world.ents.get(o.id); if (!e) return; const c = world.entityPos(e);
+  const dir = camera.position.clone().sub(controls.target).normalize(); tweenCam(c.clone().add(dir.multiplyScalar(Math.max(70, Core.valOf(e.def.r, o) * 5))), c); }
+
+/* ============================ режимы ============================ */
+const HINTS = {
+  select:'ЛКМ по ромбу — выбрать и тащить · ПКМ / Alt+ЛКМ — вращать · СКМ — сдвиг · колесо — зум · F — к объекту · Q/E — поворот · Ctrl+D — копия · Del — удалить',
+  brush:'ЛКМ — рисовать кистью · ПКМ — вращать · Esc — выйти из кисти',
+  place:'ЛКМ — поставить объект · Shift+ЛКМ — поставить несколько · Esc — отмена',
+  path:'ЛКМ — добавить точку · ромбы-цифры можно тащить · ПКМ по точке — удалить · Enter / Esc — готово',
+};
+function setMode(m) {
+  mode = m; vp.className = 'm-' + m;
+  if (m !== 'place') { placeType = null; ghostObj = null; world.setGhost(null); }
+  if (m !== 'path') pathFor = null;
+  brushRing.visible = false;
+  renderChips(); renderLeft(); if (sel && sel.k === 'obj') renderInspector();
+}
+function startPlace(type) { if (mode === 'place' && placeType === type) { setMode('select'); return; } setMode('place'); placeType = type; ghostObj = Core.makeObject(type, 0, 0); renderLeft(); renderChips(); }
+function placeAt(p, keep) {
+  pushUndo();
+  const o = Core.makeObject(placeType, r1(p.x), r1(p.z)); const st = selStep(); const d = CATALOG[o.type];
+  if (st) { o.mark = st.id; if (d.cat === 'squad' || d.cat === 'nav') o.show = st.id; }   // поставлен при выбранном шаге — на нём и проявится
+  if (d.path) o.pts = [[o.x, o.z]];
+  sc.objects.push(o); world.add(o); markers.sync(world); markDirty();
+  if (affects(o)) modsDirty = true;
+  if (d.path) { sel = { k:'obj', id:o.id }; pathFor = o.id; setMode('path'); renderAll(); toast('Кликайте по карте — точки пути'); return; }
+  if (!keep) { sel = { k:'obj', id:o.id }; setMode('select'); renderAll(); }
+  else { syncHandles(); renderLeft(); }
+}
+function startPath(o) { sel = { k:'obj', id:o.id }; pathFor = o.id; setMode('path'); }
+function addPathPoint(p) {
+  const o = findObj(pathFor); if (!o) { setMode('select'); return; }
+  pushUndo(); (isPath(o) ? o.pts : o.wp).push([r1(p.x), r1(p.z)]); markObj(o); renderInspector();
+}
+function removePoint(o, i) { pushUndo(); if (isPath(o)) { if (o.pts.length > 1) o.pts.splice(i, 1); } else o.wp.splice(i - 1, 1); markObj(o); renderInspector(); }
+
+/* ============================ ручки объектов поверх 3D ============================ */
+const HD = { map:new Map(), wps:[] }, hv = new V3();
+function syncHandles() {
+  const box = $('handles');
+  for (const o of sc.objects) { let d = HD.map.get(o.id);
+    if (!d) { d = h('div', { class:'hdl' }); d.addEventListener('pointerdown', ev => handleDown(ev, o.id, -1)); d.addEventListener('dblclick', () => { const x = findObj(o.id); if (x) focusObj(x); });
+      box.append(d); HD.map.set(o.id, d); }
+    d.className = 'hdl ' + o.side + (sel && sel.k === 'obj' && sel.id === o.id ? ' sel' : ''); d.title = o.name; }
+  for (const [id, d] of HD.map) if (!findObj(id)) { d.remove(); HD.map.delete(id); }
+  HD.wps.forEach(w => w.remove()); HD.wps = [];
+  const o = selObj(), pts = o && pathPoints(o);
+  if (pts) pts.forEach((_, i) => { if (i === 0) return; const w = h('div', { class:'wph', title:'Тащите, ПКМ — удалить' }, String(i));
+    w.addEventListener('pointerdown', ev => { if (ev.button === 0) handleDown(ev, o.id, i); });
+    w.addEventListener('contextmenu', ev => { ev.preventDefault(); removePoint(o, i); });
+    w._get = () => pathPoints(o)[i]; box.append(w); HD.wps.push(w); });
+}
+function placeHandles() {
+  const W = vp.clientWidth, H = vp.clientHeight;
+  const put = (el, x, z) => { hv.set(x, hf.sample(x, z) + .5, z).project(camera);
+    if (hv.z > 1) { el.style.display = 'none'; return; } el.style.display = '';
+    el.style.transform = `translate(${((hv.x * .5 + .5) * W).toFixed(1)}px,${((-hv.y * .5 + .5) * H).toFixed(1)}px)` + (el.classList.contains('hdl') ? ' rotate(45deg)' : ''); };
+  for (const [id, d] of HD.map) { const o = findObj(id); if (!o) continue; const e = world.ents.get(id);
+    const [x, z] = isPath(o) && o.pts.length ? o.pts[0] : [o.x, o.z]; put(d, x, z); d.classList.toggle('dim', !!e && !e.shown); }
+  for (const w of HD.wps) { const p = w._get(); if (p) put(w, p[0], p[1]); }
+}
+let drag = null;
+function handleDown(ev, id, i) {
+  if (mode !== 'select' && mode !== 'path') return;
+  ev.stopPropagation(); ev.preventDefault();
+  if (!sel || sel.id !== id) select('obj', id);
+  drag = { id, i, started:false, last:pick(ev), sx:ev.clientX, sy:ev.clientY };
+}
+addEventListener('pointermove', ev => {
+  if (!drag) return; const p = pick(ev); if (!p) return;
+  if (!drag.started) { if (Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 3) return; pushUndo(); drag.started = true; drag.last = drag.last || p; }
+  const o = findObj(drag.id); if (!o) return;
+  if (drag.i < 0) { const dx = p.x - drag.last.x, dz = p.z - drag.last.z; drag.last = p;
+    o.x = r1(o.x + dx); o.z = r1(o.z + dz);
+    if (o.wp) o.wp.forEach(w => { w[0] = r1(w[0] + dx); w[1] = r1(w[1] + dz); });
+    if (isPath(o)) o.pts.forEach(w => { w[0] = r1(w[0] + dx); w[1] = r1(w[1] + dz); }); }
+  else if (isPath(o)) o.pts[drag.i] = [r1(p.x), r1(p.z)];
+  else o.wp[drag.i - 1] = [r1(p.x), r1(p.z)];
+  markObj(o);
+});
+addEventListener('pointerup', () => { if (drag && drag.started) renderInspector(); drag = null; });
+
+/* ============================ изменения объектов ============================ */
+const dirtyObjs = new Set();
+let modsDirty = false;                 // объект меняет рельеф — пересобрать землю и всё, что по ней стелется
+const affects = o => Core.affectsTerrain(o);
+function markObj(o) { if (affects(o)) modsDirty = true; else dirtyObjs.add(o.id); markDirty(); }
+function select(k, id) {
+  sel = k ? { k, id } : null;
+  if (mode === 'path' && (!selObj() || selObj().id !== pathFor)) { mode = 'select'; vp.className = 'm-select'; pathFor = null; }
+  renderInspector(); renderSteps(); if (leftTab === 'scene') renderLeft(); syncHandles(); renderChips(); fillPip();
+}
+function delObj(o) {
+  pushUndo(); sc.objects = sc.objects.filter(x => x !== o); world.remove(o.id); markers.sync(world); if (affects(o)) modsDirty = true;
+  sc.steps.forEach(s => { if (s.cam.target === o.id) { s.cam.mode = 'point'; s.cam.x = r1(o.x); s.cam.z = r1(o.z); delete s.cam.target; } });   // камера остаётся смотреть в ту же точку
+  if (sel && sel.id === o.id) sel = null; renderAll(); markDirty(); toast('Объект удалён');
+}
+function dupObj(o) {
+  pushUndo(); const c = Core.clone(o); c.id = Core.uid(); c.x = r1(o.x + 12); c.z = r1(o.z + 12);
+  if (c.wp) c.wp = c.wp.map(([x, z]) => [r1(x + 12), r1(z + 12)]); if (c.pts) c.pts = c.pts.map(([x, z]) => [r1(x + 12), r1(z + 12)]);
+  sc.objects.push(c); world.add(c); markers.sync(world); if (affects(c)) modsDirty = true; sel = { k:'obj', id:c.id }; renderAll(); markDirty();
+}
+
+/* ============================ поля ввода ============================ */
+const F = (label, ctl, cls) => h('label', { class:'f ' + (cls || '') }, h('span', { class:'fl' }, label), ctl);
+const Sec = (title, ...kids) => h('div', { class:'sec' }, h('div', { class:'sh' }, title), ...kids);
+function inText(get, set, o = {}) { const el = h(o.area ? 'textarea' : 'input', { class:'in ' + (o.cls || ''), placeholder:o.ph || null }); el.value = get() ?? ''; el.addEventListener('input', () => set(el.value)); return el; }
+function inNum(get, set, o = {}) { const el = h('input', { class:'in num', type:'number', step:o.step ?? 1, min:o.min, max:o.max }); el.value = r1(get() ?? 0);
+  el.addEventListener('input', () => { const v = parseFloat(el.value); if (!isNaN(v)) set(v); }); return el; }
+function inRange(get, set, o = {}) { const val = h('span', { class:'rv' }), el = h('input', { type:'range', min:o.min, max:o.max, step:o.step ?? 1 });
+  el.value = get(); const upd = () => val.textContent = o.fmt ? o.fmt(+el.value) : el.value; upd();
+  el.addEventListener('input', () => { set(+el.value); upd(); }); return h('div', { class:'rg' }, el, val); }
+function inSelect(opts, get, set) { const el = h('select', { class:'in' }, opts.map(([v, l]) => h('option', { value:v }, l))); el.value = get(); el.addEventListener('change', () => set(el.value)); return el; }
+function inBool(get, set, label) { const el = h('input', { type:'checkbox' }); el.checked = !!get(); el.addEventListener('change', () => set(el.checked)); return h('label', { class:'chk' }, el, h('span', null, label)); }
+const fmtR = v => `${v} · ${(v * UNIT_M / 1000).toFixed(2)} км`;
+const fmtS = v => `${v} · ${Math.round(v * UNIT_M * 3.6)} км/ч`;
+const sideOpts = Object.entries(SIDES).map(([k, s]) => [k, s.name]);
+const stepOpts = never => [['start', 'С начала брифинга'], ...sc.steps.map((s, i) => [s.id, `Шаг ${i + 1} · ${s.ch || '—'}`]), ...(never ? [['never', 'Никогда']] : [])];
+const stepShort = ref => ref === 'start' ? '0' : ref === 'never' ? '—' : String(stepIndex(ref) + 1 || '?');
+
+/* ============================ левая панель ============================ */
+const TABS = [['terrain', 'Рельеф'], ['catalog', 'Объекты'], ['scene', 'Сцена'], ['mission', 'Миссия'], ['sound', 'Звук']];
+function renderTabs() { $('tabs').replaceChildren(...TABS.map(([id, n]) => h('button', { class:leftTab === id ? 'on' : '', onclick:() => { leftTab = id; renderTabs(); renderLeft(); } }, n))); }
+function renderLeft() {
+  const b = $('leftBody'), top = b.scrollTop;
+  if (plPrev) { plPrev.dispose(); plPrev = null; }
+  if (leftTab !== 'sound') { SE.musicStop(.3); SE.droneStop(.3); }
+  b.replaceChildren(...({ terrain:tabTerrain, catalog:tabCatalog, scene:tabScene, mission:tabMission, sound:tabSound }[leftTab])());
+  b.scrollTop = top;
+  const pc = $('plPrev'); if (pc) { plPrev = PlanetLib.preview(pc); planetPreviewSet(); }
+}
+
+const thumbCache = new Map();
+function biomeThumb(id) {
+  const key = id + ':' + sc.terrain.seed; if (thumbCache.has(key)) return thumbCache.get(key).cloneNode ? copyCanvas(thumbCache.get(key)) : null;
+  const N = 48, c = h('canvas', { width:N, height:N }), x = c.getContext('2d'), img = x.createImageData(N, N);
+  const f = BIOMES[id].fn(Core.makeNoise(sc.terrain.seed), 1), v = new Float32Array(N * N); let mn = 1e9, mx = -1e9;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const val = f((i / (N - 1) - .5) * 300, (j / (N - 1) - .5) * 300); v[j * N + i] = val; mn = Math.min(mn, val); mx = Math.max(mx, val); }
+  for (let k = 0; k < N * N; k++) { const n = (v[k] - mn) / Math.max(1, mx - mn), line = ((v[k] / 6) % 1 + 1) % 1 < .16 ? 70 : 0, g = 14 + n * 46 + line;
+    img.data[k * 4] = g; img.data[k * 4 + 1] = g + 1; img.data[k * 4 + 2] = g - 2; img.data[k * 4 + 3] = 255; }
+  x.putImageData(img, 0, 0); thumbCache.set(key, c); return copyCanvas(c);
+}
+function copyCanvas(c) { const d = h('canvas', { width:c.width, height:c.height }); d.getContext('2d').drawImage(c, 0, 0); return d; }
+function regen() {
+  const spawned = hf.generate(sc.terrain.biome, sc.terrain.seed, sc.terrain.relief);
+  sc.objects = sc.objects.filter(o => o.auto !== 'biome').concat(spawned);   // кратеры и пр. от прошлой генерации заменяются новыми
+  if (sel && sel.k === 'obj' && !findObj(sel.id)) sel = null;
+  hf.compose(sc.objects); rebuildWorld(true); markDirty(); if (leftTab === 'scene') renderLeft();
+}
+function addRandomPath(type) {
+  pushUndo(); const o = Core.makeObject(type, 0, 0); o.pts = Core.randomPath(Math.floor(Math.random() * 1e6)); o.x = o.pts[0][0]; o.z = o.pts[0][1];
+  sc.objects.push(o); hf.compose(sc.objects); rebuildWorld(true); sel = { k:'obj', id:o.id }; renderAll(); markDirty();
+  toast((type === 'river' ? 'Река' : 'Русло') + ' добавлено — точки можно тащить');
+}
+function tabTerrain() {
+  const T = sc.terrain;
+  const seedIn = inNum(() => T.seed, v => { T.seed = Math.round(v); regen(); }, { step:1 });
+  return [
+    Sec('Тип местности',
+      h('div', { class:'biomes' }, Object.entries(BIOMES).map(([id, b]) => h('button', { class:'bio' + (T.biome === id ? ' on' : ''), title:b.name,
+        onclick:() => { pushUndo(); T.biome = id; regen(); renderLeft(); } }, biomeThumb(id), h('span', null, b.name)))),
+      F('Зерно — другой вариант той же местности', h('div', { class:'rg' }, seedIn, h('button', { class:'btn', title:'Случайное зерно',
+        onclick:() => { pushUndo(); T.seed = Math.floor(Math.random() * 99999); regen(); renderLeft(); } }, '⚄ Случайное'))),
+      F('Высота рельефа', inRange(() => T.relief, v => { T.relief = v; regen(); }, { min:.2, max:2.5, step:.05, fmt:v => '×' + v.toFixed(2) })),
+      h('div', { class:'hint' }, 'Генерация пересоздаёт карту целиком, ручные правки кистью при этом теряются. Вернуть их можно через Ctrl+Z.')),
+    Sec('Кисти рельефа',
+      h('div', { class:'tools' }, BRUSHES.map(([id, n]) => h('button', { class:'btn' + (mode === 'brush' && brush.tool === id ? ' on' : ''),
+        onclick:() => { if (mode === 'brush' && brush.tool === id) setMode('select'); else { brush.tool = id; setMode('brush'); } } }, n))),
+      F('Радиус кисти', inRange(() => brush.radius, v => brush.radius = v, { min:4, max:60, fmt:fmtR })),
+      F('Сила', inRange(() => brush.strength, v => brush.strength = v, { min:.05, max:1, step:.05, fmt:v => Math.round(v * 100) + '%' })),
+      h('div', { class:'hint' }, 'Выберите кисть и водите по карте с зажатой ЛКМ. «Выровнять» тянет рельеф к высоте точки, где начат мазок.')),
+    Sec('Реки и терраформинг',
+      h('div', { class:'bar' }, h('button', { class:'btn', onclick:() => addRandomPath('river') }, '＋ Река'), h('button', { class:'btn', onclick:() => addRandomPath('dryriver') }, '＋ Сухое русло'),
+        h('button', { class:'btn', onclick:() => { leftTab = 'catalog'; catFilter = 'terra'; renderTabs(); renderLeft(); } }, 'Кратеры, шахты, холмы…')),
+      h('div', { class:'hint' }, 'Река прокладывается случайным руслом через карту и течёт только под уклон. Точки русла можно тащить, ширину и глубину — менять в инспекторе. Здания сами подгоняют землю под основание (выключается галочкой «Подгонять землю»).')),
+  ];
+}
+
+function tabCatalog() {
+  const grid = h('div', { class:'cgrid' });
+  const fill = () => { grid.replaceChildren(); const q = search.trim().toLowerCase();
+    for (const c of CATS) { if (catFilter !== 'all' && catFilter !== c.id) continue;
+      const items = Object.values(CATALOG).filter(d => d.cat === c.id && (!q || (d.name + ' ' + d.desc).toLowerCase().includes(q)));
+      if (!items.length) continue;
+      if (catFilter === 'all') grid.append(h('div', { class:'cgh' }, c.name));
+      items.forEach(d => grid.append(h('button', { class:'cc ' + d.side + (mode === 'place' && placeType === d.id ? ' on' : ''), title:d.desc, onclick:() => startPlace(d.id) },
+        svgIcon(d.icon), h('b', null, d.name), h('small', null, d.desc)))); }
+    if (!grid.children.length) grid.append(h('div', { class:'empty', style:'grid-column:1/-1' }, 'Ничего не найдено.')); };
+  fill();
+  const s = h('input', { class:'in nohist', placeholder:'Поиск: турель, ангар, мехи…' }); s.value = search; s.addEventListener('input', () => { search = s.value; fill(); });
+  return [h('div', { class:'sec' }, s,
+    h('div', { class:'chips' }, [['all', 'Все'], ...CATS.map(c => [c.id, c.name])].map(([id, n]) => h('button', { class:catFilter === id ? 'on' : '', onclick:() => { catFilter = id; renderLeft(); } }, n))),
+    h('div', { class:'hint' }, 'Клик по карточке, потом по карте. Shift+клик — несколько подряд. Если в шкале выбран шаг, объект проявится на этом шаге.'),
+    grid)];
+}
+
+function tabScene() {
+  if (!sc.objects.length) return [h('div', { class:'sec' }, h('div', { class:'empty' }, 'На карте пока нет объектов — добавьте их во вкладке «Объекты».'))];
+  return CATS.map(c => { const list = sc.objects.filter(o => CATALOG[o.type].cat === c.id); if (!list.length) return null;
+    return h('div', { class:'sec' }, h('div', { class:'sh' }, c.name, h('span', { class:'sp' }), String(list.length)),
+      list.map(o => h('div', { class:'ol' + (sel && sel.id === o.id ? ' sel' : ''), onclick:() => select('obj', o.id), ondblclick:() => focusObj(o) },
+        h('i', { class:'dot ' + o.side }), svgIcon(CATALOG[o.type].icon), h('span', { class:'nm' }, o.name || CATALOG[o.type].name),
+        h('span', { class:'st', title:'Шаг появления → шаг отметки' }, `${stepShort(o.show)}→${stepShort(o.mark)}`),
+        h('button', { class:'x', title:'Удалить', onclick:e => { e.stopPropagation(); delObj(o); } }, '✕')))); }).filter(Boolean);
+}
+
+function listEditor(arr, cols, make) {
+  const box = h('div', { class:'lst' });
+  const draw = () => box.replaceChildren(...arr.map((it, i) => h('div', { class:'li' }, cols(it, i),
+    h('button', { class:'x', title:'Удалить', onclick:() => { pushUndo(); arr.splice(i, 1); draw(); markDirty(); } }, '✕'))),
+    h('button', { class:'btn', onclick:() => { pushUndo(); arr.push(make()); draw(); markDirty(); } }, '+ Добавить'));
+  draw(); return box;
+}
+/* ---------- персонажи (портреты для окна связи) ----------
+   Персонаж брифинга можно взять из каталога студии: картинка и кадр — как в каталоге (frame.inherit),
+   кадр можно подогнать под окно брифинга. Офлайн — свой портрет картинкой (data URL 240×300). */
+let gcList = null;                                    // персонажи каталога студии (только с сервером)
+async function loadCatalog() {
+  if (!SERVER) return [];
+  if (!gcList) { try { gcList = (await Remote.api('/editor/global-characters')).characters || []; } catch (e) { console.warn(e); gcList = []; } }
+  return gcList;
+}
+const catalogFrame = gc => ({ inherit:true, scale:+gc.portrait_scale || 1,
+  xRel:gc.portrait_x_rel != null ? +gc.portrait_x_rel : (+gc.portrait_x || 0) / 258,
+  yRel:gc.portrait_y_rel != null ? +gc.portrait_y_rel : (+gc.portrait_y || 0) / 258, mirror:+gc.portrait_mirror === 1 });
+/* Персонажи «как в каталоге» подтягивают свежие картинку и кадр (в каталоге их могли поправить). */
+async function syncCatalogCast() {
+  const list = await loadCatalog(); let changed = false;
+  for (const c of sc.cast) { const gc = c.characterId && list.find(g => g.id === c.characterId); if (!gc) continue;
+    if (c.image !== (gc.image || '')) { c.image = gc.image || ''; changed = true; }
+    if (!c.frame || c.frame.inherit !== false) { const f = catalogFrame(gc); if (JSON.stringify(f) !== JSON.stringify(c.frame)) { c.frame = f; changed = true; } } }
+  if (changed && leftTab === 'mission') renderLeft();
+}
+const portraitThumb = (c, w) => { const el = h('i'); Core.applyPortrait(el, Core.speakerOf({ meta:{}, cast:[c] }, null), w); return el; };
+
+function castSection() {
+  const m = sc.meta, file = h('input', { type:'file', accept:'image/*', hidden:true }); let target = null;
+  file.addEventListener('change', async () => { const f = file.files[0]; file.value = ''; if (!f || !target) return;
+    try { pushUndo(); target.portrait = await Core.downscalePortrait(f); markDirty(); renderLeft(); fillPip(); } catch (e) { alert('Не удалось открыть изображение'); } });
+  const small = 'align-self:flex-start;padding:2px 8px;font-size:11px';
+  const rows = sc.cast.map(c => { const fromCat = !!c.characterId;
+    return h('div', { class:'cast' },
+      h('div', { class:'pt' + (fromCat ? ' cat' : ''), title:fromCat ? 'Настроить кадр' : 'Загрузить портрет',
+        onclick:() => { if (fromCat) framePortrait(c); else { target = c; file.click(); } } }, portraitThumb(c, 48)),
+      h('div', { class:'flds' }, inText(() => c.name, v => { c.name = v; markDirty(); renderSteps(); }, { ph:'Имя' }), inText(() => c.role, v => { c.role = v; markDirty(); }, { ph:'Роль, например «диспетчер»' }),
+        h('div', { class:'bar', style:'margin:0' },
+          SERVER ? h('button', { class:'btn', style:small, onclick:() => pickCharacter(c) }, fromCat ? 'Другой из каталога' : 'Из каталога') : null,
+          fromCat ? h('button', { class:'btn', style:small, onclick:() => framePortrait(c) }, 'Кадр' + (c.frame && c.frame.inherit === false ? ' · свой' : '')) : null,
+          fromCat ? h('button', { class:'btn', style:small, title:'Оставить имя, убрать картинку каталога', onclick:() => { pushUndo(); c.characterId = null; c.image = ''; c.frame = null; markDirty(); renderLeft(); fillPip(); } }, 'Отвязать') : null,
+          !fromCat && c.portrait ? h('button', { class:'btn', style:small, onclick:() => { pushUndo(); c.portrait = ''; markDirty(); renderLeft(); } }, 'Сбросить портрет') : null)),
+      sc.cast.length > 1 ? h('button', { class:'x', title:'Удалить персонажа', onclick:() => { pushUndo(); sc.cast = sc.cast.filter(x => x !== c);
+        if (m.speakerId === c.id) m.speakerId = sc.cast[0].id; sc.steps.forEach(st => { if (st.speakerId === c.id) st.speakerId = ''; }); markDirty(); renderLeft(); renderSteps(); } }, '✕') : null); });
+  return Sec('Персонажи на связи', file,
+    h('div', { class:'hint' }, SERVER
+      ? 'Портрет показывается в окне слева от субтитров. «Из каталога» берёт картинку и кадр персонажа студии; кадр можно подогнать под окно брифинга. Без портрета — голографическая заглушка.'
+      : 'Портрет показывается в окне слева от субтитров. Без картинки — голографическая заглушка. Картинка ужимается до 240×300.'),
+    ...rows,
+    h('div', { class:'bar' }, h('button', { class:'btn', onclick:() => { pushUndo(); sc.cast.push({ id:Core.uid('c'), name:'Новый персонаж', role:'', portrait:'', characterId:null, image:'', frame:null }); markDirty(); renderLeft(); } }, '+ Персонаж')),
+    F('Говорит по умолчанию', inSelect(sc.cast.map(c => [c.id, c.name || '—']), () => m.speakerId, v => { m.speakerId = v; markDirty(); renderSteps(); })));
+}
+
+/* Окно поверх редактора: выбор из каталога и настройка кадра. */
+function dialog(title, body, foot) {
+  const box = $('dlg'); box.replaceChildren(h('div', { class:'box' },
+    h('div', { class:'bh' }, h('span', { class:'k' }, title), h('span', { class:'sp' }), h('button', { class:'btn', onclick:closeDialog }, 'Закрыть ✕')),
+    h('div', { class:'bb scroll' }, body), foot ? h('div', { class:'bf' }, foot) : null));
+  box.classList.add('on');
+}
+function closeDialog() { $('dlg').classList.remove('on'); $('dlg').replaceChildren(); }
+$('dlg').addEventListener('pointerdown', e => { if (e.target === $('dlg')) closeDialog(); });
+
+async function pickCharacter(c) {
+  gcList = null;                                      // свежий список: персонажа могли только что добавить в студии
+  const list = await loadCatalog();
+  if (!list.length) { toast('В каталоге студии пока нет персонажей'); return; }
+  const grid = h('div', { class:'gcgrid' }), q = h('input', { class:'in nohist', placeholder:'Поиск по имени…' });
+  const fill = () => { const s = q.value.trim().toLowerCase(); grid.replaceChildren(...list.filter(g => !s || (g.name || '').toLowerCase().includes(s)).map(g =>
+    h('button', { class:'gc' + (c.characterId === g.id ? ' on' : ''), onclick:() => {
+      pushUndo(); const def = !c.name || c.name === 'Новый персонаж' || (c.characterId && list.find(x => x.id === c.characterId)?.name === c.name);
+      Object.assign(c, { characterId:g.id, image:g.image || '', frame:catalogFrame(g), portrait:'' }); if (def) c.name = g.name;
+      markDirty(); closeDialog(); renderLeft(); renderSteps(); fillPip(); toast(`${g.name}: портрет из каталога`); } },
+      h('div', { class:'th' }, portraitThumb({ image:g.image, frame:catalogFrame(g), name:g.name }, 96)), h('b', null, g.name || '—')))); };
+  q.addEventListener('input', fill); fill();
+  dialog('Персонаж из каталога студии', [q, grid]); q.focus();
+}
+
+/* Кадр портрета в окне связи — та же формула, что у рамки терминала: масштаб от ширины окна,
+   смещение в долях ширины. Перетаскивание двигает картинку, колесо — масштаб. */
+function framePortrait(c) {
+  const gc = (gcList || []).find(g => g.id === c.characterId);
+  const W = 200, f = Object.assign({ scale:1, xRel:0, yRel:0, mirror:false }, c.frame);
+  const view = h('i'), frame = h('div', { class:'fr', title:'Тащите, чтобы сдвинуть; колесо — масштаб' }, view, h('b', { class:'cross' }));
+  const sc_ = inRange(() => f.scale, v => { f.scale = v; draw(true); }, { min:.2, max:4, step:.01, fmt:v => '×' + v.toFixed(2) });
+  const mir = inBool(() => f.mirror, v => { f.mirror = v; draw(true); }, 'Отразить');
+  const info = h('div', { class:'hint' });
+  let undoPushed = false;
+  function draw(user) {
+    if (user) { if (!undoPushed) { pushUndo(); undoPushed = true; } f.inherit = false; }
+    Core.applyPortrait(view, { image:c.image, frame:f, portrait:c.portrait || Core.portraitPlaceholder(c.name) }, W);
+    sc_.querySelector('input').value = f.scale; sc_.querySelector('.rv').textContent = '×' + f.scale.toFixed(2);
+    info.textContent = f.inherit !== false ? 'Кадр как в каталоге. Любая правка здесь делает кадр своим для этого брифинга, каталог не меняется.' : 'Свой кадр для этого брифинга. Каталог не меняется.';
+    if (user) { c.frame = Object.assign({}, f); markDirty(); }
+  }
+  let drag = null;
+  frame.addEventListener('pointerdown', e => { drag = { x:e.clientX, y:e.clientY, xr:f.xRel, yr:f.yRel }; frame.setPointerCapture(e.pointerId); frame.classList.add('drag'); });
+  frame.addEventListener('pointermove', e => { if (!drag) return; const k = f.mirror ? -1 : 1;
+    f.xRel = Math.round((drag.xr + k * (e.clientX - drag.x) / W) * 1e4) / 1e4; f.yRel = Math.round((drag.yr + (e.clientY - drag.y) / W) * 1e4) / 1e4; draw(true); });
+  frame.addEventListener('pointerup', () => { drag = null; frame.classList.remove('drag'); });
+  frame.addEventListener('wheel', e => { e.preventDefault(); const s0 = f.scale, s1 = Math.min(4, Math.max(.2, s0 * (e.deltaY < 0 ? 1.06 : 1 / 1.06)));
+    const r = frame.getBoundingClientRect(), px = (f.mirror ? r.right - e.clientX : e.clientX - r.left) / W, py = (e.clientY - r.top) / W;
+    f.xRel = px - (px - f.xRel) * s1 / s0; f.yRel = py - (py - f.yRel) * s1 / s0; f.scale = Math.round(s1 * 1e3) / 1e3; draw(true); }, { passive:false });
+  const reset = gc ? h('button', { class:'btn', onclick:() => { pushUndo(); Object.assign(f, catalogFrame(gc)); c.frame = Object.assign({}, f); markDirty(); draw(); } }, 'Как в каталоге') : null;
+  dialog(`Кадр портрета · ${c.name || '—'}`,
+    h('div', { class:'fr-wrap' }, frame, h('div', { style:'flex:1;min-width:0' }, F('Масштаб', sc_), mir, info,
+      h('div', { class:'bar' }, reset, h('button', { class:'btn', onclick:() => { pushUndo(); Object.assign(f, { scale:1, xRel:0, yRel:0, mirror:false, inherit:false }); c.frame = Object.assign({}, f); markDirty(); draw(); } }, 'Сбросить')))),
+    h('div', { class:'bar', style:'margin:0;justify-content:flex-end' }, h('button', { class:'btn pri', onclick:() => { closeDialog(); renderLeft(); fillPip(); } }, 'Готово')));
+  draw();
+}
+
+/* ---------- планета для вступления ---------- */
+const PlanetLib = window.BriefingPlanet(THREE);
+let plPrev = null;
+function planetPreviewSet() { if (plPrev) plPrev.set(sc.planet && sc.planet.show !== false ? sc.planet : null); }
+const lightDir = a => ['→', '↗', '↑', '↖', '←', '↙', '↓', '↘'][Math.round(((a % 360) + 360) % 360 / 45) % 8] + ` ${String(a).padStart(3, ' ')}°`;
+function newPlanet(type) { const seed = Math.floor(Math.random() * 99999), keep = sc.planet && sc.planet.show === false ? false : true;
+  pushUndo(); sc.planet = PlanetLib.generate(seed, type); sc.planet.show = keep; if (!sc.planet.region) sc.planet.region = sc.meta.sector; markDirty(); renderLeft(); }
+function planetSection() {
+  const pl = sc.planet;
+  if (!pl) return Sec('Планета (вступление)', h('div', { class:'hint' }, 'Перед картой района можно показать планету: орбита → полушарие с точкой → приближение к району.'),
+    h('button', { class:'btn', onclick:() => newPlanet() }, '＋ Сгенерировать планету'));
+  const upd = (k, prev) => v => { pl[k] = v; markDirty(); if (prev) planetPreviewSet(); };
+  return Sec('Планета (вступление)',
+    inBool(() => pl.show !== false, v => { pl.show = v; markDirty(); planetPreviewSet(); }, 'Показывать во вступлении'),
+    h('canvas', { class:'plprev', id:'plPrev', title:'Тащите, чтобы покрутить' }),
+    h('div', { class:'two' }, F('Тип', inSelect(Object.entries(PlanetLib.TYPES).map(([k, t]) => [k, t.name]), () => pl.type, v => { pl.type = v; markDirty(); planetPreviewSet(); })),
+      F('Зерно', inNum(() => pl.seed, v => { pl.seed = Math.round(v); markDirty(); planetPreviewSet(); }))),
+    h('div', { class:'bar' }, h('button', { class:'btn', title:'Новые имя, описание и характеристики того же типа', onclick:() => newPlanet(pl.type) }, '⚄ Новая планета этого типа'),
+      h('button', { class:'btn', onclick:() => newPlanet() }, '⚄ Любого типа')),
+    h('div', { class:'two' }, F('Название', inText(() => pl.name, upd('name'))), F('Обозначение', inText(() => pl.designation, upd('designation')))),
+    F('Район операции (подпись у точки)', inText(() => pl.region, upd('region'))),
+    F('Широта', inRange(() => pl.lat, upd('lat', true), { min:-80, max:80, fmt:v => `${Math.abs(v)}° ${v >= 0 ? 'С' : 'Ю'}` })),
+    F('Долгота', inRange(() => pl.lon, upd('lon', true), { min:-180, max:180, fmt:v => `${Math.abs(v)}° ${v >= 0 ? 'В' : 'З'}` })),
+    F('Наклон оси', inRange(() => pl.tilt || 0, upd('tilt', true), { min:-90, max:90, fmt:v => v + '°' })),
+    F('Облачность', inRange(() => pl.clouds ?? (PlanetLib.TYPES[pl.type] || {}).clouds ?? 0, upd('clouds', true), { min:0, max:1, step:.05, fmt:v => v ? Math.round(v * 100) + '%' : 'нет' })),
+    h('div', null,
+      F('Свет: откуда', inRange(() => pl.light.angle, v => { pl.light.angle = v; markDirty(); planetPreviewSet(); }, { min:0, max:359, fmt:v => lightDir(v) })),
+      F('Свет: в лоб ↔ сбоку', inRange(() => pl.light.dist, v => { pl.light.dist = v; markDirty(); planetPreviewSet(); }, { min:0, max:.45, step:.01, fmt:v => v < .08 ? 'в лоб' : v > .3 ? 'сбоку' : Math.round(v * 100) + '' }))),
+    F('Описание', inText(() => pl.desc, upd('desc'), { area:true })),
+    h('span', { class:'fl' }, 'Характеристики'),
+    listEditor(pl.stats, r => [inText(() => r[0], v => { r[0] = v; markDirty(); }), inText(() => r[1], v => { r[1] = v; markDirty(); })], () => ['Параметр', 'значение']),
+    h('button', { class:'btn hot', onclick:() => { pushUndo(); sc.planet = null; markDirty(); renderLeft(); } }, 'Убрать планету'));
+}
+
+function tabMission() {
+  const m = sc.meta, c = sc.contract, set = (o, k) => v => { o[k] = v; markDirty(); };
+  const embl = h('div', { class:'embl' }, Object.keys(EMBLEMS).map(id => h('button', { class:m.emblem === id ? 'on' : '', title:EMBLEMS[id].name,
+    onclick:() => { pushUndo(); m.emblem = id; $('brandEmb').innerHTML = EMBLEMS[id].svg; renderLeft(); markDirty(); } }, embIcon(id))));
+  return [
+    Sec('Миссия',
+      F('Название', inText(() => m.title, set(m, 'title'))),
+      h('div', { class:'two' }, F('Код контракта', inText(() => m.code, set(m, 'code'))), F('Сектор', inText(() => m.sector, set(m, 'sector'))))),
+    castSection(),
+    planetSection(),
+    Sec('Заказчик',
+      F('Название заказчика', inText(() => m.client, set(m, 'client'))),
+      F('Подпись на заставке', inText(() => m.clientNote, set(m, 'clientNote'))),
+      h('span', { class:'fl' }, 'Эмблема'), embl),
+    Sec('Условия контракта',
+      F('Заголовок задачи', inText(() => c.title, set(c, 'title'), { ph:m.title })),
+      h('span', { class:'fl' }, 'Сводка'),
+      listEditor(c.rows, r => [inText(() => r[0], v => { r[0] = v; markDirty(); }), inText(() => r[1], v => { r[1] = v; markDirty(); })], () => ['ПАРАМЕТР', 'значение']),
+      h('span', { class:'fl' }, 'Задачи (галочка — основная)'),
+      listEditor(c.objectives, o => [Object.assign(h('input', { type:'checkbox', title:'Основная задача' }), { checked:!!o.main, onchange:e => { o.main = e.target.checked; markDirty(); } }),
+        inText(() => o.text, v => { o.text = v; markDirty(); })], () => ({ text:'Новая задача', main:false })),
+      h('span', { class:'fl' }, 'Вознаграждение (первая строка — главная)'),
+      listEditor(c.rewards, r => [inText(() => r[0], v => { r[0] = v; markDirty(); }), inText(() => r[1], v => { r[1] = v; markDirty(); })], () => ['Бонус', '+0 cr'])),
+    Sec('Сценарий',
+      h('div', { class:'bar' },
+        h('button', { class:'btn', onclick:() => { if (!confirm('Создать пустой сценарий? Текущий можно вернуть через Ctrl+Z.')) return; pushUndo(); loadScenario(Core.blankScenario()); } }, 'Новый пустой'),
+        h('button', { class:'btn', onclick:() => { if (!confirm('Загрузить демо «Кассиопея» вместо текущего сценария? Вернуть — Ctrl+Z.')) return; pushUndo(); loadScenario(Core.defaultScenario()); } }, 'Загрузить демо')),
+      h('div', { class:'hint' }, 'Сценарий сохраняется в этом браузере автоматически. Чтобы перенести его или отдать игрокам — «Экспорт» в верхней панели.')),
+  ];
+}
+
+/* ---------- звук и музыка ---------- */
+const SE = new Core.SoundEngine();     // тот же движок, что в плеере, — для прослушивания
+async function sndPrep() { SE.resume(); await SE.load(sc.sound, id => Core.getAudioBlob(id)); }
+/* Файл звука: на сервер (серверный режим) или в хранилище браузера. Возвращает ссылку для сценария. */
+async function putAudio(f, kind) {
+  if (SERVER) { toast('Загружаю файл на сервер…'); return Remote.uploadAudio(f, kind); }
+  const id = Core.uid('a'); await Core.AudioStore.put(id, f); return id;
+}
+async function previewSfx(key) {
+  await sndPrep();
+  if (key !== 'drone') { SE.play(key); return; }
+  if (SE.drn) { SE.droneStop(.4); return; }
+  SE.droneStart(); clearTimeout(previewSfx.t); previewSfx.t = setTimeout(() => SE.droneStop(1), 6000);
+}
+const musPlaying = id => !!(SE.cur && SE.cur.which === id && !SE.cur.el.ended);
+async function previewMusic(id) { await sndPrep(); if (musPlaying(id)) SE.musicStop(.4); else { SE.musicStop(.2); SE.music(id, .4); } renderLeft(); }
+const pct = v => Math.round(v * 100) + '%';
+function tabSound() {
+  const S = sc.sound, file = h('input', { type:'file', accept:'audio/*', hidden:true }); let onPick = null;
+  file.addEventListener('change', async () => { const f = file.files[0]; file.value = ''; if (f && onPick) await onPick(f); });
+  const pick = fn => { onPick = fn; file.click(); };
+  const store = (f, kind) => putAudio(f, kind).catch(e => { alert('Не удалось загрузить файл: ' + e.message); throw e; });
+  const changed = () => { SE.config(S); markDirty(); };
+  const setSfx = d => async f => { pushUndo(); const sl = S.sfx[d.id]; if (sl.id) SE.forget(sl.id); if (d.id === 'drone') SE.droneStop(.2);
+    Object.assign(sl, { mode:'file', id:await store(f, 'sfx'), name:f.name }); changed(); renderLeft(); toast(`«${d.name}»: свой звук`); if (d.id !== 'drone') previewSfx(d.id); };
+  const setMusic = m => async f => { pushUndo(); const old = S.music[m.id]; if (old) { if (musPlaying(m.id)) SE.musicStop(.2); SE.forget(old.id); }
+    S.music[m.id] = { id:await store(f, 'music'), name:f.name, vol:old ? old.vol : 1, loop:old ? old.loop !== false : true }; changed(); renderLeft(); toast(`Музыка «${m.name}» добавлена`); };
+
+  const musicRow = (m, i) => { const tr = S.music[m.id], cls = 'snd' + (i ? '' : ' first');
+    const head = h('div', { class:'snd-h' }, h('b', null, m.name), h('span', { class:'sp' }),
+      tr ? h('button', { class:'btn', onclick:() => previewMusic(m.id) }, musPlaying(m.id) ? '■ Стоп' : '▶ Слушать') : null);
+    if (!tr) return h('div', { class:cls }, head, h('div', { class:'hint' }, m.desc),
+      h('button', { class:'btn', onclick:() => pick(setMusic(m)) }, 'Загрузить файл…'));
+    return h('div', { class:cls }, head, h('div', { class:'hint' }, m.desc),
+      h('div', { class:'snd-f' }, h('span', { title:tr.name }, '♪ ' + tr.name), h('button', { class:'lnk', onclick:() => pick(setMusic(m)) }, 'заменить')),
+      F('Громкость', inRange(() => tr.vol, v => { tr.vol = v; SE.config(S); if (musPlaying(m.id)) SE.musicVol(v); markDirty(); }, { min:0, max:1.5, step:.05, fmt:pct })),
+      h('div', { class:'bar', style:'align-items:center' }, inBool(() => tr.loop !== false, v => { tr.loop = v; if (musPlaying(m.id)) SE.cur.el.loop = v; changed(); }, 'По кругу'), h('span', { style:'flex:1' }),
+        h('button', { class:'btn hot', onclick:() => { pushUndo(); if (musPlaying(m.id)) SE.musicStop(.3); S.music[m.id] = null; changed(); renderLeft(); } }, 'Убрать')));
+  };
+  const sfxRow = (d, i) => { const sl = S.sfx[d.id];
+    const modeSel = inSelect([['def', 'Стандартный'], ['file', 'Свой файл'], ['off', 'Без звука']], () => sl.mode, v => {
+      if (v === 'file' && !sl.id) { renderLeft(); pick(setSfx(d)); return; }      // файла ещё нет — сразу выбрать его
+      sl.mode = v; if (d.id === 'drone') SE.droneStop(.2); changed(); renderLeft(); });
+    return h('div', { class:'snd' + (i ? '' : ' first') },
+      h('div', { class:'snd-h' }, h('b', null, d.name), h('span', { class:'sp' }),
+        h('button', { class:'btn', title:d.id === 'drone' ? 'Прослушать / остановить' : 'Прослушать', disabled:sl.mode === 'off', onclick:() => previewSfx(d.id) }, d.id === 'drone' ? '▶ / ■' : '▶')),
+      h('div', { class:'hint' }, d.desc),
+      h('div', { class:'two' }, modeSel, sl.mode === 'file' ? inRange(() => sl.vol, v => { sl.vol = v; changed(); }, { min:0, max:1.5, step:.05, fmt:pct }) : h('span')),
+      sl.mode === 'file' ? h('div', { class:'snd-f' }, h('span', { title:sl.name }, '♪ ' + (sl.name || 'файл')), h('button', { class:'lnk', onclick:() => pick(setSfx(d)) }, 'заменить')) : null);
+  };
+  return [
+    Sec('Громкость', file,
+      F('Звуки', inRange(() => S.sfxVol, v => { S.sfxVol = v; changed(); }, { min:0, max:1.5, step:.05, fmt:pct })),
+      F('Музыка', inRange(() => S.musicVol, v => { S.musicVol = v; changed(); }, { min:0, max:1.5, step:.05, fmt:pct })),
+      inBool(() => S.duck, v => { S.duck = v; changed(); }, 'Приглушать музыку, пока звучит озвучка'),
+      h('div', { class:'hint' }, 'Озвучка реплик от этих ползунков не зависит. ' + (SERVER ? 'Файлы загружаются на сервер (голос и звуки до 15 МБ, музыка до 40 МБ). При экспорте в JSON они вшиваются в файл.' : 'Файлы хранятся в этом браузере, а при экспорте вшиваются в JSON, поэтому длинная музыка заметно увеличит файл сценария.'))),
+    Sec('Музыка', ...Core.MUSIC.map(musicRow)),
+    Sec('Звуки', h('div', { class:'hint' }, 'Каждый звук можно оставить стандартным, заменить своим файлом (mp3, ogg, wav) или выключить. Кнопка ▶ проигрывает то, что сейчас выбрано.'), ...Core.SOUNDS.map(sfxRow)),
+  ];
+}
+
+/* ============================ инспектор ============================ */
+function renderInspector() {
+  const box = $('insp'), o = selObj(), s = selStep(), key = sel ? sel.id : '';
+  const top = renderInspector.key === key ? box.scrollTop : 0; renderInspector.key = key;   // прокрутку сохраняем только для того же объекта
+  box.replaceChildren(...(o ? inspObj(o) : s ? inspStep(s) : inspNone())); box.scrollTop = top;
+}
+function inspNone() {
+  return [h('div', { class:'ihead' }, embIcon(sc.meta.emblem), h('div', null, h('small', null, 'Сценарий'), h('b', null, sc.meta.title || 'Без названия'))),
+    Sec('С чего начать',
+      h('div', { class:'hint', html:'<b>1.</b> Вкладка «Рельеф» — выберите тип местности или рисуйте кистью.<br><b>2.</b> «Объекты» — кликните карточку, затем точку на карте.<br><b>3.</b> Выберите объект — здесь появятся его настройки: сторона, радиус огня, численность отряда, вейпоинты.<br><b>4.</b> Внизу — шаги брифинга: текст реплики и камера, привязанная к объекту.<br><b>5.</b> «▶ Просмотр» — проиграть брифинг целиком.' })),
+    Sec('Сводка', h('div', { class:'hint' }, `Объектов: ${sc.objects.length} · шагов: ${sc.steps.length} · местность: ${(BIOMES[sc.terrain.biome] || {}).name || '—'}`))];
+}
+function inspObj(o) {
+  const d = CATALOG[o.type], set = k => v => { o[k] = v; markObj(o); };
+  const out = [h('div', { class:'ihead ' + o.side }, svgIcon(d.icon), h('div', null, h('small', null, (CATS.find(c => c.id === d.cat) || {}).name), h('b', null, d.name)))];
+  out.push(Sec('Метка на карте',
+    F('Название', inText(() => o.name, v => { o.name = v; markObj(o); refreshLists(); })),
+    F('Подпись сверху', inText(() => o.tag, set('tag'))),
+    F('Нижняя строка', inText(() => o.meta, set('meta'), { ph:'пусто — высота, радиус, состав' })),
+    inBool(() => o.label !== false, v => { o.label = v; markObj(o); }, 'Показывать метку')));
+  out.push(Sec('Роль и появление',
+    F('Сторона', inSelect(sideOpts, () => o.side, v => { o.side = v; markObj(o); syncHandles(); refreshLists(); renderInspector(); })),
+    F('Появляется на карте', inSelect(stepOpts(false), () => o.show, v => { o.show = v; markObj(o); refreshLists(); })),
+    F('Отмечается — цвет, метка, радиусы', inSelect(stepOpts(true), () => o.mark, v => { o.mark = v; markObj(o); refreshLists(); }))));
+  const pos = [h('div', { class:'two' }, F('X', inNum(() => o.x, v => { const dx = v - o.x; o.x = v; shiftPts(o, dx, 0); markObj(o); })),
+    F('Z', inNum(() => o.z, v => { const dz = v - o.z; o.z = v; shiftPts(o, 0, dz); markObj(o); })))];
+  if (!d.kind && !d.path && !d.terra) pos.push(F('Поворот', inRange(() => o.rot || 0, set('rot'), { min:-180, max:180, step:5, fmt:v => v + '°' })),
+    F('Масштаб', inRange(() => o.scale || 1, set('scale'), { min:.4, max:3, step:.05, fmt:v => '×' + v.toFixed(2) })));
+  if (d.kind === 'squad') pos.push(F('Масштаб юнитов', inRange(() => o.scale || 1, set('scale'), { min:.5, max:2.5, step:.05, fmt:v => '×' + v.toFixed(2) })));
+  if (Core.hasPad(o) || o.ground === false) pos.push(inBool(() => o.ground !== false, v => { o.ground = v; modsDirty = true; markDirty(); }, 'Подгонять землю под основание'));
+  out.push(Sec('Положение', ...pos));
+  const keys = Object.keys(d.params || {}).filter(k => P[k]);
+  if (keys.length) out.push(Sec('Параметры', ...keys.map(k => { const p = Object.assign({}, P[k], d.pui && d.pui[k]);
+    if (p.type === 'bool') return inBool(() => o[k], set(k), p.label);
+    if (p.type === 'select') return F(p.label, inSelect(p.options, () => o[k], v => { o[k] = v; markObj(o); }));
+    if (p.type === 'int') return F(p.label, inRange(() => o[k], set(k), { min:p.min, max:p.max, step:1, fmt:v => d.kind === 'squad' ? `${v} × ${d.unitName}` : v }));
+    return F(p.label, inRange(() => o[k], set(k), { min:p.min, max:p.max, step:p.step, fmt:p.unit === 'r' ? fmtR : p.unit === 's' ? fmtS : p.unit === '°' ? v => v + '°' : p.unit === '%' ? v => Math.round(v * 100) + '%' : null })); })));
+  const pts = pathPoints(o);
+  if (pts) {
+    const isR = isPath(o), active = mode === 'path' && pathFor === o.id;
+    out.push(Sec(isR ? 'Точки пути' : 'Маршрут патруля',
+      h('div', { class:'hint' }, isR ? (d.terra === 'channel' && d.monotone ? 'Русло сглаживается между точками и течёт от первой точки к последней: дно только понижается, поэтому вода не идёт в гору.' : 'Путь сглаживается между точками.' + (o.type === 'route' ? ' При показе прорисовывается пунктиром, камера в режиме «Следовать» едет вдоль него.' : ''))
+        : 'Отряд идёт от стартовой точки по вейпоинтам: по кругу, если маршрут замкнут, иначе туда и обратно. Без точек стоит на месте.'),
+      h('div', null, pts.map((p, i) => h('div', { class:'ptrow' }, h('b', null, i === 0 ? 'СТАРТ' : 'WP' + i), `X ${r1(p[0])}  Z ${r1(p[1])}`, h('span', { class:'sp' }),
+        i > 0 || (isR && pts.length > 1) ? h('button', { class:'x', title:'Удалить точку', onclick:() => removePoint(o, i) }, '✕') : null))),
+      h('div', { class:'bar' },
+        h('button', { class:'btn' + (active ? ' on' : ''), onclick:() => active ? setMode('select') : startPath(o) }, active ? '✓ Готово' : '✚ Ставить точки на карте'),
+        pts.length > 1 ? h('button', { class:'btn', onclick:() => { pushUndo(); if (isR) o.pts.length = 1; else o.wp.length = 0; markObj(o); renderInspector(); } }, 'Очистить') : null)));
+  }
+  out.push(Sec('Действия', h('div', { class:'bar' },
+    h('button', { class:'btn', onclick:() => focusObj(o) }, 'Камеру к объекту'),
+    h('button', { class:'btn', onclick:() => dupObj(o) }, 'Копия'),
+    h('button', { class:'btn hot', onclick:() => delObj(o) }, 'Удалить'))));
+  return out;
+}
+function shiftPts(o, dx, dz) { if (o.wp) o.wp.forEach(w => { w[0] += dx; w[1] += dz; }); if (isPath(o)) o.pts.forEach(w => { w[0] += dx; w[1] += dz; }); }
+
+function inspStep(s) {
+  const i = stepIndex(s.id), c = s.cam, set = (o, k) => v => { o[k] = v; markDirty(); renderSteps(); };
+  const objOpts = sc.objects.map(o => [o.id, `${o.name || CATALOG[o.type].name} · ${CATALOG[o.type].name}`]);
+  const followOpts = sc.objects.filter(o => o.type === 'route' || isSquad(o)).map(o => [o.id, `${o.name} · ${CATALOG[o.type].name}`]);
+  const out = [h('div', { class:'ihead' }, svgIcon('<path d="M5 7h22v14H13l-6 5v-5H5z"/><path d="M10 12h12M10 16h8"/>'),
+    h('div', null, h('small', null, `Шаг ${i + 1} из ${sc.steps.length}`), h('b', null, s.ch || 'Реплика')))];
+  out.push(Sec('Реплика',
+    h('div', { class:'two' }, F('Глава (для шкалы)', inText(() => s.ch, v => { s.ch = v; markDirty(); renderSteps(); })),
+      F('Пауза после, с', inNum(() => s.hold ?? 2.6, v => { s.hold = Math.max(0, v); markDirty(); }, { step:.1, min:0 }))),
+    F('Говорящий', inSelect([['', `По умолчанию — ${(sc.cast.find(c => c.id === sc.meta.speakerId) || {}).name || '—'}`], ...sc.cast.map(c => [c.id, c.name + (c.role ? ' · ' + c.role : '')])],
+      () => s.speakerId || '', v => { s.speakerId = v; markDirty(); renderSteps(); })),
+    F('Имя в субтитрах (если нужно иначе)', inText(() => s.speaker, set(s, 'speaker'), { ph:'как в карточке персонажа' })),
+    F('Текст', inText(() => s.text, set(s, 'text'), { area:true, ph:'Что говорит диспетчер на этом шаге… Паузу можно вставить так: [1s]' }))));
+  out.push(voiceSection(s));
+  const cam = [F('Камера смотрит на', inSelect([['point', 'Точку на карте'], ['object', 'Объект'], ['follow', 'Следует за маршрутом / отрядом']], () => c.mode, v => {
+    c.mode = v; if (v !== 'point' && !c.target) c.target = (v === 'follow' ? followOpts : objOpts)[0]?.[0]; markDirty(); renderSteps(); renderInspector(); }))];
+  if (c.mode === 'object') cam.push(objOpts.length ? F('Объект', inSelect(objOpts, () => c.target, v => { c.target = v; markDirty(); renderSteps(); })) : h('div', { class:'hint' }, 'На карте нет объектов.'));
+  if (c.mode === 'follow') cam.push(followOpts.length ? F('Маршрут или отряд', inSelect(followOpts, () => c.target, v => { c.target = v; markDirty(); renderSteps(); })) : h('div', { class:'hint' }, 'Добавьте маршрут или отряд из каталога.'));
+  if (c.mode === 'point') cam.push(h('div', { class:'two' }, F('X', inNum(() => c.x, v => { c.x = v; markDirty(); })), F('Z', inNum(() => c.z, v => { c.z = v; markDirty(); }))));
+  cam.push(F('Дистанция', inRange(() => c.dist, v => { c.dist = v; markDirty(); }, { min:30, max:450, fmt:v => `${v} · ${(v * UNIT_M / 1000).toFixed(1)} км` })),
+    F('Наклон (0 — сверху)', inRange(() => c.pitch, v => { c.pitch = v; markDirty(); }, { min:5, max:85, fmt:v => v + '°' })),
+    F('Азимут', inRange(() => c.yaw, v => { c.yaw = v; markDirty(); }, { min:-180, max:180, fmt:v => v + '°' })),
+    F('Подсветка вокруг цели', inRange(() => s.focus || 0, v => { s.focus = v; markDirty(); }, { min:0, max:320, step:5, fmt:v => v ? v + ' r' : 'авто' })),
+    h('div', { class:'bar' }, h('button', { class:'btn', title:'Записать ракурс из текущего вида вьюпорта', onclick:() => takeView(s) }, '◉ Взять текущий вид'),
+      h('button', { class:'btn', onclick:() => showView(s) }, 'Показать ракурс')),
+    h('div', { class:'hint' }, 'На карте жёлтым показаны камера шага и центр кадра, справа вверху — превью кадра. Тащите значок камеры: азимут и дистанция; с Shift — наклон. Центр в режиме «Точка» тоже тащится. Ещё способ: покрутить вид во вьюпорте и нажать «Взять текущий вид».'));
+  out.push(Sec('Камера', ...cam));
+  const here = sc.objects.filter(o => o.show === s.id || o.mark === s.id);
+  const addSel = h('select', { class:'in nohist' }, h('option', { value:'' }, '+ Отметить объект на этом шаге…'),
+    sc.objects.filter(o => o.mark !== s.id).map(o => h('option', { value:o.id }, o.name || CATALOG[o.type].name)));
+  addSel.addEventListener('change', () => { const o = findObj(addSel.value); if (!o) return; pushUndo(); o.mark = s.id;
+    if (world.idx(o.show) > i) o.show = s.id; markObj(o); renderInspector(); refreshLists(); });
+  out.push(Sec('Что проявляется на этом шаге',
+    here.length ? h('div', { class:'tagl' }, here.map(o => h('span', { title:'Выбрать объект', onclick:() => select('obj', o.id) }, (o.show === s.id ? '◇ ' : '') + (o.name || CATALOG[o.type].name))))
+      : h('div', { class:'hint' }, 'Пока ничего. Выберите объект ниже или поставьте новый, пока этот шаг выбран.'), addSel));
+  out.push(Sec('Действия', h('div', { class:'bar' },
+    h('button', { class:'btn pri', onclick:() => preview(i) }, '▶ С этого шага'),
+    h('button', { class:'btn', onclick:() => moveStep(i, -1), disabled:i === 0 }, '←'),
+    h('button', { class:'btn', onclick:() => moveStep(i, 1), disabled:i === sc.steps.length - 1 }, '→'),
+    h('button', { class:'btn', onclick:() => dupStep(s) }, 'Копия'),
+    h('button', { class:'btn hot', onclick:() => delStep(s) }, 'Удалить'))));
+  return out;
+}
+/* ---------- озвучка шага ---------- */
+const VC = window.BriefingVoice;
+function voiceSection(s) {
+  const v = s.voice, file = h('input', { type:'file', accept:'audio/*', hidden:true });
+  file.addEventListener('change', async () => { const f = file.files[0]; file.value = ''; if (f) await attachVoice(s, f); });
+  if (!v) return Sec('Озвучка', file, h('div', { class:'hint' }, 'Файл с голосом для этой реплики (mp3, ogg, wav). После загрузки сразу работает «Авто»: печать подстраивается под голос, как в студии.'),
+    h('button', { class:'btn', onclick:() => file.click() }, 'Загрузить файл…'));
+  const cv = h('canvas', { class:'wave', width:640, height:112, title:'Жёлтым — найденные участки речи' }); drawWave(cv, v, -1);
+  const prev = h('div', { class:'vprev' }), fits = VC.profileFits(s.text, v.phraseProfile);
+  return Sec('Озвучка', file, cv,
+    h('div', { class:'vinfo' }, `${v.name} · ${v.duration.toFixed(1)} с · голос ${v.start.toFixed(2)}–${v.end.toFixed(2)} с · участков речи: ${v.segments.length}` +
+      (v.speed ? ` · ${v.speed} мс/симв.` : '') + (v.phraseProfile ? ` · фраз: ${v.phraseProfile.length}` : '')),
+    !fits ? h('div', { class:'vwarn' }, 'Текст изменился после «Авто» — нажмите «Авто» ещё раз, иначе реплика напечатается одной скоростью.') : null,
+    v.error ? h('div', { class:'vwarn' }, v.error) : null, prev,
+    h('div', { class:'bar' }, h('button', { class:'btn', onclick:() => autoVoice(s) }, 'Авто'), h('button', { class:'btn', onclick:() => checkVoice(s, cv, prev) }, '▶ Проверить'),
+      h('button', { class:'btn', onclick:() => file.click() }, 'Заменить'),
+      h('button', { class:'btn hot', onclick:() => { pushUndo(); stopCheck(); s.voice = null; markDirty(); renderInspector(); } }, 'Убрать')),
+    h('div', { class:'hint' }, '«Авто» находит начало, конец и паузы речи: печать стартует вместе с голосом, каждая фраза идёт своей скоростью. Шаг переключается, когда закончатся и текст, и голос, плюс «Пауза после».'));
+}
+function planVoice(s) { const v = s.voice, r = VC.planTyping(s.text || '', v); v.speed = r.speed || 0; v.phraseProfile = r.phraseProfile || null; v.error = r.error || ''; return r; }
+async function attachVoice(s, f) {
+  pushUndo(); toast('Разбираю озвучку…');
+  try { const id = await putAudio(f, 'voice'); const a = await VC.analyzeBlob(f);
+    s.voice = Object.assign({ id, name:f.name }, a); const r = planVoice(s); if ((s.hold ?? 2.6) > 1.5) s.hold = 1.2;
+    markDirty(); renderInspector(); toast(r.error || `Готово: ${r.phrases > 1 ? r.phrases + ' фраз(ы) под голос' : 'одна скорость'}`); }
+  catch (e) { alert('Не удалось разобрать файл: ' + e.message); }
+}
+function autoVoice(s) { pushUndo(); const r = planVoice(s); markDirty(); renderInspector(); toast(r.error || `Скорость подобрана · фраз: ${r.phrases}`); }
+let check = null;
+function stopCheck() { if (check) { check.audio.pause(); cancelAnimationFrame(check.raf); check = null; } }
+async function checkVoice(s, cv, prev) {
+  stopCheck(); const blob = await Core.getAudioBlob(s.voice.id); if (!blob) { toast('Файл озвучки не найден'); return; }
+  const v = s.voice, audio = new Audio(URL.createObjectURL(blob)), tl = VC.typingTimeline(s.text || '', { speed:v.speed || VC.DEFAULT_SPEED, phraseProfile:v.phraseProfile });
+  prev.classList.add('on'); prev.textContent = ''; check = { audio, raf:0 };
+  const loop = () => { if (!check || check.audio !== audio) return; const ms = (audio.currentTime - v.start) * 1000; let n = 0; while (n < tl.times.length && tl.times[n] <= ms) n++;
+    prev.textContent = tl.plain.slice(0, n); drawWave(cv, v, audio.currentTime);
+    if (audio.ended) { prev.textContent = tl.plain; drawWave(cv, v, -1); check = null; return; } check.raf = requestAnimationFrame(loop); };
+  try { await audio.play(); loop(); } catch (e) { toast('Браузер не дал воспроизвести звук'); }
+}
+function drawWave(cv, v, t) {
+  const x = cv.getContext('2d'), W = cv.width, H = cv.height, d = v.duration || 1; x.clearRect(0, 0, W, H);
+  x.fillStyle = 'rgba(255,207,74,.13)'; (v.segments || []).forEach(sg => x.fillRect(sg.start / d * W, 0, (sg.end - sg.start) / d * W, H));
+  x.fillStyle = 'rgba(223,226,216,.7)'; const Pk = v.peaks || [], bw = W / Math.max(1, Pk.length);
+  Pk.forEach((p, i) => { const hh = Math.max(1, p * H * .9); x.fillRect(i * bw, (H - hh) / 2, Math.max(1, bw - 1), hh); });
+  x.fillStyle = '#ffcf4a'; x.fillRect(v.start / d * W, 0, 2, H); x.fillRect(v.end / d * W - 2, 0, 2, H);
+  if (t >= 0) { x.fillStyle = '#ff5a2c'; x.fillRect(t / d * W, 0, 2, H); }
+}
+
+function currentCam() {
+  const off = camera.position.clone().sub(controls.target), d = off.length();
+  return { mode:'point', x:r1(controls.target.x), z:r1(controls.target.z), dist:Math.round(d), pitch:Math.round(Math.acos(Math.min(1, Math.max(-1, off.y / d))) / DEG), yaw:Math.round(Math.atan2(off.x, off.z) / DEG) };
+}
+function takeView(s) {
+  pushUndo(); const c = s.cam;
+  if (c.mode === 'point') Object.assign(c, currentCam());
+  else { const center = Core.stepCenter(world, s, 0), off = camera.position.clone().sub(center), d = off.length();
+    c.dist = Math.round(d); c.pitch = Math.round(Math.acos(Math.min(1, Math.max(-1, off.y / d))) / DEG); c.yaw = Math.round(Math.atan2(off.x, off.z) / DEG); }
+  markDirty(); renderInspector(); renderSteps(); toast('Ракурс записан в шаг');
+}
+function showView(s) {
+  const c = s.cam, center = Core.stepCenter(world, s, 0), pr = c.pitch * DEG, ar = c.yaw * DEG;
+  tweenCam(new V3(center.x + Math.sin(ar) * Math.sin(pr) * c.dist, center.y + Math.cos(pr) * c.dist, center.z + Math.cos(ar) * Math.sin(pr) * c.dist), center);
+}
+
+/* ============================ шаги ============================ */
+let dragStep = -1;
+function camLabel(s) { const c = s.cam, o = c.target && findObj(c.target);
+  return c.mode === 'point' ? `◎ точка ${Math.round(c.x)}, ${Math.round(c.z)}` : c.mode === 'object' ? `◉ ${o ? o.name : '—'}` : `➜ следом: ${o ? o.name : '—'}`; }
+function renderSteps() {
+  const box = $('steps'), left = box.scrollLeft;
+  box.replaceChildren(...sc.steps.map((s, i) => {
+    const el = h('div', { class:'stp' + (sel && sel.id === s.id ? ' sel' : ''), draggable:'true', onclick:() => select('step', s.id), ondblclick:() => showView(s) },
+      h('div', { class:'h1' }, h('b', null, String(i + 1).padStart(2, '0')), s.ch || '—'),
+      h('div', { class:'tx' + (s.text ? '' : ' emp') }, s.text || 'пустая реплика'),
+      h('div', { class:'cm' }, camLabel(s)));
+    el.addEventListener('dragstart', e => { dragStep = i; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); });
+    el.addEventListener('dragover', e => { if (dragStep < 0) return; e.preventDefault(); el.classList.add('drop'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drop'));
+    el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('drop'); if (dragStep >= 0 && dragStep !== i) { pushUndo(); const [m] = sc.steps.splice(dragStep, 1); sc.steps.splice(i, 0, m); stepsChanged(); } dragStep = -1; });
+    el.addEventListener('dragend', () => dragStep = -1);
+    return el; }),
+    h('div', { class:'stp add', title:'Новый шаг с текущим ракурсом вьюпорта', onclick:addStep }, '+ Шаг'));
+  box.scrollLeft = left; fillPip();
+}
+function stepsChanged() { world.setSteps(sc.steps); renderSteps(); renderInspector(); refreshLists(); markDirty(); fillPip(); }
+function addStep() {
+  pushUndo(); const st = selStep(), at = st ? stepIndex(st.id) + 1 : sc.steps.length;
+  const s = { id:Core.uid('s'), ch:'', speaker:'', text:'', cam:currentCam(), focus:0, hold:2.6 };
+  sc.steps.splice(at, 0, s); sel = { k:'step', id:s.id }; stepsChanged(); syncHandles(); renderChips();
+  requestAnimationFrame(() => { const ta = document.querySelector('#insp textarea'); if (ta) ta.focus(); $('steps').children[at]?.scrollIntoView({ inline:'nearest', block:'nearest' }); });
+}
+function dupStep(s) { pushUndo(); const c = Core.clone(s); c.id = Core.uid('s'); sc.steps.splice(stepIndex(s.id) + 1, 0, c); sel = { k:'step', id:c.id }; stepsChanged(); }
+function moveStep(i, d) { const j = i + d; if (j < 0 || j >= sc.steps.length) return; pushUndo(); const [m] = sc.steps.splice(i, 1); sc.steps.splice(j, 0, m); stepsChanged(); }
+function delStep(s) {
+  pushUndo(); const i = stepIndex(s.id); sc.steps.splice(i, 1);
+  const repl = sc.steps[i]?.id || sc.steps[i - 1]?.id || 'start';     // объекты, привязанные к шагу, переезжают на соседний
+  sc.objects.forEach(o => { if (o.show === s.id) o.show = repl; if (o.mark === s.id) o.mark = repl; });
+  sel = sc.steps[i] ? { k:'step', id:sc.steps[i].id } : sc.steps[i - 1] ? { k:'step', id:sc.steps[i - 1].id } : null;
+  stepsChanged(); toast('Шаг удалён');
+}
+
+/* ============================ чипы вьюпорта ============================ */
+function renderChips() {
+  const st = selStep(), kids = [];
+  const modeName = { select:'Выбор', brush:'Кисть: ' + (BRUSHES.find(b => b[0] === brush.tool) || [])[1], place:'Установка: ' + (placeType ? CATALOG[placeType].name : ''), path:'Точки маршрута' }[mode];
+  kids.push(h('div', { class:'chip' }, 'Режим ', h('b', null, modeName), mode !== 'select' ? h('button', { onclick:() => setMode('select') }, 'Esc') : null));
+  if (st) kids.push(h('div', { class:'chip' }, viewAll ? 'Показана вся сцена' : h('span', null, 'Сцена на шаге ', h('b', null, String(stepIndex(st.id) + 1).padStart(2, '0') + ' · ' + (st.ch || '—'))),
+    h('button', { onclick:() => { viewAll = !viewAll; renderChips(); } }, viewAll ? 'по шагу' : 'показать всё')));
+  kids.push(h('div', { class:'chip' }, h('button', { style:'border:0;padding:0', onclick:() => { world.animSquads = !world.animSquads; renderChips(); } }, 'Отряды: ' + (world.animSquads ? 'движутся' : 'на старте'))));
+  $('vpTop').replaceChildren(...kids);
+  $('vpHint').textContent = HINTS[mode];
+}
+function refreshLists() { if (leftTab === 'scene') renderLeft(); renderSteps(); }
+function renderAll() { renderTabs(); renderLeft(); renderInspector(); renderSteps(); renderChips(); syncHandles(); updUndo();
+  $('docTitle').textContent = sc.meta.title; $('brandEmb').innerHTML = (EMBLEMS[sc.meta.emblem] || EMBLEMS.hex).svg; }
+
+/* ============================ файл / просмотр ============================ */
+function loadScenario(obj) { sc = Core.normalize(obj); Core.terrainFrom(sc, hf); planetPreviewSet(); sel = null; setMode('select'); rebuildWorld(true); renderAll(); markDirty(); }
+/* Блобы озвучки шагов, своих звуков и музыки. */
+async function voiceBlobs(all = true) { const out = {};
+  const ids = [...sc.steps.filter(st => st.voice && st.voice.id).map(st => st.voice.id), ...Core.soundIds(sc)];   // озвучка + свои звуки и музыка
+  for (const id of ids) if (!out[id] && (all || !Core.isServerRef(id))) { try { const b = await Core.getAudioBlob(id); if (b) out[id] = b; } catch (e) { console.warn(e); } }
+  return out; }   // all = false — для просмотра: файлы с сервера плеер возьмёт сам
+/* Замена ссылок на файлы звука в сценарии (после загрузки вшитых файлов на сервер). */
+function remapAudio(data, map) {
+  const fix = o => { if (o && o.id && map[o.id]) o.id = map[o.id]; };
+  (data.steps || []).forEach(st => fix(st.voice));
+  const snd = data.sound || {}; Object.values(snd.sfx || {}).forEach(fix); Object.values(snd.music || {}).forEach(fix);
+}
+$('bExport').onclick = async () => {
+  const data = serialize(), blobs = await voiceBlobs(), audio = {};
+  for (const id in blobs) audio[id] = await Core.blobToDataURL(blobs[id]);       // озвучка уходит внутрь файла — сценарий самодостаточен
+  if (Object.keys(audio).length) data.assets = { audio };
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type:'application/json' });
+  const a = h('a', { href:URL.createObjectURL(blob), download:`briefing_${(sc.meta.code || 'scenario').replace(/[^\wа-яё-]+/gi, '_')}.json` });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+$('bImport').onclick = () => $('file').click();
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const data = JSON.parse(await f.text()); if (!data || !Array.isArray(data.objects) || !Array.isArray(data.steps)) throw new Error('нет objects/steps');
+    if (data.assets && data.assets.audio) {
+      const map = {}, entries = Object.entries(data.assets.audio), kindOf = {};
+      (data.steps || []).forEach(st => { if (st.voice && st.voice.id) kindOf[st.voice.id] = 'voice'; });
+      Object.values((data.sound || {}).music || {}).forEach(m => { if (m && m.id) kindOf[m.id] = 'music'; });
+      for (const [i, [id, url]] of entries.entries()) { const blob = await Core.dataURLToBlob(url);
+        if (SERVER) { toast(`Загружаю файлы на сервер: ${i + 1} / ${entries.length}`);
+          const ext = (blob.type.match(/(mpeg|mp3|ogg|wav)/) || ['', 'mp3'])[1].replace('mpeg', 'mp3');
+          map[id] = await Remote.uploadAudio(new File([blob], `${id.split('/').pop().replace(/\.\w+$/, '')}.${ext}`, { type:blob.type || 'audio/mpeg' }), kindOf[id] || 'sfx'); }
+        else await Core.AudioStore.put(id, blob); }
+      remapAudio(data, map); delete data.assets; }
+    pushUndo(); loadScenario(data); toast('Сценарий загружен'); }
+  catch (err) { alert('Не удалось прочитать сценарий: ' + err.message); }
+});
+$('bPlayer').onclick = () => { save(); open(SERVER ? `player.html?id=${BID}&studio=1` : 'player.html?src=local', '_blank'); };
+let pending = null;
+async function preview(start = null) { save(); stopCheck(); SE.stopAll(); pending = { scenario:serialize(), start, audio:await voiceBlobs(false) }; $('modal').classList.add('on'); $('frame').src = 'player.html?embed=1&t=' + Date.now(); }
+function closePreview() { $('modal').classList.remove('on'); $('frame').src = 'about:blank'; pending = null; }
+addEventListener('message', e => {
+  if (e.data && e.data.type === 'briefing:ready' && pending && e.source) e.source.postMessage({ type:'briefing:load', ...pending }, '*');
+  if (e.data && e.data.type === 'briefing:exit' && e.source === $('frame').contentWindow) closePreview();
+});
+$('bPreview').onclick = () => preview(null);
+$('mClose').onclick = closePreview;
+$('bUndo').onclick = undo; $('bRedo').onclick = redo;
+
+addEventListener('keydown', ev => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '');
+  const mod = ev.ctrlKey || ev.metaKey;
+  if (mod && ev.code === 'KeyZ') { if (typing) return; ev.preventDefault(); ev.shiftKey ? redo() : undo(); return; }
+  if (mod && ev.code === 'KeyY') { if (typing) return; ev.preventDefault(); redo(); return; }
+  if (mod && ev.code === 'KeyS') { ev.preventDefault(); save(); toast('Сохранено'); return; }
+  if (typing) { if (ev.code === 'Escape') document.activeElement.blur(); return; }
+  if (ev.code === 'Escape') { if ($('dlg').classList.contains('on')) closeDialog(); else if ($('modal').classList.contains('on')) closePreview(); else if (mode !== 'select') setMode('select'); else select(null); }
+  else if (ev.code === 'Enter' && mode === 'path') setMode('select');
+  else if (ev.code === 'Delete' || ev.code === 'Backspace') { const o = selObj(); if (o) { ev.preventDefault(); delObj(o); } }
+  else if (mod && ev.code === 'KeyD') { ev.preventDefault(); const o = selObj(), s = selStep(); if (o) dupObj(o); else if (s) dupStep(s); }
+  else if (ev.code === 'KeyQ' || ev.code === 'KeyE') { const o = selObj(); if (o && !CATALOG[o.type].kind) { pushUndo(); o.rot = (((o.rot || 0) + (ev.code === 'KeyE' ? 15 : -15)) + 540) % 360 - 180; markObj(o); renderInspector(); } }
+  else if (ev.code === 'KeyF') { const o = selObj(); if (o) focusObj(o); else { const s = selStep(); if (s) showView(s); } }
+});
+addEventListener('beforeunload', save);
+
+/* ============================ кадр ============================ */
+function resize() { const w = vp.clientWidth, hh = vp.clientHeight; if (!w || !hh) return;
+  renderer.setSize(w, hh, false); composer.setSize(w, hh); bloom.resolution.set(w * DPR / 2, hh * DPR / 2); camera.aspect = w / hh; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(vp); resize();
+
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime; world.time.value = t;
+  if (tween) { tween.t = Math.min(1, tween.t + dt / .9); const k = Core.ss(0, 1, tween.t);
+    camera.position.lerpVectors(tween.p0, tween.p1, k); controls.target.lerpVectors(tween.t0, tween.t1, k); if (tween.t >= 1) tween = null; }
+  controls.update();
+  if (painting && cursorPt) { hf.brush(cursorPt.x, cursorPt.z, brush.radius, brush.strength * dt * 40, brush.tool, brushTarget, roughN); hf.compose(sc.objects); world.terrain.sync(); world.snapBodies(); }
+  if (modsDirty) { modsDirty = false; dirtyObjs.clear(); hf.compose(sc.objects); rebuildWorld(true); }
+  if (mode === 'place' && ghostDirty && ghostObj) { ghostDirty = false;
+    if (cursorPt) { ghostObj.x = r1(cursorPt.x); ghostObj.z = r1(cursorPt.z); if (isPath(ghostObj)) ghostObj.pts = [[ghostObj.x, ghostObj.z]]; world.setGhost(ghostObj); } }
+  if (dirtyObjs.size) { for (const id of dirtyObjs) { const o = findObj(id); if (o) world.rebuild(o); } dirtyObjs.clear(); markers.sync(world); syncHandles(); }
+  const st = selStep();
+  world.tick(dt, t, st && !viewAll ? stepIndex(st.id) : 1e6, true);
+  markers.update(world, camera, vp.clientWidth, vp.clientHeight);
+  placeHandles(); updateGizmo();
+  brushRing.visible = mode === 'brush' && !!cursorPt;
+  if (brushRing.visible) { const a = ringGeo.attributes.position.array;
+    for (let i = 0; i <= 64; i++) { const q = i / 64 * Math.PI * 2, x = cursorPt.x + Math.cos(q) * brush.radius, z = cursorPt.z + Math.sin(q) * brush.radius;
+      a[i * 3] = x; a[i * 3 + 1] = hf.sample(x, z) + 1; a[i * 3 + 2] = z; }
+    ringGeo.attributes.position.needsUpdate = true; ringGeo.computeBoundingSphere(); }
+  composer.render(); renderPip();
+  requestAnimationFrame(frame);
+}
+renderAll();
+if (SERVER) syncCatalogCast();
+requestAnimationFrame(frame);
+window.__ed = { get sc() { return sc; }, world, select, setMode, startPlace, placeAt, regen, addRandomPath, preview, hf, Core };   // для отладки из консоли
+</script>
+</body>
+</html>

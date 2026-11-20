@@ -23,10 +23,12 @@ server side/assets/images/avatars/*
 server side/assets/images/portraits/portrait_*
 server side/assets/sounds/voices/voice_*
 server side/assets/sounds/voiceline/voiceline_*
+server side/assets/sounds/briefing/*
 !server side/assets/images/avatars/.gitkeep
 !server side/assets/images/portraits/.gitkeep
 !server side/assets/sounds/voices/.gitkeep
 !server side/assets/sounds/voiceline/.gitkeep
+!server side/assets/sounds/briefing/.gitkeep
 
 # ===== Node.js =====
 node_modules/

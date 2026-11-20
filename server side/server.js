@@ -289,7 +289,10 @@ const db = new sqlite3.Database(config.DB_PATH, (err) => {
 });
 dbInstance = db;
 
-app.use(express.json({ limit: '1mb' }));
+// Сценарий брифинга с картой высот бывает больше обычного запроса — для него отдельный лимит.
+const jsonDefault = express.json({ limit: '1mb' });
+const jsonBriefing = express.json({ limit: '6mb' });
+app.use((req, res, next) => (req.path.startsWith('/api/editor/briefings') ? jsonBriefing : jsonDefault)(req, res, next));
 const assetsCorsMiddleware = (req, res, next) => {
     const origin = req.headers.origin;
     if (origin && config.CORS_ORIGINS.includes(origin)) {
@@ -567,6 +570,39 @@ function initDatabase() {
             points TEXT NOT NULL DEFAULT '[]',
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (dialogue_id, edge_key)
+        )`,
+        // Брифинги (client side/briefing). Сценарий — JSON-документ целиком (см. routes/briefings.js),
+        // в колонках — то, по чему нужен отбор. Новый брифинг — черновик (is_active = 0).
+        `CREATE TABLE IF NOT EXISTS briefings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL DEFAULT '',
+            code TEXT NOT NULL DEFAULT '',
+            client TEXT NOT NULL DEFAULT '',
+            allowed_users TEXT NOT NULL DEFAULT '[-1]',
+            is_active INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            scenario TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        // Прослушанные брифинги: строка появляется, когда игрок дослушал брифинг до финального экрана.
+        // На аккаунт, как dialogue_progress. Нет строки — брифинг для игрока новый (метка на «ЗАПИСИ»).
+        `CREATE TABLE IF NOT EXISTS briefing_views (
+            user_id INTEGER NOT NULL,
+            briefing_id INTEGER NOT NULL,
+            times INTEGER NOT NULL DEFAULT 0,
+            first_listened DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_listened DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, briefing_id)
+        )`,
+        // Прошлые версии сценария для отката (не чаще раза в 10 минут, последние 30).
+        `CREATE TABLE IF NOT EXISTS briefing_revisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            briefing_id INTEGER NOT NULL,
+            version INTEGER NOT NULL,
+            scenario TEXT NOT NULL,
+            saved_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`,
         // Реплику удаляют из разных мест (реплика, ветка, диалог) — варианты уходят вместе с ней
         // независимо от PRAGMA foreign_keys.
@@ -1954,6 +1990,9 @@ adminRoutes.delete('/music/:id', adminMiddleware, (req, res) => {
 app.use('/api/admin', adminRoutes);
 
 // Роуты редактора диалогов
+// Брифинги для игрока: список доступных, сценарий, отметка «прослушан».
+app.use('/api/briefings', requireAuth, require('./routes/briefings').playerRoutes(db));
+
 const dialogueEditorRoutes = require('./routes/dialogue-editor');
 app.use('/api/editor', requireAuth, requireAdmin(db), dialogueEditorRoutes(db, upload));
 

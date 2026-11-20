@@ -28,6 +28,7 @@
                 <div class="studio-modes" role="tablist" aria-label="Раздел студии">
                     <button class="sub-tab active" role="tab" data-mode="dialogues" aria-selected="true">Диалоги</button>
                     <button class="sub-tab" role="tab" data-mode="characters" aria-selected="false">Персонажи</button>
+                    <button class="sub-tab" role="tab" data-mode="briefings" aria-selected="false">Брифинги</button>
                 </div>
 
                 <div data-for="dialogues" class="studio-pane">
@@ -49,6 +50,22 @@
                         <input type="search" id="gc-search" class="search-input" placeholder="Поиск по имени..." aria-label="Поиск персонажа">
                     </div>
                     <div class="dialogue-list" id="gc-list">
+                        <div class="loading"><div class="loading-spinner"></div></div>
+                    </div>
+                </div>
+
+                <div data-for="briefings" class="studio-pane" hidden>
+                    <div class="sidebar-header">
+                        <h3>БРИФИНГИ</h3>
+                        <button id="bf-new-btn" class="btn btn-small">+ Новый</button>
+                    </div>
+                    <div id="bf-new-menu" class="bf-new-menu hidden">
+                        <button class="btn btn-small" data-new="blank">Пустой</button>
+                        <button class="btn btn-small" data-new="demo">Демо «Кассиопея»</button>
+                        <button class="btn btn-small" data-new="import">Из файла JSON…</button>
+                    </div>
+                    <input type="file" id="bf-import-file" accept=".json,application/json" class="hidden">
+                    <div class="dialogue-list" id="bf-list">
                         <div class="loading"><div class="loading-spinner"></div></div>
                     </div>
                 </div>
@@ -216,6 +233,78 @@
                                     <tbody id="gc-relations-tbody"></tbody>
                                 </table>
                             </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- Брифинг: публикация и доступ; сам брифинг правится в 3D-редакторе (briefing/editor.html) -->
+                <div data-for="briefings" class="studio-pane" hidden>
+                    <div id="bf-placeholder" class="editor-placeholder">
+                        <div class="placeholder-icon" aria-hidden="true">◬</div>
+                        <p>Выберите брифинг слева</p>
+                        <p>или создайте новый</p>
+                    </div>
+
+                    <div id="bf-content" class="editor-content hidden">
+                        <section class="editor-section">
+                            <h3 class="section-title"><span id="bf-title"></span></h3>
+                            <div class="form-help" id="bf-meta"></div>
+                            <div class="bf-actions">
+                                <button id="bf-open-btn" class="btn">Открыть в редакторе</button>
+                                <button id="bf-preview-btn" class="btn btn-small">▶ Просмотр</button>
+                                <button id="bf-dup-btn" class="btn btn-small">Копия</button>
+                                <button id="bf-export-btn" class="btn btn-small">Экспорт JSON</button>
+                            </div>
+                            <div class="form-help">Карта, объекты, реплики, камера, персонажи, планета и звук — в редакторе. Название и код контракта тоже задаются там, во вкладке «Миссия».</div>
+                        </section>
+
+                        <details class="editor-section dialogue-info" open>
+                            <summary class="dialogue-info-summary">
+                                <span class="section-title">ПУБЛИКАЦИЯ И ДОСТУП</span>
+                                <span class="dialogue-info-chips" id="bf-summary"></span>
+                                <span class="dialogue-info-toggle" aria-hidden="true"><span class="when-open">Свернуть</span><span class="when-closed">Развернуть</span> <b>▾</b></span>
+                            </summary>
+                            <div class="dialogue-info-grid">
+                                <div class="form-group dialogue-info-access">
+                                    <label for="bf-access">Доступ</label>
+                                    <select id="bf-access" class="form-input">
+                                        <option value="all">Все пользователи</option>
+                                        <option value="custom">Выбранные</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bf-order">Порядок в списке</label>
+                                    <input type="number" id="bf-order" class="form-input" step="1">
+                                </div>
+                                <div class="form-group dialogue-info-active">
+                                    <span class="form-label-spacer" aria-hidden="true">&nbsp;</span>
+                                    <label class="switch-label">
+                                        <input type="checkbox" id="bf-active">
+                                        <span>Опубликован</span>
+                                    </label>
+                                    <div class="form-help">Черновик не виден игрокам в «Записи»</div>
+                                </div>
+                                <div id="bf-users" class="users-selector dialogue-info-users hidden">
+                                    <div class="users-selector-header">Кому доступен брифинг:</div>
+                                    <div id="bf-users-list" class="users-list"></div>
+                                </div>
+                            </div>
+                            <div class="dialogue-info-actions">
+                                <button id="bf-delete-btn" class="btn btn-small btn-danger">Удалить брифинг</button>
+                                <button id="bf-save-btn" class="btn">Сохранить</button>
+                            </div>
+                        </details>
+
+                        <section class="editor-section">
+                            <h3 class="section-title">ПРОСЛУШАЛИ</h3>
+                            <div class="form-help">Отметка появляется, когда игрок дослушал брифинг до финального экрана. Пока её нет, запись у игрока помечена как новая.</div>
+                            <div class="table-scroll">
+                                <table class="user-table">
+                                    <thead><tr><th>Игрок</th><th style="width:110px;">Раз</th><th style="width:150px;">Последний раз</th><th style="width:100px;"></th></tr></thead>
+                                    <tbody id="bf-listeners-tbody"></tbody>
+                                </table>
+                            </div>
+                            <div class="form-actions"><button id="bf-reset-all-btn" class="btn btn-small" disabled>Сбросить всем</button></div>
                         </section>
                     </div>
                 </div>

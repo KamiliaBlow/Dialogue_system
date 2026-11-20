@@ -1,17 +1,20 @@
-// Студия: редактор диалогов и каталог персонажей в одном окне.
-// Адреса: studio.html#dialogues, #dialogues/<id>, #characters, #characters/<id>, #characters/new.
+// Студия: редактор диалогов, каталог персонажей и брифинги в одном окне.
+// Адреса: studio.html#dialogues, #dialogues/<id>, #characters, #characters/<id>, #characters/new,
+// #briefings, #briefings/<id>.
 // Старые editor.html и catalog.html перенаправляют сюда.
 import { initShell } from '../admin/admin-shell.js';
 import store from './studio-store.js';
 import DialogueEditor from './dialogue-editor.js';
 import CharacterCatalog from './character-catalog.js';
+import BriefingList from './briefing-list.js';
 
-const MODES = ['dialogues', 'characters'];
+const MODES = ['dialogues', 'characters', 'briefings'];
 
 const studio = {
     mode: 'dialogues',
     editor: null,
     catalog: null,
+    briefings: null,
     applyingHash: false,
 
     setMode(mode) {
@@ -42,6 +45,7 @@ const studio = {
         let hash = `#${this.mode}`;
         if (this.mode === 'dialogues' && this.editor?.currentDialogueId) hash += `/${this.editor.currentDialogueId}`;
         if (this.mode === 'characters' && this.catalog?.open) hash += `/${this.catalog.editingId ?? 'new'}`;
+        if (this.mode === 'briefings' && this.briefings?.currentId) hash += `/${this.briefings.currentId}`;
         if (location.hash !== hash) history.replaceState(null, '', hash);
     },
 
@@ -55,6 +59,9 @@ const studio = {
             }
             if (this.mode === 'characters' && id) {
                 this.catalog.openCharacter(id === 'new' ? null : id);
+            }
+            if (this.mode === 'briefings' && id && Number(id) !== this.briefings.currentId) {
+                await this.briefings.select(Number(id));
             }
         } finally {
             this.applyingHash = false;
@@ -80,6 +87,8 @@ async function main() {
     studio.catalog = new CharacterCatalog(studio);
     studio.catalog.init();
     await studio.editor.init();
+    studio.briefings = new BriefingList(studio);
+    await studio.briefings.init();
 
     await studio.applyHash();
     window.addEventListener('hashchange', () => studio.applyHash());

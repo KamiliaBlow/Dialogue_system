@@ -45,11 +45,12 @@ const get = path => request(path);
 const post = (path, body) => request(path, { method: 'POST', body });
 const put = (path, body) => request(path, { method: 'PUT', body });
 const del = path => request(path, { method: 'DELETE' });
+const patch = (path, body) => request(path, { method: 'PATCH', body });
 const upload = (path, form, method = 'POST') => request(path, { method, form });
 const enc = encodeURIComponent;
 
 const api = {
-    request, get, post, put, del, upload,
+    request, get, post, put, del, patch, upload,
 
     // ---- доступ ----
     checkAuth: () => get('/admin/check'),

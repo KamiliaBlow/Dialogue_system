@@ -139,10 +139,27 @@ body:is(.theme-green, .theme-yellow, .theme-ktb, .theme-horus, .theme-ssc, .them
   box-shadow: none !important;
 }
 
+/* Говорящий персонаж: рамка подсвечена снизу вверх цветом темы, свет гаснет к середине портрета,
+   по нижней кромке — светящаяся линия. Молчащее окно — без подсветки. Класс .speaking ставит
+   scripts/dialogue.js (setSpeaking); старая прозрачность слоя (0.3 / 0.7) здесь перекрыта. */
 body:is(.theme-green, .theme-yellow, .theme-ktb, .theme-horus, .theme-ssc, .theme-ha) :is(#char-1, #char-2) .overlay {
-  background: linear-gradient(180deg, var(--t-accent-soft), transparent 70%) !important;
-  box-shadow: none !important;
+  --t-speak: var(--t-accent);
+  background:
+    linear-gradient(0deg, var(--t-speak) 0 3px, transparent 3px),
+    linear-gradient(0deg, color-mix(in srgb, var(--t-speak) 85%, transparent), color-mix(in srgb, var(--t-speak) 48%, transparent) 20%, color-mix(in srgb, var(--t-speak) 18%, transparent) 40%, transparent 58%) !important;
+  box-shadow: inset 0 -18px 26px -16px var(--t-speak) !important;
+  mix-blend-mode: screen;      /* свет, а не тонировка: заметен и на тёмном, и на портрете в цвет темы */
+  opacity: 0 !important;
+  transition: opacity 0.45s ease !important;
 }
+body:is(.theme-green, .theme-yellow, .theme-ktb, .theme-horus, .theme-ssc, .theme-ha) :is(#char-1, #char-2).speaking .overlay {
+  opacity: 1 !important;
+}
+/* Цвет подсветки под тему: где фирменный цвет тёмный, берётся светлый оттенок */
+body.theme-ktb:not(.ktb-ignoble) :is(#char-1, #char-2) .overlay { --t-speak: var(--t-accent-light); }
+body.theme-horus :is(#char-1, #char-2) .overlay { --t-speak: var(--t-accent-light); }
+body.theme-ssc :is(#char-1, #char-2) .overlay { --t-speak: var(--t-accent-light); }
+body.theme-ha :is(#char-1, #char-2) .overlay { --t-speak: #c48ccb; }
 
 body:is(.theme-green, .theme-yellow, .theme-ktb, .theme-horus, .theme-ssc, .theme-ha) #r_box,
 body:is(.theme-green, .theme-yellow, .theme-ktb, .theme-horus, .theme-ssc, .theme-ha) .assembly-code-container {

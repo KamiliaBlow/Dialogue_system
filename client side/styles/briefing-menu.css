@@ -1,0 +1,128 @@
+/* «ЗАПИСЬ»: брифинги миссий на терминале (scripts/briefing-menu.js) и метки непрослушанных передач
+   (scripts/dialogue.js). Цвета — из переменных темы (styles/themes.css), без темы — зелёный терминала. */
+
+/* Мерцающая метка «новое»: неровное мигание, как у индикатора на пульте */
+.unread-mark {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--t-accent, #03FB8D);
+    box-shadow: 0 0 6px var(--t-accent, #03FB8D), 0 0 14px var(--t-glow, rgba(3, 251, 141, .35));
+    vertical-align: middle;
+    animation: unreadFlicker 2.4s linear infinite;
+}
+.unread-mark[hidden] { display: none; }
+@keyframes unreadFlicker {
+    0%, 46%, 50%, 82%, 100% { opacity: 1; }
+    47%, 49% { opacity: .2; }
+    83% { opacity: .45; }
+    86% { opacity: .9; }
+    90% { opacity: .3; }
+}
+@media (prefers-reduced-motion: reduce) { .unread-mark { animation: none; } }
+
+/* Метка у частоты */
+/* #freq-con уже позиционирован (absolute) — метка встаёт у правого верхнего края числа */
+.freq-mark { position: absolute; top: 18px; right: -12px; }
+
+/* Стрелка в сторону ближайшей новой частоты */
+.arrow { position: relative; }
+.arrow.has-new::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    border-radius: 50%;
+    background: var(--t-accent, #03FB8D);
+    opacity: .55;
+}
+
+/* Баннер «ЗАПИСЬ»: тусклый, пока записей нет; горит, когда есть.
+   В режиме «Запись» баннеры меняются местами по id (scripts/briefing-menu.js) — оба должны держать метку. */
+#main-receiver .banner { position: relative; }
+html body #memory_banner.mem-on h2 { color: var(--t-text, #03FB8D) !important; cursor: pointer; transition: color .2s, text-shadow .2s; }
+html body #memory_banner.mem-on:hover h2,
+html body #memory_banner.mem-on:focus-visible h2 { text-shadow: 0 0 10px var(--t-glow, rgba(3, 251, 141, .4)); }
+#memory_banner.mem-on { cursor: pointer; outline: none; }
+.mem-new {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font: 600 11px var(--t-font-num, 'JetBrains Mono', monospace);
+    color: var(--t-accent, #03FB8D);
+    pointer-events: none;
+}
+.mem-new[hidden] { display: none; }
+/* Режим «Запись»: «ЗАПИСЬ» горит как «СВЯЗЬ» — метка берёт цвет надписи, чтобы не слиться с фоном */
+body.rec-mode #codec_banner .mem-new { color: inherit; }
+body.rec-mode #codec_banner .unread-mark { background: currentColor; box-shadow: none; }
+
+/* Список записей */
+#rec-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 200000;
+    display: grid;
+    place-items: center;
+    background: rgba(0, 0, 0, .62);
+}
+#rec-panel[hidden] { display: none; }
+.rec-box {
+    width: min(560px, 92vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--t-panel, rgba(6, 14, 10, .96));
+    border: 1px solid var(--t-line, #1d4a33);
+    box-shadow: 0 0 40px rgba(0, 0, 0, .6), 0 0 0 1px var(--t-line-soft, transparent) inset;
+    color: var(--t-text, #03FB8D);
+    font-family: var(--t-font-label, 'JetBrains Mono', monospace);
+}
+.rec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--t-line, #1d4a33);
+    font-size: 13px;
+    letter-spacing: .18em;
+}
+.rec-x { background: none; border: 0; color: var(--t-dim, #3C5649); font-size: 15px; cursor: pointer; padding: 2px 6px; }
+.rec-x:hover { color: var(--t-text, #03FB8D); }
+.rec-list { overflow: auto; padding: 6px 0; }
+.rec-item {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+    padding: 10px 16px;
+    background: none;
+    border: 0;
+    border-left: 2px solid transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.rec-item:hover, .rec-item:focus-visible { background: var(--t-accent-soft, rgba(3, 251, 141, .08)); border-left-color: var(--t-accent, #03FB8D); outline: none; }
+.rec-code { font-size: 11px; letter-spacing: .12em; color: var(--t-dim, #3C5649); }
+.rec-main { display: flex; flex-direction: column; min-width: 0; }
+.rec-main b { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--t-font-text, inherit); }
+.rec-main small { font-size: 11px; color: var(--t-dim, #3C5649); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-state { display: flex; align-items: center; gap: 6px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--t-dim, #3C5649); }
+.rec-item.is-new .rec-state { color: var(--t-accent, #03FB8D); }
+.rec-foot { padding: 10px 16px; border-top: 1px solid var(--t-line, #1d4a33); font-size: 11px; color: var(--t-dim, #3C5649); line-height: 1.5; }
+
+/* Плеер брифинга поверх терминала */
+/* выше всех плавающих кнопок терминала (у них z-index до 99999) */
+#rec-player { position: fixed; inset: 0; z-index: 200001; background: #090a0b; }
+#rec-player iframe { width: 100%; height: 100%; border: 0; display: block; }
